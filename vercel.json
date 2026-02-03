@@ -3,7 +3,7 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist/stock-screener/browser",
-  "installCommand": "npm install",
+  "installCommand": "npm install --registry=https://registry.npmjs.org/",
   "framework": "angular",
   "functions": {
     "api/**/*.ts": {

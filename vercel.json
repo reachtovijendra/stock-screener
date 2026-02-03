@@ -1,0 +1,63 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "version": 2,
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist/stock-screener/browser",
+  "installCommand": "npm install",
+  "framework": null,
+  "functions": {
+    "api/**/*.ts": {
+      "memory": 1024,
+      "maxDuration": 30
+    }
+  },
+  "rewrites": [
+    {
+      "source": "/api/stocks/quote",
+      "destination": "/api/stocks/quote"
+    },
+    {
+      "source": "/api/stocks/quotes",
+      "destination": "/api/stocks/quote"
+    },
+    {
+      "source": "/api/stocks/search",
+      "destination": "/api/stocks/search"
+    },
+    {
+      "source": "/api/stocks/screen",
+      "destination": "/api/stocks/screen"
+    },
+    {
+      "source": "/api/stocks/list",
+      "destination": "/api/stocks/list"
+    },
+    {
+      "source": "/api/stocks/indices",
+      "destination": "/api/stocks/indices"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        { "key": "Access-Control-Allow-Origin", "value": "*" },
+        { "key": "Access-Control-Allow-Methods", "value": "GET, POST, OPTIONS" },
+        { "key": "Access-Control-Allow-Headers", "value": "Content-Type" },
+        { "key": "Cache-Control", "value": "s-maxage=300, stale-while-revalidate=600" }
+      ]
+    },
+    {
+      "source": "/(.*)",
+      "headers": [
+        { "key": "X-Content-Type-Options", "value": "nosniff" },
+        { "key": "X-Frame-Options", "value": "DENY" },
+        { "key": "X-XSS-Protection", "value": "1; mode=block" }
+      ]
+    }
+  ]
+}

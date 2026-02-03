@@ -1,0 +1,52 @@
+{
+  "name": "stock-screener",
+  "version": "1.0.0",
+  "description": "Professional stock screener for US and Indian markets with real-time filtering",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve --proxy-config proxy.conf.json",
+    "build": "ng build --configuration production",
+    "build:dev": "ng build --configuration development",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test",
+    "lint": "ng lint",
+    "preinstall:local": "node -e \"require('fs').copyFileSync('.npmrc.local', '.npmrc')\" 2>/dev/null || true",
+    "preinstall:ci": "node -e \"require('fs').copyFileSync('.npmrc.ci', '.npmrc')\" 2>/dev/null || true"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@angular/common": "^19.2.0",
+    "@angular/compiler": "^19.2.0",
+    "@angular/core": "^19.2.0",
+    "@angular/forms": "^19.2.0",
+    "@angular/platform-browser": "^19.2.0",
+    "@angular/platform-browser-dynamic": "^19.2.0",
+    "@angular/router": "^19.2.0",
+    "@primeng/themes": "^19.1.4",
+    "@primeuix/themes": "^2.0.3",
+    "primeicons": "^7.0.0",
+    "primeng": "^19.1.4",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "yahoo-finance2": "^2.14.0",
+    "zone.js": "~0.15.0"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "^19.2.19",
+    "@angular/cli": "^19.2.19",
+    "@angular/compiler-cli": "^19.2.0",
+    "@types/jasmine": "~5.1.0",
+    "@types/node": "^20.0.0",
+    "@vercel/node": "^3.0.0",
+    "jasmine-core": "~5.6.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "typescript": "~5.7.2"
+  }
+}

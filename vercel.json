@@ -4,7 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist/stock-screener/browser",
   "installCommand": "npm install",
-  "framework": null,
+  "framework": "angular",
   "functions": {
     "api/**/*.ts": {
       "memory": 1024,

@@ -13,6 +13,10 @@
   },
   "rewrites": [
     {
+      "source": "/api/market/indices",
+      "destination": "/api/market/indices"
+    },
+    {
       "source": "/api/stocks/quote",
       "destination": "/api/stocks/quote"
     },
@@ -35,6 +39,22 @@
     {
       "source": "/api/stocks/indices",
       "destination": "/api/stocks/indices"
+    },
+    {
+      "source": "/api/stocks/technicals",
+      "destination": "/api/stocks/technicals"
+    },
+    {
+      "source": "/api/stocks/detail",
+      "destination": "/api/stocks/detail"
+    },
+    {
+      "source": "/api/stocks/news",
+      "destination": "/api/stocks/news"
+    },
+    {
+      "source": "/api/stocks/:symbol/news",
+      "destination": "/api/stocks/[symbol]/news"
     },
     {
       "source": "/((?!api/).*)",

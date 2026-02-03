@@ -210,13 +210,12 @@ import { SortConfig } from '../../../core/models/filter.model';
           [rows]="50"
           [rowsPerPageOptions]="[25, 50, 100]"
           [scrollable]="true"
-          scrollDirection="horizontal"
+          scrollDirection="vertical"
           [showCurrentPageReport]="true"
           currentPageReportTemplate="{first}–{last} of {totalRecords}"
           sortField="marketCap"
           [sortOrder]="-1"
-          [scrollable]="true"
-          scrollHeight="calc(100vh - 340px)"
+          scrollHeight="calc(100vh - 260px)"
           styleClass="compact-table"
           responsiveLayout="scroll"
           [lazy]="true"
@@ -649,18 +648,20 @@ import { SortConfig } from '../../../core/models/filter.model';
     .symbol-cell {
       display: flex;
       flex-direction: column;
-      gap: 0.125rem;
+      gap: 0.1rem;
 
       .ticker {
         font-weight: 600;
         color: var(--primary-color);
-        font-size: 0.85rem;
+        font-size: 0.72rem;
       }
 
       .name {
-        font-size: 0.7rem;
+        font-size: 0.6rem;
         color: var(--text-color-secondary);
         white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
     }
 
@@ -676,12 +677,12 @@ import { SortConfig } from '../../../core/models/filter.model';
     .price-value {
       font-weight: 500;
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.85rem;
+      font-size: 0.7rem;
     }
 
     .change-value {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8rem;
+      font-size: 0.65rem;
       font-weight: 500;
 
       &.up { color: var(--stock-positive); }
@@ -690,7 +691,7 @@ import { SortConfig } from '../../../core/models/filter.model';
 
     .cap-value, .vol-value {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.8rem;
+      font-size: 0.65rem;
     }
 
 
@@ -700,14 +701,18 @@ import { SortConfig } from '../../../core/models/filter.model';
 
     .sector-badge {
       display: inline-block;
-      font-size: 0.65rem;
-      padding: 0.2rem 0.4rem;
-      border-radius: 4px;
+      font-size: 0.6rem;
+      padding: 0.15rem 0.35rem;
+      border-radius: 3px;
       background: var(--surface-hover);
       color: var(--text-color-secondary);
       text-transform: uppercase;
-      letter-spacing: 0.02em;
+      letter-spacing: 0.01em;
       font-weight: 500;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      max-width: 100%;
     }
 
     .text-right { text-align: right; }
@@ -716,22 +721,24 @@ import { SortConfig } from '../../../core/models/filter.model';
     :host ::ng-deep {
       .compact-table {
         .p-datatable-wrapper {
-          overflow-x: auto;
+          overflow-x: hidden;
         }
         
         .p-datatable-table {
-          min-width: 1400px;
+          width: 100%;
+          table-layout: fixed;
         }
         
         .p-datatable-thead > tr > th {
           background: var(--surface-ground);
-          padding: 0.625rem 0.75rem;
-          font-size: 0.7rem;
+          padding: 0.5rem 0.3rem;
+          font-size: 0.62rem;
           font-weight: 600;
           text-transform: uppercase;
-          letter-spacing: 0.03em;
+          letter-spacing: 0.02em;
           color: var(--text-color-secondary);
           border-bottom: 1px solid var(--surface-border);
+          overflow: hidden;
         }
 
         .p-datatable-tbody > tr {
@@ -742,9 +749,12 @@ import { SortConfig } from '../../../core/models/filter.model';
           }
 
           > td {
-            padding: 0.5rem 0.75rem;
-            font-size: 0.8rem;
+            padding: 0.4rem 0.3rem;
+            font-size: 0.72rem;
             border-bottom: 1px solid var(--surface-border);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
           }
         }
 
@@ -768,25 +778,25 @@ import { SortConfig } from '../../../core/models/filter.model';
       }
     }
 
-    /* Column widths */
-    .col-symbol { min-width: 120px; }
-    .col-price { min-width: 80px; }
-    .col-change { min-width: 70px; }
-    .col-cap { min-width: 85px; }
-    .col-pe { min-width: 55px; }
-    .col-fpe { min-width: 65px; }
-    .col-range { min-width: 130px; }
+    /* Column widths - Optimized to fit without horizontal scroll */
+    .col-symbol { width: 85px; max-width: 85px; }
+    .col-price { width: 65px; max-width: 65px; }
+    .col-change { width: 55px; max-width: 55px; }
+    .col-cap { width: 70px; max-width: 70px; }
+    .col-pe { width: 40px; max-width: 40px; }
+    .col-fpe { width: 50px; max-width: 50px; }
+    .col-range { width: 115px; max-width: 115px; }
     
     .range-value {
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       color: var(--text-color-secondary);
       font-family: 'JetBrains Mono', monospace;
     }
-    .col-vol { min-width: 70px; }
-    .col-rsi { min-width: 50px; }
-    .col-macd { min-width: 65px; }
-    .col-sector { min-width: 140px; }
-    .col-industry { min-width: 160px; }
+    .col-vol { width: 60px; max-width: 60px; }
+    .col-rsi { width: 38px; max-width: 38px; }
+    .col-macd { width: 45px; max-width: 45px; }
+    .col-sector { width: 115px; max-width: 115px; }
+    .col-industry { width: 135px; max-width: 135px; }
 
     .header-with-filter {
       display: flex;
@@ -803,25 +813,30 @@ import { SortConfig } from '../../../core/models/filter.model';
 
     :host ::ng-deep .column-filter {
       width: 100%;
+      max-width: 100%;
       
       .p-multiselect {
         width: 100%;
+        max-width: 100%;
         min-width: 0;
         background: var(--surface-card);
         border: 1px solid var(--surface-border);
-        border-radius: 4px;
+        border-radius: 3px;
         
         .p-multiselect-label {
-          padding: 0.25rem 0.5rem;
-          font-size: 0.7rem;
+          padding: 0.15rem 0.3rem;
+          font-size: 0.6rem;
           color: var(--text-color-secondary);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
         }
         
         .p-multiselect-trigger {
-          width: 1.5rem;
+          width: 1.1rem;
           
           .p-multiselect-trigger-icon {
-            font-size: 0.6rem;
+            font-size: 0.5rem;
           }
         }
       }
@@ -837,8 +852,12 @@ import { SortConfig } from '../../../core/models/filter.model';
     }
 
     .industry-text {
-      font-size: 0.75rem;
+      font-size: 0.65rem;
       color: var(--text-color-secondary);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      display: block;
     }
 
     /* Technical filter styles */

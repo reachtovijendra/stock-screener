@@ -154,8 +154,8 @@ interface MarketIndex {
     .app-header {
       background: var(--surface-card);
       border-bottom: 1px solid var(--surface-border);
-      padding: 0 1rem;
-      height: 52px;
+      padding: 0 0.75rem;
+      height: 56px;
       display: flex;
       align-items: center;
       position: sticky;
@@ -175,15 +175,15 @@ interface MarketIndex {
     .header-left {
       display: flex;
       align-items: center;
-      gap: 1.5rem;
+      gap: 1rem;
     }
 
     .header-brand {
       display: flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.4rem;
       cursor: pointer;
-      padding: 0.25rem 0.5rem;
+      padding: 0.2rem 0.4rem;
       border-radius: 6px;
       transition: background 0.2s;
 
@@ -193,12 +193,12 @@ interface MarketIndex {
     }
 
     .brand-icon {
-      font-size: 1.25rem;
+      font-size: 1.1rem;
       color: var(--primary-color);
     }
 
     .brand-name {
-      font-size: 1rem;
+      font-size: 0.9rem;
       font-weight: 700;
       color: var(--text-color);
       letter-spacing: -0.02em;
@@ -206,8 +206,8 @@ interface MarketIndex {
 
     .header-search {
       flex: 0 0 auto;
-      min-width: 220px;
-      max-width: 300px;
+      min-width: 180px;
+      max-width: 220px;
     }
 
     :host ::ng-deep .header-stock-search {
@@ -275,8 +275,8 @@ interface MarketIndex {
     .market-indices {
       display: flex;
       align-items: center;
-      gap: 8rem;
-      margin: 0 4rem;
+      gap: 2.5rem;
+      margin: 0 1.5rem;
     }
 
     .index-item {
@@ -284,7 +284,8 @@ interface MarketIndex {
       flex-direction: column;
       align-items: flex-start;
       gap: 0.15rem;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
+      min-width: 140px;
     }
 
     .index-main {
@@ -296,18 +297,21 @@ interface MarketIndex {
     .index-name {
       color: var(--text-color-secondary);
       font-weight: 500;
+      white-space: nowrap;
+      font-size: 0.68rem;
     }
 
     .index-price {
       color: var(--text-color);
       font-family: 'JetBrains Mono', monospace;
       font-weight: 600;
+      font-size: 0.75rem;
     }
 
     .index-change {
       font-family: 'JetBrains Mono', monospace;
-      font-size: 0.7rem;
-      padding: 0.1rem 0.3rem;
+      font-size: 0.65rem;
+      padding: 0.1rem 0.25rem;
       border-radius: 3px;
       
       &.up {
@@ -353,7 +357,7 @@ interface MarketIndex {
     }
 
     .range-label {
-      font-size: 0.55rem;
+      font-size: 0.5rem;
       color: var(--text-color-secondary);
       font-family: 'JetBrains Mono', monospace;
       opacity: 0.7;
@@ -362,23 +366,37 @@ interface MarketIndex {
     .header-controls {
       display: flex;
       align-items: center;
-      gap: 1.5rem;
+      gap: 0.75rem;
     }
 
     .market-status {
       display: flex;
       align-items: center;
-      gap: 0.375rem;
-      padding: 0.25rem 0.625rem;
-      border-radius: 12px;
+      gap: 0.3rem;
+      padding: 0.3rem 0.6rem;
+      border-radius: 10px;
       background: rgba(239, 68, 68, 0.1);
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       color: #ef4444;
+      max-width: 100px;
 
       &.open {
         background: rgba(16, 185, 129, 0.1);
         color: #10b981;
       }
+    }
+
+    .status-text {
+      line-height: 1.25;
+      word-wrap: break-word;
+    }
+    
+    .status-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: currentColor;
+      flex-shrink: 0;
     }
 
     .status-dot {
@@ -391,25 +409,25 @@ interface MarketIndex {
     .market-toggle {
       display: flex;
       align-items: center;
-      gap: 0.35rem;
+      gap: 0.25rem;
       background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(51, 65, 85, 0.95));
-      border-radius: 24px;
-      padding: 0.35rem;
+      border-radius: 20px;
+      padding: 0.25rem;
       border: 1px solid rgba(255, 255, 255, 0.15);
       box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
-      margin-left: 1.5rem;
+      margin-left: 0.75rem;
     }
 
     .market-btn {
       display: flex;
       align-items: center;
       justify-content: center;
-      width: 42px;
-      height: 32px;
-      padding: 0.3rem;
+      width: 36px;
+      height: 28px;
+      padding: 0.25rem;
       background: transparent;
       border: none;
-      border-radius: 18px;
+      border-radius: 16px;
       cursor: pointer;
       transition: all 0.25s ease;
       
@@ -429,16 +447,20 @@ interface MarketIndex {
     }
 
     .flag-icon {
-      width: 28px;
-      height: 20px;
+      width: 24px;
+      height: 18px;
       border-radius: 3px;
       box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     }
 
     .theme-toggle {
-      width: 2rem !important;
-      height: 2rem !important;
+      width: 1.75rem !important;
+      height: 1.75rem !important;
       color: var(--text-color-secondary);
+      
+      i {
+        font-size: 0.9rem;
+      }
       
       &:hover {
         color: var(--text-color);

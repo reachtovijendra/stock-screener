@@ -987,10 +987,10 @@ export class FilterPanelComponent implements OnInit {
   filters!: ScreenerFilters;
   presets: FilterPreset[] = [];
 
-  // Collapsed state for sections
-  collapsedMarketCap = false;
+  // Collapsed state for sections - all collapsed by default
+  collapsedMarketCap = true;
   collapsedWeek52 = true;
-  collapsedValuation = false;
+  collapsedValuation = true;
   collapsedTechnical = true;
   collapsedVolume = true;
   collapsedSectors = true;

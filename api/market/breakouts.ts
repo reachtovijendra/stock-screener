@@ -28,36 +28,19 @@ interface BreakoutStock {
   market?: string;
 }
 
-// Large-cap stocks to scan (100+ stocks)
+// Top 30 large-cap stocks (optimized for Vercel timeout)
 const STOCKS_TO_SCAN = [
-  // Mega cap tech
-  'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
-  // Healthcare
-  'UNH', 'JNJ', 'LLY', 'PFE', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY',
-  // Financial
-  'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP',
-  // Consumer
-  'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT',
-  // Energy
-  'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL',
-  // Tech & Semiconductors
-  'AVGO', 'CSCO', 'ACN', 'CRM', 'ORCL', 'NFLX', 'AMD', 'INTC', 'QCOM', 'TXN',
-  'IBM', 'AMAT', 'LRCX', 'MU', 'ADI', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON',
-  // Industrial
-  'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP',
-  // Telecom & Media
-  'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'CHTR', 'WBD', 'PARA', 'FOX', 'NWSA',
-  // Utilities & REITs
-  'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'AMT', 'PLD', 'CCI',
-  // Other popular
-  'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID'
+  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
+  'UNH', 'JNJ', 'V', 'JPM', 'WMT', 'PG', 'HD', 'XOM', 'CVX',
+  'AVGO', 'NFLX', 'AMD', 'CRM', 'ORCL', 'COST', 'MCD', 'BA',
+  'CAT', 'DIS', 'PYPL', 'INTC', 'QCOM'
 ];
 
 // Yahoo auth cache
 let yahooAuth = { crumb: '', cookies: '', timestamp: 0 };
 const AUTH_TTL = 30 * 60 * 1000;
 
-function httpsRequest(options: https.RequestOptions, postData: string | null = null): Promise<{ statusCode: number; headers: any; body: string }> {
+function httpsRequest(options: https.RequestOptions, postData: string | null = null, timeout = 8000): Promise<{ statusCode: number; headers: any; body: string }> {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
       let data = '';
@@ -65,7 +48,7 @@ function httpsRequest(options: https.RequestOptions, postData: string | null = n
       res.on('end', () => resolve({ statusCode: res.statusCode || 0, headers: res.headers, body: data }));
     });
     req.on('error', reject);
-    req.setTimeout(15000, () => { req.destroy(); reject(new Error('Timeout')); });
+    req.setTimeout(timeout, () => { req.destroy(); reject(new Error('Timeout')); });
     if (postData) req.write(postData);
     req.end();
   });
@@ -133,8 +116,8 @@ async function fetchHistoricalPrices(symbol: string): Promise<number[] | null> {
       hostname: 'query1.finance.yahoo.com',
       path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=3mo`,
       method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0' }
-    });
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
+    }, null, 5000);
 
     if (response.statusCode === 200) {
       const data = JSON.parse(response.body);
@@ -440,19 +423,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // Analyze each stock for breakouts
     const allBreakouts: BreakoutStock[] = [];
     
-    // Process in parallel batches for RSI and MACD calculation
+    // Process in parallel with timeout handling
     const technicalPromises = allQuotes.map(async (quote) => {
-      const prices = await fetchHistoricalPrices(quote.symbol);
-      const rsi = prices ? calculateRSI(prices) : null;
-      const macd = prices ? calculateMACD(prices) : null;
-      return { quote, rsi, macd };
+      try {
+        const prices = await fetchHistoricalPrices(quote.symbol);
+        const rsi = prices ? calculateRSI(prices) : null;
+        const macd = prices ? calculateMACD(prices) : null;
+        return { quote, rsi, macd, success: true };
+      } catch (e) {
+        return { quote, rsi: null, macd: null, success: false };
+      }
     });
 
-    const results = await Promise.all(technicalPromises);
+    const results = await Promise.allSettled(technicalPromises);
 
-    for (const { quote, rsi, macd } of results) {
-      const breakouts = analyzeStock(quote, rsi, macd);
-      allBreakouts.push(...breakouts);
+    for (const result of results) {
+      if (result.status === 'fulfilled' && result.value.success) {
+        const { quote, rsi, macd } = result.value;
+        const breakouts = analyzeStock(quote, rsi, macd);
+        allBreakouts.push(...breakouts);
+      }
     }
 
     // Sort by absolute change percent (most active first)
@@ -465,6 +455,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error: any) {
     console.error('Breakouts API error:', error);
-    return res.status(500).json({ error: 'Failed to scan breakouts', message: error.message });
+    // Return empty array instead of error to avoid breaking the UI
+    return res.status(200).json({ 
+      breakouts: [], 
+      scannedStocks: 0, 
+      timestamp: new Date().toISOString(),
+      error: 'Partial failure - some data may be unavailable'
+    });
   }
 }

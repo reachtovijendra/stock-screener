@@ -3,7 +3,7 @@
   "version": 2,
   "buildCommand": "npm run build",
   "outputDirectory": "dist/stock-screener/browser",
-  "installCommand": "npm install --registry=https://registry.npmjs.org/",
+  "installCommand": "rm -f package-lock.json && npm install --registry=https://registry.npmjs.org/ --prefer-online",
   "framework": "angular",
   "functions": {
     "api/**/*.ts": {

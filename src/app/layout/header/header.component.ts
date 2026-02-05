@@ -1,7 +1,7 @@
 import { Component, inject, signal, OnInit, OnDestroy, effect } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
-import { Router, NavigationEnd } from '@angular/router';
+import { Router, NavigationEnd, RouterModule } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
 import { SelectButtonModule } from 'primeng/selectbutton';
 import { TooltipModule } from 'primeng/tooltip';
@@ -25,17 +25,33 @@ interface MarketIndex {
 @Component({
   selector: 'app-header',
   standalone: true,
-  imports: [CommonModule, ButtonModule, SelectButtonModule, TooltipModule, AutoCompleteModule, FormsModule, DecimalPipe],
+  imports: [CommonModule, RouterModule, ButtonModule, SelectButtonModule, TooltipModule, AutoCompleteModule, FormsModule, DecimalPipe],
   template: `
     <header class="app-header">
       <div class="header-content">
-        <!-- Left section: Logo + Search -->
+        <!-- Left section: Logo + Search + Nav -->
         <div class="header-left">
           <!-- Logo - Clickable to go home -->
           <div class="header-brand" (click)="goHome()" [pTooltip]="'Go to Screener'" tooltipPosition="bottom">
             <i class="pi pi-chart-bar brand-icon"></i>
             <span class="brand-name">StockScreen</span>
           </div>
+
+          <!-- Navigation Links -->
+          <nav class="header-nav">
+            <a class="nav-link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
+              <i class="pi pi-table"></i>
+              <span>Screener</span>
+            </a>
+            <a class="nav-link" routerLink="/breakouts" routerLinkActive="active">
+              <i class="pi pi-chart-line"></i>
+              <span>Breakouts</span>
+            </a>
+            <a class="nav-link" routerLink="/news" routerLinkActive="active">
+              <i class="pi pi-bolt"></i>
+              <span>News</span>
+            </a>
+          </nav>
 
           <!-- Stock Search (always visible) -->
           <div class="header-search">
@@ -175,7 +191,44 @@ interface MarketIndex {
     .header-left {
       display: flex;
       align-items: center;
-      gap: 1rem;
+      gap: 1.25rem;
+    }
+
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      padding: 0.2rem;
+      background: var(--surface-ground);
+      border-radius: 8px;
+    }
+
+    .nav-link {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.4rem 0.75rem;
+      border-radius: 6px;
+      text-decoration: none;
+      color: var(--text-color-secondary);
+      font-size: 0.8rem;
+      font-weight: 500;
+      transition: all 0.2s ease;
+
+      i {
+        font-size: 0.85rem;
+      }
+
+      &:hover {
+        color: var(--text-color);
+        background: var(--surface-hover);
+      }
+
+      &.active {
+        color: var(--primary-color);
+        background: var(--surface-card);
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
     }
 
     .header-brand {

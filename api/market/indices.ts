@@ -1,25 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-
-interface MarketIndex {
-  symbol: string;
-  name: string;
-  price: number;
-  change: number;
-  changePercent: number;
-  fiftyTwoWeekLow: number;
-  fiftyTwoWeekHigh: number;
-}
-
-const US_INDICES = ['^GSPC', '^DJI', '^IXIC'];
-const IN_INDICES = ['^NSEI', '^BSESN'];
-
-const INDEX_NAMES: Record<string, string> = {
-  '^GSPC': 'S&P 500',
-  '^DJI': 'Dow Jones',
-  '^IXIC': 'NASDAQ',
-  '^NSEI': 'NIFTY 50',
-  '^BSESN': 'SENSEX'
-};
+import { getMarketIndices, Market, MarketIndex } from '../_lib/yahoo-client';
 
 // Fallback data in case Yahoo Finance is unavailable
 const FALLBACK_DATA: Record<string, MarketIndex> = {
@@ -29,6 +9,9 @@ const FALLBACK_DATA: Record<string, MarketIndex> = {
   '^NSEI': { symbol: '^NSEI', name: 'NIFTY 50', price: 22000, change: 0, changePercent: 0, fiftyTwoWeekLow: 21000, fiftyTwoWeekHigh: 23000 },
   '^BSESN': { symbol: '^BSESN', name: 'SENSEX', price: 73000, change: 0, changePercent: 0, fiftyTwoWeekLow: 70000, fiftyTwoWeekHigh: 75000 }
 };
+
+const US_INDICES = ['^GSPC', '^DJI', '^IXIC'];
+const IN_INDICES = ['^NSEI', '^BSESN'];
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
@@ -47,39 +30,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const { market = 'US' } = req.query;
-    const marketType = (market as string).toUpperCase();
-    
-    const symbols = marketType === 'IN' ? IN_INDICES : US_INDICES;
-    
-    // Try to fetch from Yahoo Finance with timeout
+    const marketType = (market as string).toUpperCase() as Market;
+
+    // Try to fetch from Yahoo Finance
     try {
-      const yahooFinance = await import('yahoo-finance2').then(m => m.default);
+      const indices = await getMarketIndices(marketType);
       
-      const fetchPromise = yahooFinance.quote(symbols);
-      const timeoutPromise = new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Yahoo Finance timeout')), 8000)
-      );
+      if (indices && indices.length > 0) {
+        return res.status(200).json({ indices });
+      }
       
-      const quotes = await Promise.race([fetchPromise, timeoutPromise]) as any;
-      const quoteArray = Array.isArray(quotes) ? quotes : [quotes];
+      // If no data returned, use fallback
+      throw new Error('No index data returned');
+    } catch (yahooError: any) {
+      console.warn('Yahoo Finance unavailable, using fallback data:', yahooError.message);
 
-      const indices: MarketIndex[] = quoteArray.map((q: any) => ({
-        symbol: q.symbol,
-        name: INDEX_NAMES[q.symbol] || q.shortName || q.symbol,
-        price: q.regularMarketPrice || 0,
-        change: q.regularMarketChange || 0,
-        changePercent: q.regularMarketChangePercent || 0,
-        fiftyTwoWeekLow: q.fiftyTwoWeekLow || 0,
-        fiftyTwoWeekHigh: q.fiftyTwoWeekHigh || 0
-      }));
-
-      return res.status(200).json({ indices });
-    } catch (yahooError) {
-      console.warn('Yahoo Finance unavailable, using fallback data:', yahooError);
-      
       // Return fallback data
+      const symbols = marketType === 'IN' ? IN_INDICES : US_INDICES;
       const indices = symbols.map(symbol => FALLBACK_DATA[symbol]);
-      return res.status(200).json({ 
+      return res.status(200).json({
         indices,
         fallback: true,
         message: 'Using cached data due to API limitations'
@@ -87,14 +56,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   } catch (error: any) {
     console.error('Market indices API error:', error);
-    
+
     // Return fallback data on any error
     const { market = 'US' } = req.query;
     const marketType = (market as string).toUpperCase();
     const symbols = marketType === 'IN' ? IN_INDICES : US_INDICES;
     const indices = symbols.map(symbol => FALLBACK_DATA[symbol]);
-    
-    return res.status(200).json({ 
+
+    return res.status(200).json({
       indices,
       fallback: true,
       message: 'Using cached data'

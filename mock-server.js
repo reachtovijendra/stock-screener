@@ -1927,6 +1927,405 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Market-wide news endpoint (aggregates news from large-cap stocks + general market news)
+    if (path === '/api/market/news' && req.method === 'GET') {
+      const LARGE_CAP_STOCKS = [
+        'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
+        'UNH', 'JNJ', 'V', 'XOM', 'JPM', 'WMT', 'MA'
+      ];
+      
+      // General market news RSS feeds
+      const MARKET_NEWS_FEEDS = [
+        { url: 'https://news.google.com/rss/search?q=stock+market+today&hl=en-US&gl=US&ceid=US:en', source: 'Market News', symbol: 'MARKET' },
+        { url: 'https://news.google.com/rss/search?q=fed+interest+rates+economy&hl=en-US&gl=US&ceid=US:en', source: 'Economic News', symbol: 'ECONOMY' },
+        { url: 'https://news.google.com/rss/search?q=S%26P+500+dow+jones+nasdaq&hl=en-US&gl=US&ceid=US:en', source: 'Market Indices', symbol: 'INDICES' }
+      ];
+      
+      // Helper to classify if news is market-related
+      function isMarketNews(title, description) {
+        const text = `${title} ${description}`.toLowerCase();
+        return text.includes('fed ') || text.includes('federal reserve') || text.includes('interest rate') ||
+               text.includes('inflation') || text.includes('gdp') || text.includes('jobs report') ||
+               text.includes('unemployment') || text.includes('recession') || text.includes('economy') ||
+               text.includes('s&p 500') || text.includes('dow jones') || text.includes('nasdaq') ||
+               text.includes('market today') || text.includes('markets ') || text.includes('wall street') ||
+               text.includes('rally') || text.includes('selloff') || text.includes('bull market') ||
+               text.includes('bear market') || text.includes('treasury') || text.includes('bond yield');
+      }
+      
+      try {
+        console.log('[Market News] Fetching news from large-cap stocks and market feeds...');
+        
+        // Fetch general market news
+        const marketNewsPromises = MARKET_NEWS_FEEDS.map(async (feed) => {
+          try {
+            const items = await fetchRSSWithTimeout({
+              hostname: 'news.google.com',
+              path: new URL(feed.url).pathname + new URL(feed.url).search
+            }, feed.source, 5000);
+            return items.map(item => ({
+              ...item,
+              symbol: feed.symbol,
+              type: 'market',
+              timeAgo: getRelativeTime(item.pubDate)
+            }));
+          } catch (err) {
+            return [];
+          }
+        });
+        
+        // Fetch news from multiple stocks in parallel
+        const stockNewsPromises = LARGE_CAP_STOCKS.map(async (symbol) => {
+          try {
+            const items = await tryYahooFinanceRSS(symbol);
+            // Add symbol to each news item and check if it's market news
+            return items.map(item => {
+              const itemIsMarket = isMarketNews(item.title, item.description || '');
+              return {
+                ...item,
+                symbol,
+                type: itemIsMarket ? 'market' : item.type,
+                timeAgo: getRelativeTime(item.pubDate)
+              };
+            });
+          } catch (err) {
+            return [];
+          }
+        });
+        
+        const [marketResults, stockResults] = await Promise.all([
+          Promise.all(marketNewsPromises),
+          Promise.all(stockNewsPromises)
+        ]);
+        
+        let allNews = [...marketResults.flat(), ...stockResults.flat()];
+        
+        // Remove duplicates by link
+        const seenLinks = new Set();
+        allNews = allNews.filter(item => {
+          if (seenLinks.has(item.link)) return false;
+          seenLinks.add(item.link);
+          return true;
+        });
+        
+        // Sort by date (newest first)
+        allNews.sort((a, b) => {
+          const dateA = new Date(a.pubDate || 0);
+          const dateB = new Date(b.pubDate || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
+        
+        // Calculate category counts
+        const categories = {
+          market: 0,
+          price_target: 0,
+          upgrade_downgrade: 0,
+          earnings: 0,
+          insider: 0,
+          dividend: 0,
+          general: 0
+        };
+        
+        allNews.forEach(item => {
+          if (categories[item.type] !== undefined) {
+            categories[item.type]++;
+          }
+        });
+        
+        // Limit to 150 articles
+        const limitedNews = allNews.slice(0, 150);
+        
+        console.log(`[Market News] Total: ${limitedNews.length} articles (${categories.market} market news)`);
+        
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          news: limitedNews,
+          categories,
+          totalStocks: LARGE_CAP_STOCKS.length,
+          timestamp: new Date().toISOString()
+        }));
+      } catch (error) {
+        console.error('[Market News] Error:', error.message);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: 'Failed to fetch market news', news: [], categories: {} }));
+      }
+      return;
+    }
+
+    // Technical Breakouts endpoint
+    if (path === '/api/market/breakouts' && req.method === 'GET') {
+      const STOCKS_TO_SCAN = [
+        // Mega cap tech
+        'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'BRK-A',
+        // Healthcare
+        'UNH', 'JNJ', 'LLY', 'PFE', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY',
+        // Financial
+        'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP',
+        // Consumer
+        'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT',
+        // Energy
+        'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL',
+        // Tech & Semiconductors
+        'AVGO', 'CSCO', 'ACN', 'CRM', 'ORCL', 'NFLX', 'AMD', 'INTC', 'QCOM', 'TXN',
+        'IBM', 'AMAT', 'LRCX', 'MU', 'ADI', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON',
+        // Industrial
+        'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP',
+        // Telecom & Media
+        'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'CHTR', 'WBD', 'PARA', 'FOX', 'NWSA',
+        // Utilities & REITs
+        'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'AMT', 'PLD', 'CCI',
+        // Other popular
+        'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID'
+      ];
+
+      function analyzeStockForBreakouts(quote, rsi, macd) {
+        const breakouts = [];
+        
+        const baseStock = {
+          symbol: quote.symbol,
+          name: quote.shortName || quote.longName || quote.symbol,
+          price: quote.regularMarketPrice || 0,
+          change: quote.regularMarketChange || 0,
+          changePercent: quote.regularMarketChangePercent || 0,
+          marketCap: quote.marketCap || 0,
+          volume: quote.regularMarketVolume || 0,
+          avgVolume: quote.averageDailyVolume3Month || 0,
+          relativeVolume: quote.averageDailyVolume3Month ? (quote.regularMarketVolume / quote.averageDailyVolume3Month) : 1,
+          fiftyDayMA: quote.fiftyDayAverage,
+          twoHundredDayMA: quote.twoHundredDayAverage,
+          percentFromFiftyDayMA: quote.fiftyDayAverage ? ((quote.regularMarketPrice - quote.fiftyDayAverage) / quote.fiftyDayAverage) * 100 : null,
+          percentFromTwoHundredDayMA: quote.twoHundredDayAverage ? ((quote.regularMarketPrice - quote.twoHundredDayAverage) / quote.twoHundredDayAverage) * 100 : null,
+          fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh,
+          fiftyTwoWeekLow: quote.fiftyTwoWeekLow,
+          percentFromFiftyTwoWeekHigh: quote.fiftyTwoWeekHigh ? ((quote.regularMarketPrice - quote.fiftyTwoWeekHigh) / quote.fiftyTwoWeekHigh) * 100 : null,
+          percentFromFiftyTwoWeekLow: quote.fiftyTwoWeekLow ? ((quote.regularMarketPrice - quote.fiftyTwoWeekLow) / quote.fiftyTwoWeekLow) * 100 : null,
+          rsi: rsi ? Math.round(rsi * 10) / 10 : undefined,
+          market: 'US'
+        };
+
+        const price = baseStock.price;
+        const pct50MA = baseStock.percentFromFiftyDayMA;
+        const pct200MA = baseStock.percentFromTwoHundredDayMA;
+        const pct52High = baseStock.percentFromFiftyTwoWeekHigh;
+        const pct52Low = baseStock.percentFromFiftyTwoWeekLow;
+        const relVol = baseStock.relativeVolume;
+
+        // Moving Average Crossovers - within 5% of 50 MA
+        if (pct50MA != null && Math.abs(pct50MA) <= 5) {
+          breakouts.push({
+            ...baseStock,
+            alertType: pct50MA > 0 ? 'above_50ma' : 'below_50ma',
+            alertCategory: 'ma_crossover',
+            alertDescription: pct50MA > 0 
+              ? `Trading ${Math.abs(pct50MA).toFixed(1)}% above 50-day MA - potential support` 
+              : `Trading ${Math.abs(pct50MA).toFixed(1)}% below 50-day MA - watch for breakdown`,
+            severity: pct50MA > 0 ? 'bullish' : 'bearish'
+          });
+        }
+
+        // Within 8% of 200 MA
+        if (pct200MA != null && Math.abs(pct200MA) <= 8) {
+          breakouts.push({
+            ...baseStock,
+            alertType: pct200MA > 0 ? 'above_200ma' : 'below_200ma',
+            alertCategory: 'ma_crossover',
+            alertDescription: pct200MA > 0 
+              ? `Trading ${Math.abs(pct200MA).toFixed(1)}% above 200-day MA - long-term uptrend` 
+              : `Trading ${Math.abs(pct200MA).toFixed(1)}% below 200-day MA - long-term downtrend`,
+            severity: pct200MA > 0 ? 'bullish' : 'bearish'
+          });
+        }
+
+        // Golden Cross / Death Cross detection - within 3%
+        if (baseStock.fiftyDayMA && baseStock.twoHundredDayMA) {
+          const maDiff = ((baseStock.fiftyDayMA - baseStock.twoHundredDayMA) / baseStock.twoHundredDayMA) * 100;
+          if (Math.abs(maDiff) <= 3) {
+            breakouts.push({
+              ...baseStock,
+              alertType: maDiff > 0 ? 'golden_cross' : 'death_cross',
+              alertCategory: 'ma_crossover',
+              alertDescription: maDiff > 0 
+                ? `Golden Cross forming - 50 MA ${Math.abs(maDiff).toFixed(1)}% above 200 MA (bullish)` 
+                : `Death Cross forming - 50 MA ${Math.abs(maDiff).toFixed(1)}% below 200 MA (bearish)`,
+              severity: maDiff > 0 ? 'bullish' : 'bearish'
+            });
+          }
+        }
+
+        // 52-Week Levels - within 5% of high
+        if (pct52High != null && pct52High >= -5) {
+          breakouts.push({
+            ...baseStock,
+            alertType: pct52High >= 0 ? 'new_52w_high' : 'near_52w_high',
+            alertCategory: '52w_levels',
+            alertDescription: pct52High >= 0 
+              ? 'New 52-week high - momentum breakout' 
+              : `Within ${Math.abs(pct52High).toFixed(1)}% of 52-week high`,
+            severity: 'bullish'
+          });
+        }
+
+        // Within 10% of 52-week low
+        if (pct52Low != null && pct52Low <= 10) {
+          breakouts.push({
+            ...baseStock,
+            alertType: pct52Low <= 0 ? 'new_52w_low' : 'near_52w_low',
+            alertCategory: '52w_levels',
+            alertDescription: pct52Low <= 0 
+              ? 'New 52-week low - potential capitulation' 
+              : `Within ${pct52Low.toFixed(1)}% of 52-week low - potential bounce`,
+            severity: pct52Low <= 0 ? 'bearish' : 'neutral'
+          });
+        }
+
+        // RSI Signals - expanded thresholds
+        if (rsi != null) {
+          if (rsi <= 35) {
+            breakouts.push({
+              ...baseStock,
+              alertType: rsi <= 30 ? 'rsi_oversold' : 'rsi_approaching_oversold',
+              alertCategory: 'rsi_signals',
+              alertDescription: rsi <= 30 
+                ? `RSI at ${rsi.toFixed(0)} - oversold territory, potential bounce`
+                : `RSI at ${rsi.toFixed(0)} - approaching oversold, watch for reversal`,
+              severity: 'bullish'
+            });
+          } else if (rsi >= 65) {
+            breakouts.push({
+              ...baseStock,
+              alertType: rsi >= 70 ? 'rsi_overbought' : 'rsi_approaching_overbought',
+              alertCategory: 'rsi_signals',
+              alertDescription: rsi >= 70 
+                ? `RSI at ${rsi.toFixed(0)} - overbought territory, potential pullback`
+                : `RSI at ${rsi.toFixed(0)} - approaching overbought, monitor closely`,
+              severity: 'bearish'
+            });
+          }
+        }
+
+        // Volume Breakouts - 1.5x+ average
+        if (relVol >= 1.5) {
+          breakouts.push({
+            ...baseStock,
+            alertType: 'high_volume',
+            alertCategory: 'volume_breakout',
+            alertDescription: `${relVol.toFixed(1)}x average volume - ${relVol >= 2 ? 'significant' : 'elevated'} activity`,
+            severity: baseStock.changePercent >= 0 ? 'bullish' : 'bearish'
+          });
+        }
+
+        // MACD Signals
+        if (macd && macd.signalType) {
+          const signalType = macd.signalType;
+          if (signalType === 'bullish_crossover') {
+            breakouts.push({
+              ...baseStock,
+              alertType: 'macd_bullish_cross',
+              alertCategory: 'macd_signals',
+              alertDescription: 'MACD bullish crossover - MACD line crossed above signal line',
+              severity: 'bullish'
+            });
+          } else if (signalType === 'bearish_crossover') {
+            breakouts.push({
+              ...baseStock,
+              alertType: 'macd_bearish_cross',
+              alertCategory: 'macd_signals',
+              alertDescription: 'MACD bearish crossover - MACD line crossed below signal line',
+              severity: 'bearish'
+            });
+          } else if (signalType === 'strong_bullish') {
+            breakouts.push({
+              ...baseStock,
+              alertType: 'macd_strong_bullish',
+              alertCategory: 'macd_signals',
+              alertDescription: 'Strong bullish MACD - positive MACD above signal line',
+              severity: 'bullish'
+            });
+          } else if (signalType === 'strong_bearish') {
+            breakouts.push({
+              ...baseStock,
+              alertType: 'macd_strong_bearish',
+              alertCategory: 'macd_signals',
+              alertDescription: 'Strong bearish MACD - negative MACD below signal line',
+              severity: 'bearish'
+            });
+          }
+        }
+
+        return breakouts;
+      }
+
+      try {
+        console.log('[Breakouts] Scanning stocks for technical breakouts...');
+        const startTime = Date.now();
+        
+        // Fetch quotes and calculate technicals
+        const auth = await getYahooCrumb();
+        const allBreakouts = [];
+        
+        // Process in batches
+        const batchSize = 10;
+        for (let i = 0; i < STOCKS_TO_SCAN.length; i += batchSize) {
+          const batch = STOCKS_TO_SCAN.slice(i, i + batchSize);
+          
+          // Fetch quotes for batch
+          const symbolsParam = batch.join(',');
+          const quotePath = `/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}&crumb=${encodeURIComponent(auth.crumb || '')}`;
+          
+          const quoteResponse = await httpsRequest({
+            hostname: 'query1.finance.yahoo.com',
+            port: 443,
+            path: quotePath,
+            method: 'GET',
+            headers: {
+              'Cookie': auth.cookies,
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            }
+          });
+          
+          if (quoteResponse.statusCode === 200 && quoteResponse.body) {
+            const data = JSON.parse(quoteResponse.body);
+            const quotes = data.quoteResponse?.result || [];
+            
+            // Calculate RSI for each stock and analyze
+            for (const quote of quotes) {
+              try {
+                const prices = await fetchHistoricalPrices(quote.symbol, 50);
+                const rsi = prices ? calculateRSI(prices) : null;
+                const macd = prices ? calculateMACD(prices) : null;
+                const breakouts = analyzeStockForBreakouts(quote, rsi, macd);
+                allBreakouts.push(...breakouts);
+              } catch (err) {
+                // Skip stocks with errors
+              }
+            }
+          }
+          
+          // Small delay between batches
+          if (i + batchSize < STOCKS_TO_SCAN.length) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+          }
+        }
+        
+        // Sort by absolute change percent
+        allBreakouts.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+        
+        console.log(`[Breakouts] Found ${allBreakouts.length} alerts in ${Date.now() - startTime}ms`);
+        
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          breakouts: allBreakouts,
+          scannedStocks: STOCKS_TO_SCAN.length,
+          timestamp: new Date().toISOString()
+        }));
+      } catch (error) {
+        console.error('[Breakouts] Error:', error.message);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: 'Failed to scan breakouts', breakouts: [] }));
+      }
+      return;
+    }
+
     if (path === '/api/health') {
       res.writeHead(200);
       res.end(JSON.stringify({ status: 'ok', cacheSize: cache.size, hasAuth: !!yahooAuth.crumb }));

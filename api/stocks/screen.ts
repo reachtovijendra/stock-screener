@@ -283,9 +283,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
   } catch (error: any) {
     console.error('Screen API error:', error);
-    return res.status(500).json({ 
-      error: 'Screening failed',
-      message: error.message 
+    
+    // Return empty results with error info instead of 500
+    return res.status(200).json({
+      stocks: [],
+      totalCount: 0,
+      executionTimeMs: 0,
+      error: 'Screening failed - Yahoo Finance may be temporarily unavailable',
+      message: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 }

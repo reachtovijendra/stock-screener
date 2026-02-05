@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import yahooFinance from 'yahoo-finance2';
+import https from 'https';
 import { Market } from '../_lib/yahoo-client';
 
 interface MarketIndex {
@@ -20,6 +20,62 @@ const INDEX_NAMES: Record<string, string> = {
   '^BSESN': 'SENSEX',
   '^NSEBANK': 'Bank NIFTY'
 };
+
+/**
+ * Make HTTPS request
+ */
+function httpsRequest(options: https.RequestOptions): Promise<{ statusCode: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk: Buffer) => data += chunk.toString());
+      res.on('end', () => {
+        resolve({
+          statusCode: res.statusCode || 500,
+          body: data
+        });
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(10000, () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+
+    req.end();
+  });
+}
+
+/**
+ * Fetch quotes from Yahoo Finance
+ */
+async function fetchQuotes(symbols: string[]): Promise<any[]> {
+  try {
+    const symbolsParam = symbols.join(',');
+    const response = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      port: 443,
+      path: `/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}`,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (response.statusCode === 200) {
+      const data = JSON.parse(response.body);
+      if (data.quoteResponse && data.quoteResponse.result) {
+        return data.quoteResponse.result;
+      }
+    }
+    return [];
+  } catch (error) {
+    console.error('Error fetching quotes:', error);
+    return [];
+  }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS headers
@@ -45,10 +101,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const symbolList = (symbols as string).split(',').map(s => s.trim());
     
-    const quotes = await yahooFinance.quote(symbolList);
-    const quoteArray = Array.isArray(quotes) ? quotes : [quotes];
+    const quotes = await fetchQuotes(symbolList);
 
-    const indices: MarketIndex[] = quoteArray.map((q: any) => ({
+    const indices: MarketIndex[] = quotes.map((q: any) => ({
       symbol: q.symbol,
       name: INDEX_NAMES[q.symbol] || q.shortName || q.symbol,
       value: q.regularMarketPrice || 0,
@@ -60,9 +115,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(indices);
   } catch (error: any) {
     console.error('Indices API error:', error);
-    return res.status(500).json({ 
+    return res.status(200).json({
+      indices: [],
       error: 'Failed to fetch indices',
-      message: error.message 
+      message: error.message
     });
   }
 }

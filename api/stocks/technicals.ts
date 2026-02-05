@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import yahooFinance from 'yahoo-finance2';
+import https from 'https';
 
 interface TechnicalIndicators {
   rsi: number | null;
@@ -8,6 +8,63 @@ interface TechnicalIndicators {
   macdHistogram: number | null;
   fiftyDayMA: number | null;
   twoHundredDayMA: number | null;
+}
+
+/**
+ * Make HTTPS request
+ */
+function httpsRequest(options: https.RequestOptions): Promise<{ statusCode: number; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk: Buffer) => data += chunk.toString());
+      res.on('end', () => {
+        resolve({
+          statusCode: res.statusCode || 500,
+          body: data
+        });
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(15000, () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+
+    req.end();
+  });
+}
+
+/**
+ * Fetch historical prices from Yahoo Finance chart API
+ */
+async function fetchHistoricalPrices(symbol: string): Promise<number[]> {
+  try {
+    const response = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      port: 443,
+      path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': '*/*'
+      }
+    });
+
+    if (response.statusCode === 200) {
+      const data = JSON.parse(response.body);
+      if (data.chart?.result?.[0]?.indicators?.quote?.[0]?.close) {
+        const closes = data.chart.result[0].indicators.quote[0].close;
+        // Filter out null values
+        return closes.filter((c: number | null) => c != null);
+      }
+    }
+    return [];
+  } catch (error) {
+    console.error(`Error fetching historical data for ${symbol}:`, error);
+    return [];
+  }
 }
 
 /**
@@ -41,14 +98,14 @@ function calculateRSI(closes: number[], period: number = 14): number | null {
 
   if (avgLoss === 0) return 100;
   const rs = avgGain / avgLoss;
-  return 100 - (100 / (1 + rs));
+  return Math.round((100 - (100 / (1 + rs))) * 10) / 10;
 }
 
 /**
  * Calculate MACD (Moving Average Convergence Divergence)
  */
 function calculateMACD(closes: number[]): { macd: number | null; signal: number | null; histogram: number | null } {
-  if (closes.length < 26) return { macd: null, signal: null, histogram: null };
+  if (closes.length < 35) return { macd: null, signal: null, histogram: null };
 
   // Calculate EMA
   const calculateEMA = (data: number[], period: number): number[] => {
@@ -77,9 +134,9 @@ function calculateMACD(closes: number[]): { macd: number | null; signal: number 
   const histogram = macdLine - signal;
 
   return {
-    macd: macdLine,
-    signal: signal,
-    histogram: histogram
+    macd: Math.round(macdLine * 1000) / 1000,
+    signal: Math.round(signal * 1000) / 1000,
+    histogram: Math.round(histogram * 1000) / 1000
   };
 }
 
@@ -89,7 +146,7 @@ function calculateMACD(closes: number[]): { macd: number | null; signal: number 
 function calculateSMA(closes: number[], period: number): number | null {
   if (closes.length < period) return null;
   const sum = closes.slice(-period).reduce((a, b) => a + b, 0);
-  return sum / period;
+  return Math.round((sum / period) * 100) / 100;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -113,23 +170,47 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(400).json({ error: 'Symbols array is required' });
     }
 
+    // Limit to 50 symbols per request
+    const limitedSymbols = symbols.slice(0, 50);
     const technicals: Record<string, TechnicalIndicators> = {};
 
-    // Fetch historical data for all symbols
-    await Promise.all(
-      symbols.map(async (symbol: string) => {
-        try {
-          const now = new Date();
-          const start = new Date();
-          start.setFullYear(now.getFullYear() - 1); // 1 year of data
+    // Fetch historical data for all symbols in parallel batches
+    const batchSize = 10;
+    for (let i = 0; i < limitedSymbols.length; i += batchSize) {
+      const batch = limitedSymbols.slice(i, i + batchSize);
+      
+      await Promise.all(
+        batch.map(async (symbol: string) => {
+          try {
+            const closes = await fetchHistoricalPrices(symbol);
 
-          const historicalData = await yahooFinance.historical(symbol, {
-            period1: start,
-            period2: now,
-            interval: '1d'
-          });
+            if (!closes || closes.length < 35) {
+              technicals[symbol] = {
+                rsi: null,
+                macd: null,
+                macdSignal: null,
+                macdHistogram: null,
+                fiftyDayMA: null,
+                twoHundredDayMA: null
+              };
+              return;
+            }
 
-          if (!historicalData || historicalData.length === 0) {
+            const rsi = calculateRSI(closes);
+            const macdData = calculateMACD(closes);
+            const ma50 = calculateSMA(closes, 50);
+            const ma200 = calculateSMA(closes, 200);
+
+            technicals[symbol] = {
+              rsi,
+              macd: macdData.macd,
+              macdSignal: macdData.signal,
+              macdHistogram: macdData.histogram,
+              fiftyDayMA: ma50,
+              twoHundredDayMA: ma200
+            };
+          } catch (error) {
+            console.error(`Error fetching technicals for ${symbol}:`, error);
             technicals[symbol] = {
               rsi: null,
               macd: null,
@@ -138,42 +219,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               fiftyDayMA: null,
               twoHundredDayMA: null
             };
-            return;
           }
+        })
+      );
 
-          const closes = historicalData.map((d: any) => d.close);
-
-          const rsi = calculateRSI(closes);
-          const macdData = calculateMACD(closes);
-          const ma50 = calculateSMA(closes, 50);
-          const ma200 = calculateSMA(closes, 200);
-
-          technicals[symbol] = {
-            rsi,
-            macd: macdData.macd,
-            macdSignal: macdData.signal,
-            macdHistogram: macdData.histogram,
-            fiftyDayMA: ma50,
-            twoHundredDayMA: ma200
-          };
-        } catch (error) {
-          console.error(`Error fetching technicals for ${symbol}:`, error);
-          technicals[symbol] = {
-            rsi: null,
-            macd: null,
-            macdSignal: null,
-            macdHistogram: null,
-            fiftyDayMA: null,
-            twoHundredDayMA: null
-          };
-        }
-      })
-    );
+      // Small delay between batches
+      if (i + batchSize < limitedSymbols.length) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+    }
 
     return res.status(200).json({ technicals });
   } catch (error: any) {
     console.error('Technicals API error:', error);
-    return res.status(500).json({
+    return res.status(200).json({
+      technicals: {},
       error: 'Failed to calculate technical indicators',
       message: error.message
     });

@@ -8,6 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Technical Breakouts page showing stocks crossing critical technical levels
+- Moving Average Crossover alerts: 50-day MA, 200-day MA, Golden Cross, Death Cross
+- 52-Week Level alerts: New highs, new lows, near-high, near-low conditions
+- RSI Signal alerts: Overbought (>70) and oversold (<30) conditions
+- MACD Signal alerts: Bullish and bearish crossovers
+- Volume Breakout alerts: Unusual trading volume (2x+ average)
+- Signal type filter (All/Bullish/Bearish) with real-time counts
+- Collapsible category sections for organized alert viewing
+- Market News page aggregating news from large-cap stocks (>$100B market cap)
+- Six news category filters: Price Target, Rating, Earnings, Insider, Dividend, General News
+- Interactive category filter tabs with visual feedback and counts
+- Real-time article count and source statistics
+- Auto-refresh every 5 minutes with manual refresh option
+- News cards with category badges, stock symbols, and time indicators
+- Navigation link to News page in header
+- Market news API endpoint for fetching aggregated news from multiple stocks
+
+### Fixed
+- Vercel API functions now use direct HTTP requests with crumb authentication instead of yahoo-finance2 library
+- Fixed Yahoo Finance blocking requests from Vercel serverless function IPs
+- API endpoints return graceful fallback data when Yahoo Finance is temporarily unavailable
+- Improved error handling across all API endpoints to prevent 500 errors
+
+### Changed
+- Replaced yahoo-finance2 dependency in Vercel functions with native https module
+- Updated yahoo-client.ts to use browser-like headers and crumb-based authentication
+- API functions now use batch requests for improved performance
+
+### Added
 - Initial project setup with Angular 19 and PrimeNG 19
 - Stock screener feature with comprehensive filtering capabilities
 - Support for US (NYSE, NASDAQ) and Indian (NSE, BSE) markets

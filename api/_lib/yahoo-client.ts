@@ -1,12 +1,9 @@
-import yahooFinance from 'yahoo-finance2';
+/**
+ * Yahoo Finance Client with Crumb Authentication
+ * Works on both Vercel serverless and local environments
+ */
 
-// Configure yahoo-finance2
-yahooFinance.setGlobalConfig({
-  queue: {
-    concurrency: 2,
-    timeout: 60000
-  }
-});
+import https from 'https';
 
 /**
  * Market type
@@ -14,7 +11,7 @@ yahooFinance.setGlobalConfig({
 export type Market = 'US' | 'IN';
 
 /**
- * Stock quote from Yahoo Finance
+ * Stock quote interface
  */
 export interface StockQuote {
   symbol: string;
@@ -54,32 +51,292 @@ export interface StockQuote {
 }
 
 /**
- * In-memory cache for quotes
+ * Market index interface
  */
+export interface MarketIndex {
+  symbol: string;
+  name: string;
+  price: number;
+  change: number;
+  changePercent: number;
+  fiftyTwoWeekLow: number;
+  fiftyTwoWeekHigh: number;
+}
+
+// Yahoo Finance authentication cache
+let yahooAuth: { crumb: string | null; cookies: string | null; timestamp: number } = {
+  crumb: null,
+  cookies: null,
+  timestamp: 0
+};
+const AUTH_TTL = 25 * 60 * 1000; // 25 minutes
+
+// Quote cache
 const quoteCache = new Map<string, { data: StockQuote; timestamp: number }>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 3 * 60 * 1000; // 3 minutes
 
 /**
- * Get cached quote if valid
+ * Make HTTPS request with promise
  */
-function getCachedQuote(symbol: string): StockQuote | null {
-  const cached = quoteCache.get(symbol);
-  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-    return cached.data;
-  }
-  return null;
+function httpsRequest(options: https.RequestOptions, postData: string | null = null): Promise<{ statusCode: number; headers: any; body: string }> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let data = '';
+      res.on('data', (chunk: Buffer) => data += chunk.toString());
+      res.on('end', () => {
+        resolve({
+          statusCode: res.statusCode || 500,
+          headers: res.headers,
+          body: data
+        });
+      });
+    });
+
+    req.on('error', reject);
+    req.setTimeout(15000, () => {
+      req.destroy();
+      reject(new Error('Request timeout'));
+    });
+
+    if (postData) {
+      req.write(postData);
+    }
+    req.end();
+  });
 }
 
 /**
- * Cache a quote
+ * Get Yahoo Finance crumb for authenticated requests
  */
-function cacheQuote(symbol: string, quote: StockQuote): void {
-  quoteCache.set(symbol, { data: quote, timestamp: Date.now() });
-  
-  // Limit cache size
-  if (quoteCache.size > 1000) {
-    const firstKey = quoteCache.keys().next().value;
-    if (firstKey) quoteCache.delete(firstKey);
+async function getYahooCrumb(): Promise<{ crumb: string | null; cookies: string | null }> {
+  // Check if we have a valid cached crumb
+  if (yahooAuth.crumb && Date.now() - yahooAuth.timestamp < AUTH_TTL) {
+    return yahooAuth;
+  }
+
+  console.log('[Yahoo] Fetching new crumb...');
+
+  try {
+    // Step 1: Get cookies from Yahoo Finance
+    const pageResponse = await httpsRequest({
+      hostname: 'finance.yahoo.com',
+      port: 443,
+      path: '/quote/AAPL',
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9'
+      }
+    });
+
+    // Extract cookies
+    const setCookies = pageResponse.headers['set-cookie'] as string[] | undefined;
+    let cookies = '';
+    if (setCookies) {
+      cookies = setCookies.map((c: string) => c.split(';')[0]).join('; ');
+    }
+
+    // Step 2: Get crumb using cookies
+    const crumbResponse = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      port: 443,
+      path: '/v1/test/getcrumb',
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': '*/*',
+        'Cookie': cookies
+      }
+    });
+
+    if (crumbResponse.statusCode === 200 && crumbResponse.body) {
+      yahooAuth = {
+        crumb: crumbResponse.body.trim(),
+        cookies: cookies,
+        timestamp: Date.now()
+      };
+      console.log('[Yahoo] Got crumb successfully');
+      return yahooAuth;
+    }
+
+    console.log('[Yahoo] Failed to get crumb:', crumbResponse.statusCode);
+    return { crumb: null, cookies: null };
+  } catch (error: any) {
+    console.error('[Yahoo] Error getting crumb:', error.message);
+    return { crumb: null, cookies: null };
+  }
+}
+
+/**
+ * Fetch quote from Yahoo Finance v7 API
+ */
+async function fetchYahooQuote(symbol: string): Promise<any | null> {
+  const auth = await getYahooCrumb();
+
+  // Build URL with crumb if available
+  let url = `/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
+  if (auth.crumb) {
+    url += `&crumb=${encodeURIComponent(auth.crumb)}`;
+  }
+
+  const headers: Record<string, string> = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json'
+  };
+
+  if (auth.cookies) {
+    headers['Cookie'] = auth.cookies;
+  }
+
+  try {
+    const response = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      port: 443,
+      path: url,
+      method: 'GET',
+      headers: headers
+    });
+
+    if (response.statusCode === 200) {
+      const data = JSON.parse(response.body);
+      if (data.quoteResponse && data.quoteResponse.result && data.quoteResponse.result.length > 0) {
+        return data.quoteResponse.result[0];
+      }
+    }
+
+    // If v7 fails, try chart API as fallback
+    console.log(`[Yahoo] v7 API failed for ${symbol}, trying chart API...`);
+    return await fetchChartQuote(symbol);
+  } catch (error: any) {
+    console.error(`[Yahoo] Error for ${symbol}:`, error.message);
+    return await fetchChartQuote(symbol);
+  }
+}
+
+/**
+ * Fetch quote from chart API (fallback)
+ */
+async function fetchChartQuote(symbol: string): Promise<any | null> {
+  try {
+    const response = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      port: 443,
+      path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=5d`,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': '*/*'
+      }
+    });
+
+    if (response.statusCode === 200) {
+      const data = JSON.parse(response.body);
+      if (data.chart && data.chart.result && data.chart.result[0]) {
+        const meta = data.chart.result[0].meta;
+        return {
+          symbol: meta.symbol,
+          shortName: meta.shortName || meta.longName,
+          regularMarketPrice: meta.regularMarketPrice,
+          regularMarketChange: meta.regularMarketPrice - (meta.chartPreviousClose || meta.previousClose),
+          regularMarketChangePercent: meta.chartPreviousClose
+            ? ((meta.regularMarketPrice - meta.chartPreviousClose) / meta.chartPreviousClose) * 100
+            : 0,
+          marketCap: meta.marketCap,
+          trailingPE: null,
+          forwardPE: null,
+          priceToBook: null,
+          fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
+          fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
+          fiftyDayAverage: meta.fiftyDayAverage,
+          twoHundredDayAverage: meta.twoHundredDayAverage,
+          regularMarketVolume: meta.regularMarketVolume,
+          averageDailyVolume3Month: meta.averageDailyVolume10Day,
+          exchange: meta.exchangeName || meta.exchange,
+          currency: meta.currency,
+          _source: 'chart'
+        };
+      }
+    }
+    return null;
+  } catch (error: any) {
+    console.error(`[Yahoo Chart] Error for ${symbol}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Fetch multiple quotes in batch
+ */
+async function fetchYahooQuotes(symbols: string[]): Promise<any[]> {
+  const auth = await getYahooCrumb();
+
+  // Build URL with all symbols
+  const symbolsParam = symbols.join(',');
+  let url = `/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}`;
+  if (auth.crumb) {
+    url += `&crumb=${encodeURIComponent(auth.crumb)}`;
+  }
+
+  const headers: Record<string, string> = {
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Accept': 'application/json'
+  };
+
+  if (auth.cookies) {
+    headers['Cookie'] = auth.cookies;
+  }
+
+  try {
+    const response = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      port: 443,
+      path: url,
+      method: 'GET',
+      headers: headers
+    });
+
+    if (response.statusCode === 200) {
+      const data = JSON.parse(response.body);
+      if (data.quoteResponse && data.quoteResponse.result) {
+        return data.quoteResponse.result;
+      }
+    }
+
+    console.log(`[Yahoo] Batch quote failed, status: ${response.statusCode}`);
+    return [];
+  } catch (error: any) {
+    console.error('[Yahoo] Batch quote error:', error.message);
+    return [];
+  }
+}
+
+/**
+ * Search Yahoo Finance for symbols
+ */
+async function searchYahooSymbols(query: string): Promise<any[]> {
+  try {
+    const url = `/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=30&newsCount=0&listsCount=0&enableFuzzyQuery=true`;
+
+    const response = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      port: 443,
+      path: url,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      }
+    });
+
+    if (response.statusCode === 200 && response.body) {
+      const data = JSON.parse(response.body);
+      return data.quotes || [];
+    }
+    return [];
+  } catch (error: any) {
+    console.error(`[Yahoo Search] Error:`, error.message);
+    return [];
   }
 }
 
@@ -97,16 +354,12 @@ export function getMarketFromSymbol(symbol: string): Market {
  * Format symbol for Yahoo Finance
  */
 export function formatSymbol(symbol: string, market: Market): string {
-  // If symbol already has suffix, return as is
   if (symbol.includes('.')) {
     return symbol;
   }
-  
-  // For Indian market, default to NSE
   if (market === 'IN') {
     return `${symbol}.NS`;
   }
-  
   return symbol;
 }
 
@@ -141,6 +394,7 @@ function transformQuote(data: any, market: Market): StockQuote {
   const twoHundredDayMA = data.twoHundredDayAverage || null;
   const avgVolume = data.averageDailyVolume3Month || data.averageVolume || 1;
   const volume = data.regularMarketVolume || 0;
+  const marketCap = data.marketCap || 0;
 
   return {
     symbol: data.symbol,
@@ -151,8 +405,8 @@ function transformQuote(data: any, market: Market): StockQuote {
     market,
     exchange: data.exchange || data.fullExchangeName || 'Unknown',
     currency: data.currency || (market === 'US' ? 'USD' : 'INR'),
-    marketCap: data.marketCap || 0,
-    marketCapCategory: categorizeMarketCap(data.marketCap || 0, market),
+    marketCap,
+    marketCapCategory: categorizeMarketCap(marketCap, market),
     fiftyTwoWeekHigh: high52,
     fiftyTwoWeekLow: low52,
     percentFromFiftyTwoWeekHigh: high52 > 0 ? ((price - high52) / high52) * 100 : 0,
@@ -161,11 +415,11 @@ function transformQuote(data: any, market: Market): StockQuote {
     forwardPeRatio: data.forwardPE || null,
     pbRatio: data.priceToBook || null,
     psRatio: data.priceToSalesTrailing12Months || null,
-    eps: data.trailingEps || null,
-    forwardEps: data.forwardEps || null,
+    eps: data.trailingEps || data.epsTrailingTwelveMonths || null,
+    forwardEps: data.forwardEps || data.epsForward || null,
     earningsGrowth: data.earningsQuarterlyGrowth ? data.earningsQuarterlyGrowth * 100 : null,
     revenueGrowth: data.revenueGrowth ? data.revenueGrowth * 100 : null,
-    dividendYield: data.dividendYield ? data.dividendYield * 100 : null,
+    dividendYield: data.dividendYield ? data.dividendYield * 100 : (data.trailingAnnualDividendYield ? data.trailingAnnualDividendYield * 100 : null),
     avgVolume,
     volume,
     relativeVolume: avgVolume > 0 ? volume / avgVolume : 1,
@@ -181,38 +435,49 @@ function transformQuote(data: any, market: Market): StockQuote {
 }
 
 /**
+ * Get cached quote if valid
+ */
+function getCachedQuote(symbol: string): StockQuote | null {
+  const cached = quoteCache.get(symbol);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+}
+
+/**
+ * Cache a quote
+ */
+function cacheQuote(symbol: string, quote: StockQuote): void {
+  quoteCache.set(symbol, { data: quote, timestamp: Date.now() });
+
+  // Limit cache size
+  if (quoteCache.size > 500) {
+    const firstKey = quoteCache.keys().next().value;
+    if (firstKey) quoteCache.delete(firstKey);
+  }
+}
+
+/**
  * Get a single stock quote
  */
 export async function getQuote(symbol: string, market: Market): Promise<StockQuote> {
   const formattedSymbol = formatSymbol(symbol, market);
-  
+
   // Check cache
   const cached = getCachedQuote(formattedSymbol);
   if (cached) {
     return cached;
   }
 
-  try {
-    const data = await yahooFinance.quoteSummary(formattedSymbol, {
-      modules: ['price', 'summaryDetail', 'defaultKeyStatistics', 'financialData', 'assetProfile']
-    });
-
-    const quote = transformQuote({
-      symbol: formattedSymbol,
-      ...data.price,
-      ...data.summaryDetail,
-      ...data.defaultKeyStatistics,
-      ...data.financialData,
-      sector: data.assetProfile?.sector,
-      industry: data.assetProfile?.industry
-    }, market);
-
-    cacheQuote(formattedSymbol, quote);
-    return quote;
-  } catch (error) {
-    console.error(`Error fetching quote for ${formattedSymbol}:`, error);
+  const data = await fetchYahooQuote(formattedSymbol);
+  if (!data) {
     throw new Error(`Failed to fetch quote for ${symbol}`);
   }
+
+  const quote = transformQuote(data, market);
+  cacheQuote(formattedSymbol, quote);
+  return quote;
 }
 
 /**
@@ -237,58 +502,87 @@ export async function getQuotes(symbols: string[], market: Market): Promise<Stoc
     return results;
   }
 
-  try {
-    // Use quote for batch requests (faster than quoteSummary for multiple)
-    const data = await yahooFinance.quote(uncachedSymbols);
-    const quotes = Array.isArray(data) ? data : [data];
+  // Fetch in batches of 50 (Yahoo limit)
+  const batchSize = 50;
+  for (let i = 0; i < uncachedSymbols.length; i += batchSize) {
+    const batch = uncachedSymbols.slice(i, i + batchSize);
+    const quotes = await fetchYahooQuotes(batch);
 
     for (const item of quotes) {
-      if (item) {
+      if (item && item.regularMarketPrice) {
         const quote = transformQuote(item, market);
         cacheQuote(quote.symbol, quote);
         results.push(quote);
       }
     }
-  } catch (error) {
-    console.error('Error fetching batch quotes:', error);
-    // Return what we have from cache
+
+    // Small delay between batches to avoid rate limiting
+    if (i + batchSize < uncachedSymbols.length) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+    }
   }
 
   return results;
 }
 
 /**
+ * Get market indices
+ */
+export async function getMarketIndices(market: Market): Promise<MarketIndex[]> {
+  const US_INDICES = ['^GSPC', '^DJI', '^IXIC'];
+  const IN_INDICES = ['^NSEI', '^BSESN'];
+  
+  const INDEX_NAMES: Record<string, string> = {
+    '^GSPC': 'S&P 500',
+    '^DJI': 'Dow Jones',
+    '^IXIC': 'NASDAQ',
+    '^NSEI': 'NIFTY 50',
+    '^BSESN': 'SENSEX'
+  };
+
+  const symbols = market === 'IN' ? IN_INDICES : US_INDICES;
+  const quotes = await fetchYahooQuotes(symbols);
+
+  return quotes.map((q: any) => ({
+    symbol: q.symbol,
+    name: INDEX_NAMES[q.symbol] || q.shortName || q.symbol,
+    price: q.regularMarketPrice || 0,
+    change: q.regularMarketChange || 0,
+    changePercent: q.regularMarketChangePercent || 0,
+    fiftyTwoWeekLow: q.fiftyTwoWeekLow || 0,
+    fiftyTwoWeekHigh: q.fiftyTwoWeekHigh || 0
+  }));
+}
+
+/**
  * Search for stocks
  */
 export async function searchStocks(query: string, market: Market): Promise<any[]> {
-  try {
-    const results = await yahooFinance.search(query, {
-      newsCount: 0,
-      quotesCount: 20
-    });
+  const results = await searchYahooSymbols(query);
 
-    return (results.quotes || [])
-      .filter((q: any) => {
-        // Filter by market
-        if (market === 'IN') {
-          return q.exchange === 'NSI' || q.exchange === 'BSE' || 
-                 q.symbol?.endsWith('.NS') || q.symbol?.endsWith('.BO');
-        } else {
-          return !q.symbol?.includes('.') || 
-                 ['NYSE', 'NASDAQ', 'AMEX', 'NYQ', 'NMS', 'NGM'].includes(q.exchange);
-        }
-      })
-      .map((q: any) => ({
-        symbol: q.symbol,
-        name: q.shortname || q.longname || q.symbol,
-        exchange: q.exchange,
-        type: q.quoteType?.toLowerCase() || 'equity',
-        market: getMarketFromSymbol(q.symbol)
-      }));
-  } catch (error) {
-    console.error('Search error:', error);
-    return [];
-  }
+  return results
+    .filter((q: any) => {
+      // Filter by quote type (equity or ETF)
+      if (q.quoteType !== 'EQUITY' && q.quoteType !== 'ETF') {
+        return false;
+      }
+      // Filter by market
+      if (market === 'IN') {
+        return q.exchange === 'NSI' || q.exchange === 'BSE' ||
+          q.symbol?.endsWith('.NS') || q.symbol?.endsWith('.BO');
+      } else {
+        return !q.symbol?.includes('.') ||
+          ['NYSE', 'NASDAQ', 'AMEX', 'NYQ', 'NMS', 'NGM', 'PCX'].includes(q.exchange);
+      }
+    })
+    .slice(0, 20)
+    .map((q: any) => ({
+      symbol: q.symbol,
+      name: q.shortname || q.longname || q.symbol,
+      exchange: q.exchange,
+      type: q.quoteType?.toLowerCase() || 'equity',
+      market: getMarketFromSymbol(q.symbol)
+    }));
 }
 
 /**
@@ -302,7 +596,9 @@ export function getIndexSymbols(market: Market): string[] {
       'V', 'XOM', 'JPM', 'WMT', 'MA', 'PG', 'HD', 'CVX', 'MRK', 'ABBV',
       'LLY', 'PFE', 'KO', 'PEP', 'COST', 'AVGO', 'TMO', 'MCD', 'CSCO', 'ACN',
       'ABT', 'DHR', 'NEE', 'VZ', 'ADBE', 'NKE', 'TXN', 'CRM', 'PM', 'ORCL',
-      'AMD', 'INTC', 'NFLX', 'QCOM', 'HON', 'UPS', 'LOW', 'BA', 'SBUX', 'CAT'
+      'AMD', 'INTC', 'NFLX', 'QCOM', 'HON', 'UPS', 'LOW', 'BA', 'SBUX', 'CAT',
+      'GE', 'IBM', 'GS', 'MS', 'AXP', 'BLK', 'C', 'WFC', 'BAC', 'SCHW',
+      'RTX', 'LMT', 'MMM', 'DIS', 'CMCSA', 'T', 'TMUS', 'COP', 'SLB', 'EOG'
     ];
   } else {
     // NIFTY 50 stocks

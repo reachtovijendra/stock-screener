@@ -255,12 +255,12 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null): 
     relativeVolume: quote.averageDailyVolume3Month ? (quote.regularMarketVolume / quote.averageDailyVolume3Month) : 1,
     fiftyDayMA: quote.fiftyDayAverage,
     twoHundredDayMA: quote.twoHundredDayAverage,
-    percentFromFiftyDayMA: quote.fiftyDayAverage ? ((quote.regularMarketPrice - quote.fiftyDayAverage) / quote.fiftyDayAverage) * 100 : null,
-    percentFromTwoHundredDayMA: quote.twoHundredDayAverage ? ((quote.regularMarketPrice - quote.twoHundredDayAverage) / quote.twoHundredDayAverage) * 100 : null,
+    percentFromFiftyDayMA: quote.fiftyDayAverage ? ((quote.regularMarketPrice - quote.fiftyDayAverage) / quote.fiftyDayAverage) * 100 : undefined,
+    percentFromTwoHundredDayMA: quote.twoHundredDayAverage ? ((quote.regularMarketPrice - quote.twoHundredDayAverage) / quote.twoHundredDayAverage) * 100 : undefined,
     fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh,
     fiftyTwoWeekLow: quote.fiftyTwoWeekLow,
-    percentFromFiftyTwoWeekHigh: quote.fiftyTwoWeekHigh ? ((quote.regularMarketPrice - quote.fiftyTwoWeekHigh) / quote.fiftyTwoWeekHigh) * 100 : null,
-    percentFromFiftyTwoWeekLow: quote.fiftyTwoWeekLow ? ((quote.regularMarketPrice - quote.fiftyTwoWeekLow) / quote.fiftyTwoWeekLow) * 100 : null,
+    percentFromFiftyTwoWeekHigh: quote.fiftyTwoWeekHigh ? ((quote.regularMarketPrice - quote.fiftyTwoWeekHigh) / quote.fiftyTwoWeekHigh) * 100 : undefined,
+    percentFromFiftyTwoWeekLow: quote.fiftyTwoWeekLow ? ((quote.regularMarketPrice - quote.fiftyTwoWeekLow) / quote.fiftyTwoWeekLow) * 100 : undefined,
     rsi: rsi ? Math.round(rsi * 10) / 10 : undefined,
     market: 'US'
   };

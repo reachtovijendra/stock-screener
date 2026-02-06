@@ -560,7 +560,7 @@ export async function getMarketIndices(market: Market): Promise<MarketIndex[]> {
 export async function searchStocks(query: string, market: Market): Promise<any[]> {
   const results = await searchYahooSymbols(query);
 
-  return results
+  const filtered = results
     .filter((q: any) => {
       // Filter by quote type (equity or ETF)
       if (q.quoteType !== 'EQUITY' && q.quoteType !== 'ETF') {
@@ -583,6 +583,29 @@ export async function searchStocks(query: string, market: Market): Promise<any[]
       type: q.quoteType?.toLowerCase() || 'equity',
       market: getMarketFromSymbol(q.symbol)
     }));
+
+  // Fallback: if Yahoo search returned nothing and query looks like a ticker, try chart API direct lookup
+  if (filtered.length === 0 && /^[A-Z\-\.]{1,10}$/i.test(query.trim())) {
+    const exactSymbol = query.trim().toUpperCase();
+    const symbol = market === 'IN' && !exactSymbol.includes('.') ? `${exactSymbol}.NS` : exactSymbol;
+    try {
+      const chartData = await fetchChartQuote(symbol);
+      if (chartData && chartData.meta) {
+        const meta = chartData.meta;
+        filtered.push({
+          symbol: meta.symbol || symbol,
+          name: meta.shortName || meta.longName || meta.symbol || symbol,
+          exchange: meta.exchangeName || meta.exchange || 'Unknown',
+          type: 'equity',
+          market: getMarketFromSymbol(meta.symbol || symbol)
+        });
+      }
+    } catch (e) {
+      // Ignore fallback errors
+    }
+  }
+
+  return filtered;
 }
 
 /**

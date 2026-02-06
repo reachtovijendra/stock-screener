@@ -4,6 +4,7 @@
  */
 
 import https from 'https';
+import { getStaticSectorInfo } from './stock-sectors';
 
 /**
  * Market type
@@ -273,7 +274,8 @@ async function fetchYahooQuotes(symbols: string[]): Promise<any[]> {
 
   // Build URL with all symbols
   const symbolsParam = symbols.join(',');
-  let url = `/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}`;
+  const fields = 'symbol,shortName,longName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,marketCap,fiftyTwoWeekHigh,fiftyTwoWeekLow,fiftyDayAverage,twoHundredDayAverage,trailingPE,forwardPE,priceToBook,priceToSalesTrailing12Months,epsTrailingTwelveMonths,epsForward,trailingAnnualDividendYield,earningsQuarterlyGrowth,revenueGrowth,averageDailyVolume3Month,averageVolume,beta,exchange,fullExchangeName,currency,sector,industry,sectorDisp,industryDisp';
+  let url = `/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}&fields=${encodeURIComponent(fields)}`;
   if (auth.crumb) {
     url += `&crumb=${encodeURIComponent(auth.crumb)}`;
   }
@@ -423,8 +425,8 @@ function transformQuote(data: any, market: Market): StockQuote {
     avgVolume,
     volume,
     relativeVolume: avgVolume > 0 ? volume / avgVolume : 1,
-    sector: data.sector || 'Unknown',
-    industry: data.industry || 'Unknown',
+    sector: data.sector || data.sectorDisp || getStaticSectorInfo(data.symbol)?.sector || 'Unknown',
+    industry: data.industry || data.industryDisp || getStaticSectorInfo(data.symbol)?.industry || 'Unknown',
     beta: data.beta || null,
     fiftyDayMA,
     twoHundredDayMA,

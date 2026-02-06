@@ -28,12 +28,29 @@ interface BreakoutStock {
   market?: string;
 }
 
-// Top 30 large-cap stocks (optimized for Vercel timeout)
+// Large-cap stocks to scan (100+ stocks)
 const STOCKS_TO_SCAN = [
-  'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
-  'UNH', 'JNJ', 'V', 'JPM', 'WMT', 'PG', 'HD', 'XOM', 'CVX',
-  'AVGO', 'NFLX', 'AMD', 'CRM', 'ORCL', 'COST', 'MCD', 'BA',
-  'CAT', 'DIS', 'PYPL', 'INTC', 'QCOM'
+  // Mega cap tech
+  'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
+  // Healthcare
+  'UNH', 'JNJ', 'LLY', 'PFE', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY',
+  // Financial
+  'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP',
+  // Consumer
+  'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT',
+  // Energy
+  'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL',
+  // Tech & Semiconductors
+  'AVGO', 'CSCO', 'ACN', 'CRM', 'ORCL', 'NFLX', 'AMD', 'INTC', 'QCOM', 'TXN',
+  'IBM', 'AMAT', 'LRCX', 'MU', 'ADI', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON',
+  // Industrial
+  'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP',
+  // Telecom & Media
+  'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'CHTR', 'WBD', 'PARA', 'FOX', 'NWSA',
+  // Utilities & REITs
+  'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'AMT', 'PLD', 'CCI',
+  // Other popular
+  'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID'
 ];
 
 function httpsRequest(options: https.RequestOptions, timeout = 8000): Promise<{ statusCode: number; headers: any; body: string }> {

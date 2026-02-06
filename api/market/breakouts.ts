@@ -36,11 +36,7 @@ const STOCKS_TO_SCAN = [
   'CAT', 'DIS', 'PYPL', 'INTC', 'QCOM'
 ];
 
-// Yahoo auth cache
-let yahooAuth = { crumb: '', cookies: '', timestamp: 0 };
-const AUTH_TTL = 30 * 60 * 1000;
-
-function httpsRequest(options: https.RequestOptions, postData: string | null = null, timeout = 8000): Promise<{ statusCode: number; headers: any; body: string }> {
+function httpsRequest(options: https.RequestOptions, timeout = 8000): Promise<{ statusCode: number; headers: any; body: string }> {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
       let data = '';
@@ -49,82 +45,50 @@ function httpsRequest(options: https.RequestOptions, postData: string | null = n
     });
     req.on('error', reject);
     req.setTimeout(timeout, () => { req.destroy(); reject(new Error('Timeout')); });
-    if (postData) req.write(postData);
     req.end();
   });
 }
 
-async function getYahooCrumb(): Promise<{ crumb: string; cookies: string }> {
-  if (yahooAuth.crumb && Date.now() - yahooAuth.timestamp < AUTH_TTL) {
-    return yahooAuth;
-  }
-
-  try {
-    const pageResponse = await httpsRequest({
-      hostname: 'finance.yahoo.com',
-      path: '/quote/AAPL',
-      method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-    });
-
-    const setCookies = pageResponse.headers['set-cookie'];
-    const cookies = setCookies ? setCookies.map((c: string) => c.split(';')[0]).join('; ') : '';
-
-    const crumbResponse = await httpsRequest({
-      hostname: 'query1.finance.yahoo.com',
-      path: '/v1/test/getcrumb',
-      method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': cookies }
-    });
-
-    if (crumbResponse.statusCode === 200) {
-      yahooAuth = { crumb: crumbResponse.body.trim(), cookies, timestamp: Date.now() };
-    }
-  } catch (e) {
-    console.error('Crumb error:', e);
-  }
-
-  return yahooAuth;
-}
-
-async function fetchQuotes(symbols: string[]): Promise<any[]> {
-  const auth = await getYahooCrumb();
-  const symbolsParam = symbols.join(',');
-  
+// Fetch stock data from chart API (no authentication needed)
+async function fetchStockData(symbol: string): Promise<any | null> {
   try {
     const response = await httpsRequest({
       hostname: 'query1.finance.yahoo.com',
-      path: `/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}&crumb=${encodeURIComponent(auth.crumb)}`,
+      port: 443,
+      path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=3mo&includePrePost=false`,
       method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0', 'Cookie': auth.cookies }
-    });
+      headers: { 
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json'
+      }
+    }, 6000);
 
     if (response.statusCode === 200) {
       const data = JSON.parse(response.body);
-      return data?.quoteResponse?.result || [];
+      const result = data?.chart?.result?.[0];
+      if (result) {
+        const meta = result.meta;
+        const closes = result.indicators?.quote?.[0]?.close?.filter((c: number | null) => c != null) || [];
+        
+        return {
+          symbol: meta.symbol,
+          shortName: meta.shortName || meta.symbol,
+          regularMarketPrice: meta.regularMarketPrice,
+          regularMarketChange: meta.regularMarketPrice - meta.previousClose,
+          regularMarketChangePercent: ((meta.regularMarketPrice - meta.previousClose) / meta.previousClose) * 100,
+          fiftyDayAverage: meta.fiftyDayAverage,
+          twoHundredDayAverage: meta.twoHundredDayAverage,
+          fiftyTwoWeekHigh: meta.fiftyTwoWeekHigh,
+          fiftyTwoWeekLow: meta.fiftyTwoWeekLow,
+          regularMarketVolume: meta.regularMarketVolume,
+          averageDailyVolume3Month: result.indicators?.quote?.[0]?.volume?.reduce((a: number, b: number) => a + (b || 0), 0) / 60 || 0,
+          prices: closes
+        };
+      }
     }
   } catch (e) {
-    console.error('Quote fetch error:', e);
+    console.error(`[Chart] Error for ${symbol}:`, e);
   }
-
-  return [];
-}
-
-async function fetchHistoricalPrices(symbol: string): Promise<number[] | null> {
-  try {
-    const response = await httpsRequest({
-      hostname: 'query1.finance.yahoo.com',
-      path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=3mo`,
-      method: 'GET',
-      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' }
-    }, null, 5000);
-
-    if (response.statusCode === 200) {
-      const data = JSON.parse(response.body);
-      const closes = data?.chart?.result?.[0]?.indicators?.quote?.[0]?.close;
-      if (closes) return closes.filter((c: number | null) => c != null);
-    }
-  } catch (e) {}
   
   return null;
 }
@@ -410,36 +374,43 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
-    // Fetch quotes in batches
-    const batchSize = 20;
-    const allQuotes: any[] = [];
-    
-    for (let i = 0; i < STOCKS_TO_SCAN.length; i += batchSize) {
-      const batch = STOCKS_TO_SCAN.slice(i, i + batchSize);
-      const quotes = await fetchQuotes(batch);
-      allQuotes.push(...quotes);
-    }
-
-    // Analyze each stock for breakouts
-    const allBreakouts: BreakoutStock[] = [];
-    
-    // Process in parallel with timeout handling
-    const technicalPromises = allQuotes.map(async (quote) => {
+    // Fetch all stocks in parallel using chart API (no auth needed)
+    const stockPromises = STOCKS_TO_SCAN.map(async (symbol) => {
       try {
-        const prices = await fetchHistoricalPrices(quote.symbol);
-        const rsi = prices ? calculateRSI(prices) : null;
-        const macd = prices ? calculateMACD(prices) : null;
-        return { quote, rsi, macd, success: true };
+        const data = await fetchStockData(symbol);
+        if (data && data.prices) {
+          const rsi = calculateRSI(data.prices);
+          const macd = calculateMACD(data.prices);
+          return { data, rsi, macd, success: true };
+        }
+        return { data: null, rsi: null, macd: null, success: false };
       } catch (e) {
-        return { quote, rsi: null, macd: null, success: false };
+        return { data: null, rsi: null, macd: null, success: false };
       }
     });
 
-    const results = await Promise.allSettled(technicalPromises);
+    const results = await Promise.allSettled(stockPromises);
+    const allBreakouts: BreakoutStock[] = [];
+    let scannedCount = 0;
 
     for (const result of results) {
-      if (result.status === 'fulfilled' && result.value.success) {
-        const { quote, rsi, macd } = result.value;
+      if (result.status === 'fulfilled' && result.value.success && result.value.data) {
+        scannedCount++;
+        const { data, rsi, macd } = result.value;
+        // Convert chart data to quote format for analyzeStock
+        const quote = {
+          symbol: data.symbol,
+          shortName: data.shortName,
+          regularMarketPrice: data.regularMarketPrice,
+          regularMarketChange: data.regularMarketChange,
+          regularMarketChangePercent: data.regularMarketChangePercent,
+          fiftyDayAverage: data.fiftyDayAverage,
+          twoHundredDayAverage: data.twoHundredDayAverage,
+          fiftyTwoWeekHigh: data.fiftyTwoWeekHigh,
+          fiftyTwoWeekLow: data.fiftyTwoWeekLow,
+          regularMarketVolume: data.regularMarketVolume,
+          averageDailyVolume3Month: data.averageDailyVolume3Month
+        };
         const breakouts = analyzeStock(quote, rsi, macd);
         allBreakouts.push(...breakouts);
       }
@@ -450,17 +421,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({
       breakouts: allBreakouts,
-      scannedStocks: allQuotes.length,
+      scannedStocks: scannedCount,
       timestamp: new Date().toISOString()
     });
   } catch (error: any) {
     console.error('Breakouts API error:', error);
-    // Return empty array instead of error to avoid breaking the UI
     return res.status(200).json({ 
       breakouts: [], 
       scannedStocks: 0, 
       timestamp: new Date().toISOString(),
-      error: 'Partial failure - some data may be unavailable'
+      error: 'Failed to fetch data'
     });
   }
 }

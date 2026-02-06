@@ -572,7 +572,7 @@ export async function searchStocks(query: string, market: Market): Promise<any[]
           q.symbol?.endsWith('.NS') || q.symbol?.endsWith('.BO');
       } else {
         return !q.symbol?.includes('.') ||
-          ['NYSE', 'NASDAQ', 'AMEX', 'NYQ', 'NMS', 'NGM', 'PCX'].includes(q.exchange);
+          ['NYSE', 'NASDAQ', 'AMEX', 'NYQ', 'NMS', 'NGM', 'NCM', 'PCX', 'OPR', 'BTS'].includes(q.exchange);
       }
     })
     .slice(0, 20)

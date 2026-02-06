@@ -373,7 +373,8 @@ async function searchYahooSymbols(query) {
       const quotes = (data.quotes || []).filter(q => 
         (q.quoteType === 'EQUITY' || q.quoteType === 'ETF') &&
         (q.exchange === 'NMS' || q.exchange === 'NYQ' || q.exchange === 'NGM' || 
-         q.exchange === 'PCX' || q.exchange === 'ASE' || q.exchange === 'BTS' ||
+         q.exchange === 'NCM' || q.exchange === 'PCX' || q.exchange === 'ASE' || 
+         q.exchange === 'BTS' || q.exchange === 'OPR' || q.exchange === 'YHD' ||
          q.exchange === 'NSI' || q.exchange === 'BSE' || q.exchange === 'BOM')
       );
       console.log(`[Search] Found ${quotes.length} results for "${query}"`);
@@ -989,6 +990,19 @@ async function fetchStockNews(symbol) {
       return [];
     }
     
+    // Filter out articles older than 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    allItems = allItems.filter(item => {
+      try {
+        return new Date(item.pubDate) >= sevenDaysAgo;
+      } catch {
+        return false;
+      }
+    });
+    
+    console.log(`[News] After filtering old articles: ${allItems.length} remaining`);
+
     // Classify articles and add metadata
     allItems.forEach(item => {
       // Re-classify if not already done
@@ -1000,19 +1014,23 @@ async function fetchStockNews(symbol) {
       item.timeAgo = getRelativeTime(item.pubDate);
     });
     
-    // Sort by priority first, then by date
+    // Sort by date first (newest first), then by priority for same-day articles
     allItems.sort((a, b) => {
-      if (a.priority !== b.priority) {
-        return a.priority - b.priority;
+      const dateA = new Date(a.pubDate);
+      const dateB = new Date(b.pubDate);
+      // Primary sort: newest first
+      const dateDiff = dateB - dateA;
+      if (Math.abs(dateDiff) > 86400000) { // More than 1 day apart - sort by date
+        return dateDiff;
       }
-      // Same priority - sort by date (newest first)
-      return new Date(b.pubDate) - new Date(a.pubDate);
+      // Within same day - sort by priority
+      return (a.priority || 6) - (b.priority || 6);
     });
     
     console.log(`[News] Final result: ${allItems.length} articles for ${symbol}`);
     
-    // Return top 15 items
-    return allItems.slice(0, 15);
+    // Return top 20 items
+    return allItems.slice(0, 20);
   } catch (error) {
     console.error(`[News] Error fetching news for ${symbol}:`, error.message);
     return [];
@@ -1798,13 +1816,31 @@ const server = http.createServer(async (req, res) => {
       
       try {
         const quotes = [];
+        const seenSymbols = new Set();
         
-        // If fuzzy search, use Yahoo's search API to find by name
+        // Always try exact symbol match first (handles cases like "HOOD" directly)
+        const exactSymbol = query.toUpperCase().trim();
+        if (/^[A-Z\-\.]{1,10}$/.test(exactSymbol)) {
+          const exactQuote = await fetchYahooQuote(exactSymbol);
+          if (exactQuote) {
+            let transformed = transformQuote(exactQuote, exactSymbol);
+            if (transformed) {
+              if (includeTechnicals) {
+                await enrichWithTechnicals(transformed);
+              }
+              quotes.push(transformed);
+              seenSymbols.add(exactSymbol);
+            }
+          }
+        }
+        
+        // If fuzzy search, also use Yahoo's search API to find by name
         if (fuzzy) {
           const searchResults = await searchYahooSymbols(query);
           
           // Fetch full quotes for the found symbols
           for (const result of searchResults.slice(0, 10)) {
+            if (seenSymbols.has(result.symbol)) continue; // Skip duplicates
             const quote = await fetchYahooQuote(result.symbol);
             if (quote) {
               let transformed = transformQuote(quote, result.symbol);
@@ -1813,22 +1849,26 @@ const server = http.createServer(async (req, res) => {
                   await enrichWithTechnicals(transformed);
                 }
                 quotes.push(transformed);
+                seenSymbols.add(result.symbol);
               }
             }
           }
-        } else {
-          // Exact symbol search
+        } else if (query.includes(',')) {
+          // Multi-symbol exact search
           const symbols = query.toUpperCase().split(',').slice(0, 10);
           
           for (const symbol of symbols) {
-            const quote = await fetchYahooQuote(symbol.trim());
+            const sym = symbol.trim();
+            if (seenSymbols.has(sym)) continue;
+            const quote = await fetchYahooQuote(sym);
             if (quote) {
-              let transformed = transformQuote(quote, symbol.trim());
+              let transformed = transformQuote(quote, sym);
               if (transformed) {
                 if (includeTechnicals) {
                   await enrichWithTechnicals(transformed);
                 }
                 quotes.push(transformed);
+                seenSymbols.add(sym);
               }
             }
           }
@@ -2000,6 +2040,17 @@ const server = http.createServer(async (req, res) => {
         
         let allNews = [...marketResults.flat(), ...stockResults.flat()];
         
+        // Filter out articles older than 7 days
+        const sevenDaysAgo = new Date();
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+        allNews = allNews.filter(item => {
+          try {
+            return new Date(item.pubDate) >= sevenDaysAgo;
+          } catch {
+            return false;
+          }
+        });
+        
         // Remove duplicates by link
         const seenLinks = new Set();
         allNews = allNews.filter(item => {
@@ -2152,12 +2203,12 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
-        // 52-Week Levels - within 5% of high
+        // 52-Week Highs - within 5% of high
         if (pct52High != null && pct52High >= -5) {
           breakouts.push({
             ...baseStock,
             alertType: pct52High >= 0 ? 'new_52w_high' : 'near_52w_high',
-            alertCategory: '52w_levels',
+            alertCategory: '52w_highs',
             alertDescription: pct52High >= 0 
               ? 'New 52-week high - momentum breakout' 
               : `Within ${Math.abs(pct52High).toFixed(1)}% of 52-week high`,
@@ -2165,12 +2216,12 @@ const server = http.createServer(async (req, res) => {
           });
         }
 
-        // Within 10% of 52-week low
+        // 52-Week Lows - within 10% of low
         if (pct52Low != null && pct52Low <= 10) {
           breakouts.push({
             ...baseStock,
             alertType: pct52Low <= 0 ? 'new_52w_low' : 'near_52w_low',
-            alertCategory: '52w_levels',
+            alertCategory: '52w_lows',
             alertDescription: pct52Low <= 0 
               ? 'New 52-week low - potential capitulation' 
               : `Within ${pct52Low.toFixed(1)}% of 52-week low - potential bounce`,

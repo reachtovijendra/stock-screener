@@ -594,10 +594,8 @@ export class MarketNewsComponent implements OnInit, OnDestroy {
     { id: 'general', label: 'Company News', icon: 'pi pi-building', color: '#6b7280', bgColor: 'rgba(107, 114, 128, 0.12)', count: 0 }
   ]);
 
-  // Selected categories (all by default)
-  selectedCategories = signal<string[]>([
-    'market', 'price_target', 'upgrade_downgrade', 'earnings', 'insider', 'dividend', 'general'
-  ]);
+  // Selected categories (only Market by default)
+  selectedCategories = signal<string[]>(['market']);
 
   // Filtered news based on selected categories
   filteredNews = computed(() => {
@@ -649,14 +647,16 @@ export class MarketNewsComponent implements OnInit, OnDestroy {
         this.allNews.set(result.news);
         this.lastUpdated.set(new Date());
         
-        // Update category counts
-        if (result.categories) {
-          const updatedCategories = this.categories().map(cat => ({
-            ...cat,
-            count: result.categories[cat.id] || 0
-          }));
-          this.categories.set(updatedCategories);
+        // Compute category counts from actual news items (not API totals, which may differ due to deduplication/limits)
+        const countsByCategory: Record<string, number> = {};
+        for (const item of result.news) {
+          countsByCategory[item.type] = (countsByCategory[item.type] || 0) + 1;
         }
+        const updatedCategories = this.categories().map(cat => ({
+          ...cat,
+          count: countsByCategory[cat.id] || 0
+        }));
+        this.categories.set(updatedCategories);
       }
     } catch (err) {
       console.error('Failed to fetch market news:', err);

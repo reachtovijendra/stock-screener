@@ -7,6 +7,7 @@ interface NewsItem {
   pubDate: string;
   source: string;
   type: string;
+  timeAgo?: string;
 }
 
 /**
@@ -59,6 +60,28 @@ function fetchRSS(url: string, timeout: number = 10000): Promise<string> {
       reject(err);
     });
   });
+}
+
+/**
+ * Calculate relative time string
+ */
+function getRelativeTime(dateString: string): string {
+  try {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMs / 3600000);
+    const diffDays = Math.floor(diffMs / 86400000);
+
+    if (diffMins < 1) return 'Just now';
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+  } catch {
+    return '';
+  }
 }
 
 /**
@@ -117,9 +140,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const allNews: NewsItem[] = [];
+    const encodedSymbol = encodeURIComponent(symbol as string);
     const sources = [
-      { name: 'Yahoo Finance', url: `https://finance.yahoo.com/rss/headline?s=${symbol}` },
-      { name: 'Google News', url: `https://news.google.com/rss/search?q=${symbol}+stock&hl=en-US&gl=US&ceid=US:en` }
+      { name: 'Yahoo Finance', url: `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodedSymbol}&region=US&lang=en-US` },
+      { name: 'Google News', url: `https://news.google.com/rss/search?q=${encodedSymbol}+stock&hl=en-US&gl=US&ceid=US:en` },
+      { name: 'Benzinga', url: `https://news.google.com/rss/search?q=${encodedSymbol}+site:benzinga.com&hl=en-US&gl=US&ceid=US:en` },
+      { name: 'Seeking Alpha', url: `https://news.google.com/rss/search?q=${encodedSymbol}+site:seekingalpha.com&hl=en-US&gl=US&ceid=US:en` },
+      { name: 'Investing.com', url: `https://news.google.com/rss/search?q=${encodedSymbol}+site:investing.com&hl=en-US&gl=US&ceid=US:en` },
+      { name: 'MarketWatch', url: `https://news.google.com/rss/search?q=${encodedSymbol}+site:marketwatch.com&hl=en-US&gl=US&ceid=US:en` }
     ];
 
     // Fetch from all sources in parallel with timeout
@@ -147,24 +175,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       new Map(allNews.map(item => [item.link, item])).values()
     );
 
-    // Sort by priority: Price Target first, then by date
+    // Filter out articles older than 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    const recentNews = uniqueNews.filter(item => {
+      try {
+        return new Date(item.pubDate) >= sevenDaysAgo;
+      } catch {
+        return false;
+      }
+    });
+
+    // Sort by date first (newest first), then by priority for same-day articles
     const priorityOrder = ['Price Target', 'Earnings', 'Insider Trading', 'Dividend', 'M&A', 'General'];
-    uniqueNews.sort((a, b) => {
+    recentNews.sort((a, b) => {
+      const dateA = new Date(a.pubDate).getTime();
+      const dateB = new Date(b.pubDate).getTime();
+      // Primary sort: newest first
+      if (Math.abs(dateB - dateA) > 86400000) { // More than 1 day apart
+        return dateB - dateA;
+      }
+      // Within same day - sort by priority
       const priorityA = priorityOrder.indexOf(a.type);
       const priorityB = priorityOrder.indexOf(b.type);
-      
       if (priorityA !== priorityB) {
         return priorityA - priorityB;
       }
-      
-      // Sort by date if same priority
-      const dateA = new Date(a.pubDate);
-      const dateB = new Date(b.pubDate);
-      return dateB.getTime() - dateA.getTime();
+      return dateB - dateA;
     });
 
-    // Limit to 50 articles
-    const limitedNews = uniqueNews.slice(0, 50);
+    // Add timeAgo to each article
+    recentNews.forEach(item => {
+      item.timeAgo = getRelativeTime(item.pubDate);
+    });
+
+    // Limit to 30 articles
+    const limitedNews = recentNews.slice(0, 30);
 
     return res.status(200).json({ news: limitedNews });
   } catch (error: any) {

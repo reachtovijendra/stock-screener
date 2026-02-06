@@ -278,12 +278,12 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null): 
     }
   }
 
-  // 52-Week Levels - within 5% of high
+  // 52-Week Highs - within 5% of high
   if (pct52High != null && pct52High >= -5) {
     breakouts.push({
       ...baseStock,
       alertType: pct52High >= 0 ? 'new_52w_high' : 'near_52w_high',
-      alertCategory: '52w_levels',
+      alertCategory: '52w_highs',
       alertDescription: pct52High >= 0 
         ? 'New 52-week high - momentum breakout' 
         : `Within ${Math.abs(pct52High).toFixed(1)}% of 52-week high`,
@@ -291,12 +291,12 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null): 
     });
   }
 
-  // Within 10% of 52-week low
+  // 52-Week Lows - within 10% of low
   if (pct52Low != null && pct52Low <= 10) {
     breakouts.push({
       ...baseStock,
       alertType: pct52Low <= 0 ? 'new_52w_low' : 'near_52w_low',
-      alertCategory: '52w_levels',
+      alertCategory: '52w_lows',
       alertDescription: pct52Low <= 0 
         ? 'New 52-week low - potential capitulation' 
         : `Within ${pct52Low.toFixed(1)}% of 52-week low - potential bounce`,

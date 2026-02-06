@@ -43,48 +43,10 @@ import { SortConfig } from '../../../core/models/filter.model';
       <!-- Results Header -->
       <div class="results-header">
         <div class="header-left">
-          <button 
-            pButton 
-            type="button" 
-            icon="pi pi-filter" 
-            class="p-button-text p-button-sm filter-toggle-btn"
-            pTooltip="Show Filters" 
-            tooltipPosition="right"
-            (click)="toggleFilters.emit()">
-          </button>
           <h2>Results</h2>
           @if (!screenerService.loading() && screenerService.totalCount() > 0) {
             <span class="stock-count">{{ screenerService.totalCount() | number }} stocks</span>
           }
-        </div>
-        <div class="header-center">
-          <!-- Stock Search Autocomplete -->
-          <p-autoComplete
-            [(ngModel)]="searchQuery"
-            [suggestions]="filteredStocks()"
-            (completeMethod)="searchStocks($event)"
-            (onSelect)="onStockSelect($event)"
-            (ngModelChange)="onSearchChange($event)"
-            [field]="'symbol'"
-            [placeholder]="'Search by symbol or name...'"
-            [minLength]="1"
-            [showEmptyMessage]="true"
-            emptyMessage="No stocks found"
-            [dropdown]="false"
-            [forceSelection]="true"
-            styleClass="stock-search"
-            inputStyleClass="stock-search-input">
-            <ng-template let-stock pTemplate="item">
-              <div class="search-item" (click)="onItemClick(stock)">
-                <span class="search-symbol">{{ stock.symbol }}</span>
-                <span class="search-name">{{ stock.name }}</span>
-                <span class="search-cap">{{ marketService.formatMarketCap(stock.marketCap, stock.market) }}</span>
-                <span class="search-price" [class.positive]="stock.changePercent >= 0" [class.negative]="stock.changePercent < 0">
-                  {{ formatPrice(stock.price, stock.market) }}
-                </span>
-              </div>
-            </ng-template>
-          </p-autoComplete>
         </div>
         <div class="header-right">
           @if (screenerService.executionTime() > 0) {
@@ -253,43 +215,11 @@ import { SortConfig } from '../../../core/models/filter.model';
               <th pSortableColumn="macdHistogram" class="col-macd text-right">
                 MACD <p-sortIcon field="macdHistogram"></p-sortIcon>
               </th>
-              <th class="col-sector">
-                <div class="header-with-filter">
-                  <span class="header-label" pSortableColumn="sector">Sector <p-sortIcon field="sector"></p-sortIcon></span>
-                  <p-multiSelect
-                    [options]="sectorOptions()"
-                    [(ngModel)]="selectedSectors"
-                    (onChange)="onSectorFilterChange()"
-                    placeholder="All"
-                    [showHeader]="false"
-                    [filter]="true"
-                    filterPlaceHolder="Search..."
-                    [maxSelectedLabels]="0"
-                    selectedItemsLabel="{0} selected"
-                    styleClass="column-filter"
-                    appendTo="body"
-                    (click)="$event.stopPropagation()">
-                  </p-multiSelect>
-                </div>
+              <th pSortableColumn="sector" class="col-sector">
+                Sector <p-sortIcon field="sector"></p-sortIcon>
               </th>
-              <th class="col-industry">
-                <div class="header-with-filter">
-                  <span class="header-label" pSortableColumn="industry">Industry <p-sortIcon field="industry"></p-sortIcon></span>
-                  <p-multiSelect
-                    [options]="industryOptions()"
-                    [(ngModel)]="selectedIndustries"
-                    (onChange)="onIndustryFilterChange()"
-                    placeholder="All"
-                    [showHeader]="false"
-                    [filter]="true"
-                    filterPlaceHolder="Search..."
-                    [maxSelectedLabels]="0"
-                    selectedItemsLabel="{0} selected"
-                    styleClass="column-filter"
-                    appendTo="body"
-                    (click)="$event.stopPropagation()">
-                  </p-multiSelect>
-                </div>
+              <th pSortableColumn="industry" class="col-industry">
+                Industry <p-sortIcon field="industry"></p-sortIcon>
               </th>
             </tr>
           </ng-template>
@@ -420,15 +350,6 @@ import { SortConfig } from '../../../core/models/filter.model';
       gap: 0.5rem;
       flex-shrink: 0;
 
-      .filter-toggle-btn {
-        color: var(--primary-color);
-        padding: 0.5rem;
-        
-        &:hover {
-          background: var(--surface-hover);
-        }
-      }
-
       h2 {
         font-size: 1rem;
         font-weight: 600;
@@ -442,91 +363,6 @@ import { SortConfig } from '../../../core/models/filter.model';
       }
     }
 
-    .header-center {
-      flex: 1;
-      max-width: 350px;
-      margin: 0 1rem;
-    }
-
-    :host ::ng-deep .stock-search {
-      width: 100%;
-      
-      .p-autocomplete-input {
-        width: 100%;
-        background: var(--surface-card);
-        border: 1px solid var(--surface-border);
-        border-radius: 8px;
-        padding: 0.5rem 0.875rem;
-        font-size: 0.85rem;
-        color: var(--text-color);
-        
-        &::placeholder {
-          color: var(--text-color-secondary);
-        }
-        
-        &:focus {
-          border-color: var(--primary-color);
-          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-        }
-      }
-      
-      .p-autocomplete-panel {
-        background: var(--surface-overlay);
-        border: 1px solid var(--surface-border);
-        border-radius: 8px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
-        margin-top: 4px;
-      }
-      
-      .p-autocomplete-item {
-        padding: 0.625rem 0.875rem;
-        
-        &:hover {
-          background: var(--surface-hover);
-        }
-      }
-    }
-
-    .search-item {
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-      
-      .search-symbol {
-        font-weight: 600;
-        font-size: 0.85rem;
-        color: var(--primary-color);
-        min-width: 60px;
-      }
-      
-      .search-name {
-        flex: 1;
-        font-size: 0.8rem;
-        color: var(--text-color-secondary);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      
-      .search-cap {
-        font-size: 0.7rem;
-        color: var(--text-color-secondary);
-        font-family: 'JetBrains Mono', monospace;
-        min-width: 50px;
-        text-align: right;
-      }
-      
-      .search-price {
-        font-size: 0.8rem;
-        font-weight: 500;
-        font-family: 'JetBrains Mono', monospace;
-        min-width: 65px;
-        text-align: right;
-        
-        &.positive { color: var(--stock-positive); }
-        &.negative { color: var(--stock-negative); }
-      }
-    }
 
     .header-right {
       display: flex;
@@ -974,7 +810,7 @@ export class ResultsTableComponent {
   marketService = inject(MarketService);
 
   // Output event to toggle filters panel
-  toggleFilters = output<void>();
+  // toggleFilters output removed - filters are always visible above the table
 
   summary = this.screenerService.getResultsSummary;
 

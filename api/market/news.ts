@@ -264,6 +264,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     });
 
+    // Filter out articles older than 7 days
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    allNews = allNews.filter(item => {
+      try {
+        return new Date(item.pubDate) >= sevenDaysAgo;
+      } catch {
+        return false;
+      }
+    });
+
     // Remove duplicates by link
     const uniqueNews = Array.from(
       new Map(allNews.map(item => [item.link, item])).values()

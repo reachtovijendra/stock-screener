@@ -174,128 +174,119 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
               <h2>Technical Analysis</h2>
               <p class="data-source">Based on real-time data from Yahoo Finance</p>
               
-              <div class="gauges-container vertical">
-                <!-- Summary Gauge (Main) -->
-                <div class="gauge-card main-gauge">
-                  <h3>Overall Summary</h3>
-                  <div class="gauge-wrapper large">
-                    <svg viewBox="0 0 240 140" class="gauge-svg">
-                      <path d="M 20 120 A 100 100 0 0 1 220 120" fill="none" stroke="#e0e0e0" stroke-width="16" stroke-linecap="round"/>
-                      <path d="M 20 120 A 100 100 0 0 1 60 45" fill="none" stroke="#ef4444" stroke-width="16" stroke-linecap="round"/>
-                      <path d="M 60 45 A 100 100 0 0 1 120 20" fill="none" stroke="#fca5a5" stroke-width="16"/>
-                      <path d="M 120 20 A 100 100 0 0 1 180 45" fill="none" stroke="#86efac" stroke-width="16"/>
-                      <path d="M 180 45 A 100 100 0 0 1 220 120" fill="none" stroke="#22c55e" stroke-width="16" stroke-linecap="round"/>
-                      <text x="30" y="90" class="gauge-text small">Strong</text>
-                      <text x="30" y="102" class="gauge-text small">Sell</text>
-                      <text x="65" y="55" class="gauge-text small">Sell</text>
-                      <text x="120" y="38" class="gauge-text small">Neutral</text>
-                      <text x="175" y="55" class="gauge-text small">Buy</text>
-                      <text x="200" y="90" class="gauge-text small">Strong</text>
-                      <text x="200" y="102" class="gauge-text small">Buy</text>
-                      <line [attr.x1]="120" [attr.y1]="120" 
-                            [attr.x2]="getSummaryNeedleX(overallScore())" 
-                            [attr.y2]="getSummaryNeedleY(overallScore())" 
-                            stroke="#374151" stroke-width="4" stroke-linecap="round"/>
-                      <circle cx="120" cy="120" r="8" fill="#374151"/>
+              <!-- All 3 gauges in a single row -->
+              <div class="gauges-row">
+                <!-- Overall Summary Gauge -->
+                <div class="gauge-card">
+                  <h3>Overall</h3>
+                  <div class="gauge-wrapper">
+                    <svg viewBox="0 0 200 120" class="gauge-svg">
+                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e0e0e0" stroke-width="12" stroke-linecap="round"/>
+                      <path d="M 20 100 A 80 80 0 0 1 52 40" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round"/>
+                      <path d="M 52 40 A 80 80 0 0 1 100 20" fill="none" stroke="#fca5a5" stroke-width="12"/>
+                      <path d="M 100 20 A 80 80 0 0 1 148 40" fill="none" stroke="#86efac" stroke-width="12"/>
+                      <path d="M 148 40 A 80 80 0 0 1 180 100" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round"/>
+                      <text x="20" y="115" class="gauge-label-text sell">Sell</text>
+                      <text x="180" y="115" class="gauge-label-text buy">Buy</text>
+                      <line [attr.x1]="100" [attr.y1]="100" 
+                            [attr.x2]="getNeedleX(overallScore())" 
+                            [attr.y2]="getNeedleY(overallScore())" 
+                            stroke="#374151" stroke-width="3" stroke-linecap="round"/>
+                      <circle cx="100" cy="100" r="6" fill="#374151"/>
                     </svg>
                   </div>
-                  <div class="gauge-label large" [class]="getSignalClass(overallScore())">
+                  <div class="gauge-label" [class]="getSignalClass(overallScore())">
                     {{ getSignalLabel(overallScore()) }}
                   </div>
-                  <div class="score-display">
-                    Score: {{ overallScore() | number:'1.0-0' }}/100
+                  <div class="score-display">{{ overallScore() | number:'1.0-0' }}/100</div>
+                </div>
+
+                <!-- Technical Indicators Gauge -->
+                <div class="gauge-card">
+                  <h3>Indicators</h3>
+                  <div class="gauge-wrapper">
+                    <svg viewBox="0 0 200 120" class="gauge-svg">
+                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e0e0e0" stroke-width="12" stroke-linecap="round"/>
+                      <path d="M 20 100 A 80 80 0 0 1 52 40" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round"/>
+                      <path d="M 52 40 A 80 80 0 0 1 100 20" fill="none" stroke="#f97316" stroke-width="12"/>
+                      <path d="M 100 20 A 80 80 0 0 1 148 40" fill="none" stroke="#a3a3a3" stroke-width="12"/>
+                      <path d="M 148 40 A 80 80 0 0 1 180 100" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round"/>
+                      <text x="20" y="115" class="gauge-label-text sell">Sell</text>
+                      <text x="180" y="115" class="gauge-label-text buy">Buy</text>
+                      <line [attr.x1]="100" [attr.y1]="100" 
+                            [attr.x2]="getNeedleX(technicalScore())" 
+                            [attr.y2]="getNeedleY(technicalScore())" 
+                            stroke="#374151" stroke-width="3" stroke-linecap="round"/>
+                      <circle cx="100" cy="100" r="6" fill="#374151"/>
+                    </svg>
+                  </div>
+                  <div class="gauge-label" [class]="getSignalClass(technicalScore())">
+                    {{ getSignalLabel(technicalScore()) }}
                   </div>
                 </div>
 
-                <!-- Two smaller gauges side by side -->
-                <div class="small-gauges-row">
-                  <!-- Technical Indicators Gauge -->
-                  <div class="gauge-card">
-                    <h3>Technical Indicators</h3>
-                    <div class="gauge-wrapper">
-                      <svg viewBox="0 0 200 120" class="gauge-svg">
-                        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e0e0e0" stroke-width="12" stroke-linecap="round"/>
-                        <path d="M 20 100 A 80 80 0 0 1 52 40" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round"/>
-                        <path d="M 52 40 A 80 80 0 0 1 100 20" fill="none" stroke="#f97316" stroke-width="12"/>
-                        <path d="M 100 20 A 80 80 0 0 1 148 40" fill="none" stroke="#a3a3a3" stroke-width="12"/>
-                        <path d="M 148 40 A 80 80 0 0 1 180 100" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round"/>
-                        <text x="20" y="115" class="gauge-label-text sell">Sell</text>
-                        <text x="180" y="115" class="gauge-label-text buy">Buy</text>
-                        <line [attr.x1]="100" [attr.y1]="100" 
-                              [attr.x2]="getNeedleX(technicalScore())" 
-                              [attr.y2]="getNeedleY(technicalScore())" 
-                              stroke="#374151" stroke-width="3" stroke-linecap="round"/>
-                        <circle cx="100" cy="100" r="6" fill="#374151"/>
-                      </svg>
-                    </div>
-                    <div class="gauge-label" [class]="getSignalClass(technicalScore())">
-                      {{ getSignalLabel(technicalScore()) }}
-                    </div>
-                    <div class="indicator-breakdown compact">
-                      <div class="breakdown-item">
-                        <span class="breakdown-label">RSI (14)</span>
-                        <span class="breakdown-value" [class]="getRsiClass(s.rsi)">
-                          {{ s.rsi !== null ? (s.rsi | number:'1.1-1') : 'N/A' }}
-                        </span>
-                        <span class="breakdown-signal" [class]="getRsiSignalClass(s.rsi)">
-                          {{ getRsiShortSignal(s.rsi) }}
-                        </span>
-                      </div>
-                      <div class="breakdown-item">
-                        <span class="breakdown-label">MACD</span>
-                        <span class="breakdown-value" [class.positive]="(s.macdHistogram || 0) > 0" [class.negative]="(s.macdHistogram || 0) < 0">
-                          {{ s.macdHistogram !== null ? (s.macdHistogram | number:'1.2-2') : 'N/A' }}
-                        </span>
-                        <span class="breakdown-signal" [class]="getMacdSignalClass(s.macdSignalType)">
-                          {{ getMacdShortSignal(s.macdSignalType) }}
-                        </span>
-                      </div>
-                    </div>
+                <!-- Moving Averages Gauge -->
+                <div class="gauge-card">
+                  <h3>Moving Avg</h3>
+                  <div class="gauge-wrapper">
+                    <svg viewBox="0 0 200 120" class="gauge-svg">
+                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e0e0e0" stroke-width="12" stroke-linecap="round"/>
+                      <path d="M 20 100 A 80 80 0 0 1 52 40" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round"/>
+                      <path d="M 52 40 A 80 80 0 0 1 100 20" fill="none" stroke="#f97316" stroke-width="12"/>
+                      <path d="M 100 20 A 80 80 0 0 1 148 40" fill="none" stroke="#a3a3a3" stroke-width="12"/>
+                      <path d="M 148 40 A 80 80 0 0 1 180 100" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round"/>
+                      <text x="20" y="115" class="gauge-label-text sell">Sell</text>
+                      <text x="180" y="115" class="gauge-label-text buy">Buy</text>
+                      <line [attr.x1]="100" [attr.y1]="100" 
+                            [attr.x2]="getNeedleX(maScore())" 
+                            [attr.y2]="getNeedleY(maScore())" 
+                            stroke="#374151" stroke-width="3" stroke-linecap="round"/>
+                      <circle cx="100" cy="100" r="6" fill="#374151"/>
+                    </svg>
                   </div>
+                  <div class="gauge-label" [class]="getSignalClass(maScore())">
+                    {{ getSignalLabel(maScore()) }}
+                  </div>
+                </div>
+              </div>
 
-                  <!-- Moving Averages Gauge -->
-                  <div class="gauge-card">
-                    <h3>Moving Averages</h3>
-                    <div class="gauge-wrapper">
-                      <svg viewBox="0 0 200 120" class="gauge-svg">
-                        <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e0e0e0" stroke-width="12" stroke-linecap="round"/>
-                        <path d="M 20 100 A 80 80 0 0 1 52 40" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round"/>
-                        <path d="M 52 40 A 80 80 0 0 1 100 20" fill="none" stroke="#f97316" stroke-width="12"/>
-                        <path d="M 100 20 A 80 80 0 0 1 148 40" fill="none" stroke="#a3a3a3" stroke-width="12"/>
-                        <path d="M 148 40 A 80 80 0 0 1 180 100" fill="none" stroke="#22c55e" stroke-width="12" stroke-linecap="round"/>
-                        <text x="20" y="115" class="gauge-label-text sell">Sell</text>
-                        <text x="180" y="115" class="gauge-label-text buy">Buy</text>
-                        <line [attr.x1]="100" [attr.y1]="100" 
-                              [attr.x2]="getNeedleX(maScore())" 
-                              [attr.y2]="getNeedleY(maScore())" 
-                              stroke="#374151" stroke-width="3" stroke-linecap="round"/>
-                        <circle cx="100" cy="100" r="6" fill="#374151"/>
-                      </svg>
-                    </div>
-                    <div class="gauge-label" [class]="getSignalClass(maScore())">
-                      {{ getSignalLabel(maScore()) }}
-                    </div>
-                    <div class="indicator-breakdown compact">
-                      <div class="breakdown-item">
-                        <span class="breakdown-label">50 MA</span>
-                        <span class="breakdown-value" [class.positive]="(s.percentFromFiftyDayMA || 0) > 0" [class.negative]="(s.percentFromFiftyDayMA || 0) < 0">
-                          {{ s.percentFromFiftyDayMA !== null ? ((s.percentFromFiftyDayMA >= 0 ? '+' : '') + (s.percentFromFiftyDayMA | number:'1.1-1') + '%') : 'N/A' }}
-                        </span>
-                        <span class="breakdown-signal" [class.buy]="(s.percentFromFiftyDayMA || 0) > 0" [class.sell]="(s.percentFromFiftyDayMA || 0) < 0">
-                          {{ (s.percentFromFiftyDayMA || 0) > 0 ? 'Buy' : ((s.percentFromFiftyDayMA || 0) < 0 ? 'Sell' : '—') }}
-                        </span>
-                      </div>
-                      <div class="breakdown-item">
-                        <span class="breakdown-label">200 MA</span>
-                        <span class="breakdown-value" [class.positive]="(s.percentFromTwoHundredDayMA || 0) > 0" [class.negative]="(s.percentFromTwoHundredDayMA || 0) < 0">
-                          {{ s.percentFromTwoHundredDayMA !== null ? ((s.percentFromTwoHundredDayMA >= 0 ? '+' : '') + (s.percentFromTwoHundredDayMA | number:'1.1-1') + '%') : 'N/A' }}
-                        </span>
-                        <span class="breakdown-signal" [class.buy]="(s.percentFromTwoHundredDayMA || 0) > 0" [class.sell]="(s.percentFromTwoHundredDayMA || 0) < 0">
-                          {{ (s.percentFromTwoHundredDayMA || 0) > 0 ? 'Buy' : ((s.percentFromTwoHundredDayMA || 0) < 0 ? 'Sell' : '—') }}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+              <!-- Compact breakdown grid below gauges -->
+              <div class="breakdown-grid">
+                <div class="breakdown-item">
+                  <span class="breakdown-label">RSI (14)</span>
+                  <span class="breakdown-value" [class]="getRsiClass(s.rsi)">
+                    {{ s.rsi !== null ? (s.rsi | number:'1.1-1') : 'N/A' }}
+                  </span>
+                  <span class="breakdown-signal" [class]="getRsiSignalClass(s.rsi)">
+                    {{ getRsiShortSignal(s.rsi) }}
+                  </span>
+                </div>
+                <div class="breakdown-item">
+                  <span class="breakdown-label">MACD</span>
+                  <span class="breakdown-value" [class.positive]="(s.macdHistogram || 0) > 0" [class.negative]="(s.macdHistogram || 0) < 0">
+                    {{ s.macdHistogram !== null ? (s.macdHistogram | number:'1.2-2') : 'N/A' }}
+                  </span>
+                  <span class="breakdown-signal" [class]="getMacdSignalClass(s.macdSignalType)">
+                    {{ getMacdShortSignal(s.macdSignalType) }}
+                  </span>
+                </div>
+                <div class="breakdown-item">
+                  <span class="breakdown-label">50 MA</span>
+                  <span class="breakdown-value" [class.positive]="(s.percentFromFiftyDayMA || 0) > 0" [class.negative]="(s.percentFromFiftyDayMA || 0) < 0">
+                    {{ s.percentFromFiftyDayMA !== null ? ((s.percentFromFiftyDayMA >= 0 ? '+' : '') + (s.percentFromFiftyDayMA | number:'1.1-1') + '%') : 'N/A' }}
+                  </span>
+                  <span class="breakdown-signal" [class.buy]="(s.percentFromFiftyDayMA || 0) > 0" [class.sell]="(s.percentFromFiftyDayMA || 0) < 0">
+                    {{ (s.percentFromFiftyDayMA || 0) > 0 ? 'Buy' : ((s.percentFromFiftyDayMA || 0) < 0 ? 'Sell' : '—') }}
+                  </span>
+                </div>
+                <div class="breakdown-item">
+                  <span class="breakdown-label">200 MA</span>
+                  <span class="breakdown-value" [class.positive]="(s.percentFromTwoHundredDayMA || 0) > 0" [class.negative]="(s.percentFromTwoHundredDayMA || 0) < 0">
+                    {{ s.percentFromTwoHundredDayMA !== null ? ((s.percentFromTwoHundredDayMA >= 0 ? '+' : '') + (s.percentFromTwoHundredDayMA | number:'1.1-1') + '%') : 'N/A' }}
+                  </span>
+                  <span class="breakdown-signal" [class.buy]="(s.percentFromTwoHundredDayMA || 0) > 0" [class.sell]="(s.percentFromTwoHundredDayMA || 0) < 0">
+                    {{ (s.percentFromTwoHundredDayMA || 0) > 0 ? 'Buy' : ((s.percentFromTwoHundredDayMA || 0) < 0 ? 'Sell' : '—') }}
+                  </span>
                 </div>
               </div>
             </div>
@@ -597,6 +588,24 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       overflow: hidden;
     }
 
+    .analysis-section::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .analysis-section::-webkit-scrollbar-track {
+      background: var(--surface-ground);
+      border-radius: 3px;
+    }
+
+    .analysis-section::-webkit-scrollbar-thumb {
+      background: var(--surface-border);
+      border-radius: 3px;
+    }
+
+    .analysis-section::-webkit-scrollbar-thumb:hover {
+      background: var(--text-color-secondary);
+    }
+
     /* Technical Analysis Section */
     .analysis-section {
       background: var(--surface-card);
@@ -605,7 +614,8 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       height: 100%;
       display: flex;
       flex-direction: column;
-      overflow: hidden;
+      overflow-y: auto;
+      overflow-x: hidden;
     }
 
     .analysis-section h2 {
@@ -624,57 +634,40 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       flex-shrink: 0;
     }
 
-    /* Gauges Layout */
-    .gauges-container.vertical {
+    /* Gauges Row - all 3 side by side */
+    .gauges-row {
       display: flex;
-      flex-direction: column;
       gap: 0.5rem;
-      align-items: center;
-      flex: 1;
-      justify-content: space-evenly;
+      justify-content: center;
+      align-items: flex-start;
+      flex-shrink: 0;
     }
 
     .gauge-card {
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 0.5rem;
-    }
-
-    .gauge-card.main-gauge {
       padding: 0.25rem;
+      flex: 1;
+      min-width: 0;
     }
 
     .gauge-card h3 {
-      margin: 0 0 0.25rem 0;
-      font-size: 0.85rem;
+      margin: 0 0 0.15rem 0;
+      font-size: 0.7rem;
       font-weight: 600;
       color: var(--text-color-secondary);
+      white-space: nowrap;
     }
 
     .gauge-wrapper {
-      width: 140px;
-      height: 85px;
-    }
-
-    .gauge-wrapper.large {
-      width: 180px;
-      height: 105px;
+      width: 110px;
+      height: 66px;
     }
 
     .gauge-svg {
       width: 100%;
       height: 100%;
-    }
-
-    .gauge-text {
-      font-size: 9px;
-      fill: var(--text-color-secondary);
-      text-anchor: middle;
-    }
-
-    .gauge-text.small {
-      font-size: 8px;
     }
 
     .gauge-label-text {
@@ -687,16 +680,11 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
     .gauge-label-text.buy { fill: var(--green-400); }
 
     .gauge-label {
-      margin-top: 0.35rem;
-      padding: 0.3rem 0.75rem;
-      border-radius: 6px;
+      margin-top: 0.15rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 5px;
       font-weight: 600;
-      font-size: 0.8rem;
-    }
-
-    .gauge-label.large {
-      padding: 0.35rem 1rem;
-      font-size: 0.9rem;
+      font-size: 0.65rem;
     }
 
     .gauge-label.strong_sell { background: var(--red-500); color: white; }
@@ -706,48 +694,28 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
     .gauge-label.strong_buy { background: var(--green-600); color: white; }
 
     .score-display {
-      margin-top: 0.25rem;
-      font-size: 0.8rem;
+      margin-top: 0.1rem;
+      font-size: 0.65rem;
       color: var(--text-color-secondary);
     }
 
-    /* Small gauges row */
-    .small-gauges-row {
-      display: flex;
-      gap: 1.5rem;
-      width: 100%;
-      justify-content: center;
-    }
-
-    .small-gauges-row .gauge-card {
-      flex: 1;
-      max-width: 240px;
-    }
-
-    /* Indicator breakdown */
-    .indicator-breakdown {
+    /* Breakdown grid below gauges */
+    .breakdown-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.15rem 1rem;
       margin-top: 0.5rem;
       padding-top: 0.5rem;
       border-top: 1px solid var(--surface-border);
-      width: 100%;
-    }
-
-    .indicator-breakdown.compact {
-      margin-top: 0.35rem;
-      padding-top: 0.35rem;
+      flex-shrink: 0;
     }
 
     .breakdown-item {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.2rem 0;
-      font-size: 0.75rem;
-    }
-
-    .indicator-breakdown.compact .breakdown-item {
       padding: 0.15rem 0;
-      font-size: 0.75rem;
+      font-size: 0.7rem;
     }
 
     .breakdown-label {
@@ -1004,9 +972,11 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       .key-stats-grid {
         grid-template-columns: repeat(4, 1fr);
       }
-      .small-gauges-row {
-        flex-direction: column;
-        align-items: center;
+      .gauges-row {
+        flex-wrap: wrap;
+      }
+      .breakdown-grid {
+        grid-template-columns: 1fr;
       }
     }
   `]

@@ -750,10 +750,18 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
       bgColor: 'rgba(59, 130, 246, 0.12)'
     },
     { 
-      id: '52w_levels', 
-      label: '52-Week Highs & Lows', 
-      icon: 'pi pi-chart-bar',
-      description: 'Stocks at or near their 52-week extremes',
+      id: '52w_highs', 
+      label: '52-Week Highs', 
+      icon: 'pi pi-arrow-up-right',
+      description: 'Stocks at or near their 52-week high',
+      color: '#22c55e',
+      bgColor: 'rgba(34, 197, 94, 0.12)'
+    },
+    { 
+      id: '52w_lows', 
+      label: '52-Week Lows', 
+      icon: 'pi pi-arrow-down-right',
+      description: 'Stocks at or near their 52-week low',
       color: '#f97316',
       bgColor: 'rgba(249, 115, 22, 0.12)'
     },
@@ -787,7 +795,7 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
   allBreakouts = signal<BreakoutStock[]>([]);
   loading = signal(false);
   lastUpdated = signal<Date | null>(null);
-  collapsedCategories = signal<string[]>([]);
+  collapsedCategories = signal<string[]>(['ma_crossover', '52w_highs', '52w_lows', 'rsi_signals', 'macd_signals', 'volume_breakout']);
   selectedSignal = signal<'all' | 'bullish' | 'bearish' | 'neutral'>('all');
 
   // Computed

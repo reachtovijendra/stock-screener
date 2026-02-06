@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, OnDestroy, effect, signal, output } from '@angular/core';
+import { Component, inject, OnInit, OnDestroy, effect, signal, output, ViewChild, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -17,6 +17,7 @@ import { TooltipModule } from 'primeng/tooltip';
 import { TagModule } from 'primeng/tag';
 import { RippleModule } from 'primeng/ripple';
 import { FloatLabelModule } from 'primeng/floatlabel';
+import { OverlayPanelModule, OverlayPanel } from 'primeng/overlaypanel';
 
 import { ScreenerService, MarketService } from '../../../core/services';
 import { 
@@ -50,566 +51,630 @@ interface FilterOption<T> {
     TooltipModule,
     TagModule,
     RippleModule,
-    FloatLabelModule
+    FloatLabelModule,
+    OverlayPanelModule
   ],
   template: `
-    <div class="filter-panel">
-      <!-- Header -->
-      <div class="filter-header">
-        <div class="header-title">
-          <i class="pi pi-sliders-h"></i>
-          <span>Filters</span>
-        </div>
-        <button 
-          pButton 
-          pRipple
-          type="button" 
-          icon="pi pi-refresh"
-          class="p-button-text p-button-rounded p-button-sm reset-btn"
-          pTooltip="Reset all filters"
-          tooltipPosition="left"
-          (click)="resetFilters()"
-          [disabled]="screenerService.activeFilterCount() === 0">
-        </button>
-      </div>
-
-      <!-- Filter Sections -->
-      <div class="filter-sections">
+    <div class="filter-bar">
+      <!-- Filter Dropdown Buttons -->
+      <div class="filter-buttons">
         <!-- Market Cap -->
-        <div class="filter-section" [class.collapsed]="collapsedMarketCap">
-          <button class="section-header" (click)="collapsedMarketCap = !collapsedMarketCap">
-            <span class="section-title">Market Cap</span>
-            <i class="pi" [class.pi-chevron-down]="collapsedMarketCap" [class.pi-chevron-up]="!collapsedMarketCap"></i>
-          </button>
-          @if (!collapsedMarketCap) {
-            <div class="section-content">
-              <div class="toggle-row">
-                <p-selectButton 
-                  [options]="marketCapModeOptions" 
-                  [(ngModel)]="filters.marketCap.mode"
-                  (onChange)="onFilterChange()"
-                  [allowEmpty]="false"
-                  styleClass="compact-toggle">
-                </p-selectButton>
-              </div>
-              @if (filters.marketCap.mode === 'categories') {
-                <div class="checkbox-grid">
-                  @for (cat of marketCapCategories; track cat.value) {
-                    <label class="checkbox-item">
-                      <p-checkbox 
-                        [inputId]="'cap-' + cat.value"
-                        [value]="cat.value"
-                        [(ngModel)]="filters.marketCap.categories"
-                        (onChange)="onFilterChange()">
-                      </p-checkbox>
-                      <span>{{ cat.label }}</span>
-                    </label>
-                  }
-                </div>
-              } @else {
-                <div class="range-inputs custom-range">
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="mcap-min"
-                      [(ngModel)]="filters.marketCap.customRange.min"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="mcap-min">Min ($B)</label>
-                  </span>
-                  <span class="range-separator">-</span>
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="mcap-max"
-                      [(ngModel)]="filters.marketCap.customRange.max"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="mcap-max">Max ($B)</label>
-                  </span>
-                </div>
-              }
+        <button class="filter-trigger" [class.has-value]="hasMarketCapFilter()" (click)="opMarketCap.toggle($event)">
+          <i class="pi pi-building"></i>
+          <span>Market Cap</span>
+          <i class="pi pi-chevron-down arrow"></i>
+        </button>
+        <p-overlayPanel #opMarketCap [style]="{'width': '320px'}" appendTo="body">
+          <div class="overlay-content">
+            <div class="overlay-title">Market Cap</div>
+            <div class="toggle-row">
+              <p-selectButton 
+                [options]="marketCapModeOptions" 
+                [(ngModel)]="filters.marketCap.mode"
+                (onChange)="onFilterChange()"
+                [allowEmpty]="false"
+                styleClass="compact-toggle">
+              </p-selectButton>
             </div>
-          }
-        </div>
+            @if (filters.marketCap.mode === 'categories') {
+              <div class="checkbox-grid">
+                @for (cat of marketCapCategories; track cat.value) {
+                  <label class="checkbox-item">
+                    <p-checkbox 
+                      [inputId]="'cap-' + cat.value"
+                      [value]="cat.value"
+                      [(ngModel)]="filters.marketCap.categories"
+                      (onChange)="onFilterChange()">
+                    </p-checkbox>
+                    <span>{{ cat.label }}</span>
+                  </label>
+                }
+              </div>
+            } @else {
+              <div class="range-inputs">
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="mcap-min"
+                    [(ngModel)]="filters.marketCap.customRange.min"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="mcap-min">Min ($B)</label>
+                </span>
+                <span class="range-separator">-</span>
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="mcap-max"
+                    [(ngModel)]="filters.marketCap.customRange.max"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="mcap-max">Max ($B)</label>
+                </span>
+              </div>
+            }
+          </div>
+        </p-overlayPanel>
 
         <!-- 52-Week Range -->
-        <div class="filter-section" [class.collapsed]="collapsedWeek52">
-          <button class="section-header" (click)="collapsedWeek52 = !collapsedWeek52">
-            <span class="section-title">52-Week Range</span>
-            <i class="pi" [class.pi-chevron-down]="collapsedWeek52" [class.pi-chevron-up]="!collapsedWeek52"></i>
-          </button>
-          @if (!collapsedWeek52) {
-            <div class="section-content">
-              <div class="checkbox-col">
-                <label class="checkbox-item">
-                  <p-checkbox 
-                    inputId="nearHigh"
-                    [(ngModel)]="filters.fiftyTwoWeek.nearHigh"
-                    [binary]="true"
-                    (onChange)="onNearHighLowChange('high')">
-                  </p-checkbox>
-                  <span>Near 52W High (5%)</span>
-                </label>
-                <label class="checkbox-item">
-                  <p-checkbox 
-                    inputId="nearLow"
-                    [(ngModel)]="filters.fiftyTwoWeek.nearLow"
-                    [binary]="true"
-                    (onChange)="onNearHighLowChange('low')">
-                  </p-checkbox>
-                  <span>Near 52W Low (10%)</span>
-                </label>
-              </div>
-              <div class="range-filter-row">
-                <span class="range-filter-label">% From High</span>
-                <div class="range-inputs">
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="week52-min"
-                      [(ngModel)]="filters.fiftyTwoWeek.percentFromHigh.min"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      suffix="%"
-                      [maxFractionDigits]="1"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="week52-min">Min</label>
-                  </span>
-                  <span class="range-separator">-</span>
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="week52-max"
-                      [(ngModel)]="filters.fiftyTwoWeek.percentFromHigh.max"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      suffix="%"
-                      [maxFractionDigits]="1"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="week52-max">Max</label>
-                  </span>
-                </div>
+        <button class="filter-trigger" [class.has-value]="has52WeekFilter()" (click)="op52Week.toggle($event)">
+          <i class="pi pi-calendar"></i>
+          <span>52-Week</span>
+          <i class="pi pi-chevron-down arrow"></i>
+        </button>
+        <p-overlayPanel #op52Week [style]="{'width': '360px'}" appendTo="body">
+          <div class="overlay-content">
+            <div class="overlay-title">52-Week Range</div>
+            <div class="checkbox-col">
+              <label class="checkbox-item">
+                <p-checkbox 
+                  inputId="nearHigh"
+                  [(ngModel)]="filters.fiftyTwoWeek.nearHigh"
+                  [binary]="true"
+                  (onChange)="onNearHighLowChange('high')">
+                </p-checkbox>
+                <span>Near 52W High (5%)</span>
+              </label>
+              <label class="checkbox-item">
+                <p-checkbox 
+                  inputId="nearLow"
+                  [(ngModel)]="filters.fiftyTwoWeek.nearLow"
+                  [binary]="true"
+                  (onChange)="onNearHighLowChange('low')">
+                </p-checkbox>
+                <span>Near 52W Low (10%)</span>
+              </label>
+            </div>
+            <div class="range-filter-row">
+              <span class="range-filter-label">% From High</span>
+              <div class="range-inputs">
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="week52-min"
+                    [(ngModel)]="filters.fiftyTwoWeek.percentFromHigh.min"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    suffix="%"
+                    [maxFractionDigits]="1"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="week52-min">Min</label>
+                </span>
+                <span class="range-separator">-</span>
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="week52-max"
+                    [(ngModel)]="filters.fiftyTwoWeek.percentFromHigh.max"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    suffix="%"
+                    [maxFractionDigits]="1"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="week52-max">Max</label>
+                </span>
               </div>
             </div>
-          }
-        </div>
+          </div>
+        </p-overlayPanel>
 
         <!-- Valuation -->
-        <div class="filter-section" [class.collapsed]="collapsedValuation">
-          <button class="section-header" (click)="collapsedValuation = !collapsedValuation">
-            <span class="section-title">Valuation</span>
-            <i class="pi" [class.pi-chevron-down]="collapsedValuation" [class.pi-chevron-up]="!collapsedValuation"></i>
-          </button>
-          @if (!collapsedValuation) {
-            <div class="section-content">
-              <div class="range-filter-row">
-                <span class="range-filter-label">P/E Ratio</span>
-                <div class="range-inputs">
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="pe-min"
-                      [(ngModel)]="filters.peRatio.min"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      [maxFractionDigits]="1"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="pe-min">Min</label>
-                  </span>
-                  <span class="range-separator">-</span>
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="pe-max"
-                      [(ngModel)]="filters.peRatio.max"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      [maxFractionDigits]="1"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="pe-max">Max</label>
-                  </span>
-                </div>
-              </div>
-              <div class="range-filter-row">
-                <span class="range-filter-label">Forward P/E</span>
-                <div class="range-inputs">
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="fpe-min"
-                      [(ngModel)]="filters.forwardPeRatio.min"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      [maxFractionDigits]="1"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="fpe-min">Min</label>
-                  </span>
-                  <span class="range-separator">-</span>
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="fpe-max"
-                      [(ngModel)]="filters.forwardPeRatio.max"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      [maxFractionDigits]="1"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="fpe-max">Max</label>
-                  </span>
-                </div>
-              </div>
-              <div class="range-filter-row">
-                <span class="range-filter-label">P/B Ratio</span>
-                <div class="range-inputs">
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="pb-min"
-                      [(ngModel)]="filters.pbRatio.min"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      [maxFractionDigits]="1"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="pb-min">Min</label>
-                  </span>
-                  <span class="range-separator">-</span>
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="pb-max"
-                      [(ngModel)]="filters.pbRatio.max"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      [maxFractionDigits]="1"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="pb-max">Max</label>
-                  </span>
-                </div>
-              </div>
-              <div class="range-filter-row">
-                <span class="range-filter-label">Dividend Yield</span>
-                <div class="range-inputs">
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="div-min"
-                      [(ngModel)]="filters.dividendYield.min"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      suffix="%"
-                      [maxFractionDigits]="2"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="div-min">Min</label>
-                  </span>
-                  <span class="range-separator">-</span>
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="div-max"
-                      [(ngModel)]="filters.dividendYield.max"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      suffix="%"
-                      [maxFractionDigits]="2"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="div-max">Max</label>
-                  </span>
-                </div>
+        <button class="filter-trigger" [class.has-value]="hasValuationFilter()" (click)="opValuation.toggle($event)">
+          <i class="pi pi-dollar"></i>
+          <span>Valuation</span>
+          <i class="pi pi-chevron-down arrow"></i>
+        </button>
+        <p-overlayPanel #opValuation [style]="{'width': '360px'}" appendTo="body">
+          <div class="overlay-content">
+            <div class="overlay-title">Valuation</div>
+            <div class="range-filter-row">
+              <span class="range-filter-label">P/E Ratio</span>
+              <div class="range-inputs">
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="pe-min"
+                    [(ngModel)]="filters.peRatio.min"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    [maxFractionDigits]="1"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="pe-min">Min</label>
+                </span>
+                <span class="range-separator">-</span>
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="pe-max"
+                    [(ngModel)]="filters.peRatio.max"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    [maxFractionDigits]="1"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="pe-max">Max</label>
+                </span>
               </div>
             </div>
-          }
-        </div>
+            <div class="range-filter-row">
+              <span class="range-filter-label">Forward P/E</span>
+              <div class="range-inputs">
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="fpe-min"
+                    [(ngModel)]="filters.forwardPeRatio.min"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    [maxFractionDigits]="1"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="fpe-min">Min</label>
+                </span>
+                <span class="range-separator">-</span>
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="fpe-max"
+                    [(ngModel)]="filters.forwardPeRatio.max"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    [maxFractionDigits]="1"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="fpe-max">Max</label>
+                </span>
+              </div>
+            </div>
+            <div class="range-filter-row">
+              <span class="range-filter-label">P/B Ratio</span>
+              <div class="range-inputs">
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="pb-min"
+                    [(ngModel)]="filters.pbRatio.min"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    [maxFractionDigits]="1"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="pb-min">Min</label>
+                </span>
+                <span class="range-separator">-</span>
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="pb-max"
+                    [(ngModel)]="filters.pbRatio.max"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    [maxFractionDigits]="1"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="pb-max">Max</label>
+                </span>
+              </div>
+            </div>
+            <div class="range-filter-row">
+              <span class="range-filter-label">Dividend Yield</span>
+              <div class="range-inputs">
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="div-min"
+                    [(ngModel)]="filters.dividendYield.min"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    suffix="%"
+                    [maxFractionDigits]="2"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="div-min">Min</label>
+                </span>
+                <span class="range-separator">-</span>
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="div-max"
+                    [(ngModel)]="filters.dividendYield.max"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    suffix="%"
+                    [maxFractionDigits]="2"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="div-max">Max</label>
+                </span>
+              </div>
+            </div>
+          </div>
+        </p-overlayPanel>
 
         <!-- Technical -->
-        <div class="filter-section" [class.collapsed]="collapsedTechnical">
-          <button class="section-header" (click)="collapsedTechnical = !collapsedTechnical">
-            <span class="section-title">Technical</span>
-            <i class="pi" [class.pi-chevron-down]="collapsedTechnical" [class.pi-chevron-up]="!collapsedTechnical"></i>
-          </button>
-          @if (!collapsedTechnical) {
-            <div class="section-content">
-              <div class="ma-filter-row">
-                <span class="ma-filter-label">50-Day MA</span>
-                <p-selectButton 
-                  [options]="maOptions" 
-                  [(ngModel)]="filters.movingAverages.aboveFiftyDayMA"
-                  (onChange)="onFilterChange()"
-                  optionLabel="label"
-                  optionValue="value"
-                  styleClass="ma-toggle">
-                </p-selectButton>
-              </div>
-              <div class="ma-filter-row">
-                <span class="ma-filter-label">200-Day MA</span>
-                <p-selectButton 
-                  [options]="maOptions" 
-                  [(ngModel)]="filters.movingAverages.aboveTwoHundredDayMA"
-                  (onChange)="onFilterChange()"
-                  optionLabel="label"
-                  optionValue="value"
-                  styleClass="ma-toggle">
-                </p-selectButton>
-              </div>
-              <div class="cross-filters">
-                <label class="checkbox-item">
-                  <p-checkbox 
-                    inputId="goldenCross"
-                    [(ngModel)]="filters.movingAverages.goldenCross"
-                    [binary]="true"
-                    (onChange)="onFilterChange()">
-                  </p-checkbox>
-                  <span pTooltip="50 MA above 200 MA" tooltipPosition="top">Golden Cross</span>
-                </label>
-                <label class="checkbox-item">
-                  <p-checkbox 
-                    inputId="deathCross"
-                    [(ngModel)]="filters.movingAverages.deathCross"
-                    [binary]="true"
-                    (onChange)="onFilterChange()">
-                  </p-checkbox>
-                  <span pTooltip="50 MA below 200 MA" tooltipPosition="top">Death Cross</span>
-                </label>
-              </div>
+        <button class="filter-trigger" [class.has-value]="hasTechnicalFilter()" (click)="opTechnical.toggle($event)">
+          <i class="pi pi-chart-line"></i>
+          <span>Technical</span>
+          <i class="pi pi-chevron-down arrow"></i>
+        </button>
+        <p-overlayPanel #opTechnical [style]="{'width': '320px'}" appendTo="body">
+          <div class="overlay-content">
+            <div class="overlay-title">Technical</div>
+            <div class="ma-filter-row">
+              <span class="ma-filter-label">50-Day MA</span>
+              <p-selectButton 
+                [options]="maOptions" 
+                [(ngModel)]="filters.movingAverages.aboveFiftyDayMA"
+                (onChange)="onFilterChange()"
+                optionLabel="label"
+                optionValue="value"
+                styleClass="ma-toggle">
+              </p-selectButton>
             </div>
-          }
-        </div>
+            <div class="ma-filter-row">
+              <span class="ma-filter-label">200-Day MA</span>
+              <p-selectButton 
+                [options]="maOptions" 
+                [(ngModel)]="filters.movingAverages.aboveTwoHundredDayMA"
+                (onChange)="onFilterChange()"
+                optionLabel="label"
+                optionValue="value"
+                styleClass="ma-toggle">
+              </p-selectButton>
+            </div>
+            <div class="cross-filters">
+              <label class="checkbox-item">
+                <p-checkbox 
+                  inputId="goldenCross"
+                  [(ngModel)]="filters.movingAverages.goldenCross"
+                  [binary]="true"
+                  (onChange)="onFilterChange()">
+                </p-checkbox>
+                <span pTooltip="50 MA above 200 MA" tooltipPosition="top">Golden Cross</span>
+              </label>
+              <label class="checkbox-item">
+                <p-checkbox 
+                  inputId="deathCross"
+                  [(ngModel)]="filters.movingAverages.deathCross"
+                  [binary]="true"
+                  (onChange)="onFilterChange()">
+                </p-checkbox>
+                <span pTooltip="50 MA below 200 MA" tooltipPosition="top">Death Cross</span>
+              </label>
+            </div>
+          </div>
+        </p-overlayPanel>
 
         <!-- Volume -->
-        <div class="filter-section" [class.collapsed]="collapsedVolume">
-          <button class="section-header" (click)="collapsedVolume = !collapsedVolume">
-            <span class="section-title">Volume</span>
-            <i class="pi" [class.pi-chevron-down]="collapsedVolume" [class.pi-chevron-up]="!collapsedVolume"></i>
-          </button>
-          @if (!collapsedVolume) {
-            <div class="section-content">
-              <div class="range-filter-row">
-                <span class="range-filter-label">Avg Daily Volume</span>
-                <div class="range-inputs">
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="vol-min"
-                      [(ngModel)]="filters.avgVolume.min"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="vol-min">Min</label>
-                  </span>
-                  <span class="range-separator">-</span>
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="vol-max"
-                      [(ngModel)]="filters.avgVolume.max"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="vol-max">Max</label>
-                  </span>
-                </div>
-              </div>
-              <div class="range-filter-row">
-                <span class="range-filter-label">Relative Volume</span>
-                <div class="range-inputs">
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="rvol-min"
-                      [(ngModel)]="filters.relativeVolume.min"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      [minFractionDigits]="1"
-                      [maxFractionDigits]="2"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="rvol-min">Min</label>
-                  </span>
-                  <span class="range-separator">-</span>
-                  <span class="p-float-label">
-                    <p-inputNumber 
-                      inputId="rvol-max"
-                      [(ngModel)]="filters.relativeVolume.max"
-                      (onBlur)="onFilterChange()"
-                      [showButtons]="false"
-                      mode="decimal"
-                      [minFractionDigits]="1"
-                      [maxFractionDigits]="2"
-                      styleClass="range-input">
-                    </p-inputNumber>
-                    <label for="rvol-max">Max</label>
-                  </span>
-                </div>
+        <button class="filter-trigger" [class.has-value]="hasVolumeFilter()" (click)="opVolume.toggle($event)">
+          <i class="pi pi-chart-bar"></i>
+          <span>Volume</span>
+          <i class="pi pi-chevron-down arrow"></i>
+        </button>
+        <p-overlayPanel #opVolume [style]="{'width': '360px'}" appendTo="body">
+          <div class="overlay-content">
+            <div class="overlay-title">Volume</div>
+            <div class="range-filter-row">
+              <span class="range-filter-label">Avg Daily Volume</span>
+              <div class="range-inputs">
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="vol-min"
+                    [(ngModel)]="filters.avgVolume.min"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="vol-min">Min</label>
+                </span>
+                <span class="range-separator">-</span>
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="vol-max"
+                    [(ngModel)]="filters.avgVolume.max"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="vol-max">Max</label>
+                </span>
               </div>
             </div>
-          }
-        </div>
+            <div class="range-filter-row">
+              <span class="range-filter-label">Relative Volume</span>
+              <div class="range-inputs">
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="rvol-min"
+                    [(ngModel)]="filters.relativeVolume.min"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    [minFractionDigits]="1"
+                    [maxFractionDigits]="2"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="rvol-min">Min</label>
+                </span>
+                <span class="range-separator">-</span>
+                <span class="p-float-label">
+                  <p-inputNumber 
+                    inputId="rvol-max"
+                    [(ngModel)]="filters.relativeVolume.max"
+                    (onBlur)="onFilterChange()"
+                    [showButtons]="false"
+                    mode="decimal"
+                    [minFractionDigits]="1"
+                    [maxFractionDigits]="2"
+                    styleClass="range-input">
+                  </p-inputNumber>
+                  <label for="rvol-max">Max</label>
+                </span>
+              </div>
+            </div>
+          </div>
+        </p-overlayPanel>
 
         <!-- Sectors -->
-        <div class="filter-section" [class.collapsed]="collapsedSectors">
-          <button class="section-header" (click)="collapsedSectors = !collapsedSectors">
-            <span class="section-title">Sectors</span>
-            <i class="pi" [class.pi-chevron-down]="collapsedSectors" [class.pi-chevron-up]="!collapsedSectors"></i>
-          </button>
-          @if (!collapsedSectors) {
-            <div class="section-content">
-              <p-multiSelect 
-                [options]="sectorOptions"
-                [(ngModel)]="filters.sectors"
-                (onChange)="onFilterChange()"
-                placeholder="All Sectors"
-                display="chip"
-                [showClear]="true"
-                [filter]="true"
-                filterPlaceholder="Search..."
-                appendTo="body"
-                styleClass="w-full compact-multiselect">
-              </p-multiSelect>
-            </div>
+        <button class="filter-trigger" [class.has-value]="filters.sectors.length > 0" (click)="opSectors.toggle($event)">
+          <i class="pi pi-th-large"></i>
+          <span>Sectors</span>
+          @if (filters.sectors.length > 0) {
+            <span class="filter-count">{{ filters.sectors.length }}</span>
           }
-        </div>
+          <i class="pi pi-chevron-down arrow"></i>
+        </button>
+        <p-overlayPanel #opSectors [style]="{'width': '320px'}" appendTo="body">
+          <div class="overlay-content">
+            <div class="overlay-title">Sectors</div>
+            <p-multiSelect 
+              [options]="sectorOptions"
+              [(ngModel)]="filters.sectors"
+              (onChange)="onSectorChange()"
+              placeholder="All Sectors"
+              display="chip"
+              [showClear]="true"
+              [filter]="true"
+              filterPlaceholder="Search..."
+              appendTo="body"
+              styleClass="w-full compact-multiselect">
+            </p-multiSelect>
+          </div>
+        </p-overlayPanel>
+
+        <!-- Industry -->
+        <button class="filter-trigger" [class.has-value]="selectedIndustries.length > 0" (click)="opIndustry.toggle($event)">
+          <i class="pi pi-briefcase"></i>
+          <span>Industry</span>
+          @if (selectedIndustries.length > 0) {
+            <span class="filter-count">{{ selectedIndustries.length }}</span>
+          }
+          <i class="pi pi-chevron-down arrow"></i>
+        </button>
+        <p-overlayPanel #opIndustry [style]="{'width': '320px'}" appendTo="body">
+          <div class="overlay-content">
+            <div class="overlay-title">Industry</div>
+            <p-multiSelect 
+              [options]="industryOptions()"
+              [(ngModel)]="selectedIndustries"
+              (onChange)="onIndustryChange()"
+              [placeholder]="industryOptions().length > 0 ? 'All Industries' : 'Loading...'"
+              display="chip"
+              [showClear]="true"
+              [filter]="true"
+              filterPlaceholder="Search..."
+              appendTo="body"
+              styleClass="w-full compact-multiselect">
+            </p-multiSelect>
+          </div>
+        </p-overlayPanel>
       </div>
 
-      <!-- Run Button -->
-      <div class="run-section">
-        <button 
-          pButton 
-          pRipple
-          type="button"
-          label="Run Screen"
-          icon="pi pi-play"
-          class="run-button"
-          [loading]="screenerService.loading()"
-          (click)="runScreen()">
+      <!-- Action Buttons -->
+      <div class="filter-actions">
+        @if (screenerService.activeFilterCount() > 0) {
+          <button class="reset-action" (click)="resetFilters()" title="Reset all filters">
+            <i class="pi pi-refresh"></i>
+            <span>Reset</span>
+          </button>
+        }
+        <button class="run-action" [class.loading]="screenerService.loading()" [disabled]="screenerService.loading()" (click)="runScreen()">
+          @if (screenerService.loading()) {
+            <i class="pi pi-spin pi-spinner"></i>
+          } @else {
+            <i class="pi pi-search"></i>
+          }
+          <span>Screen</span>
         </button>
       </div>
     </div>
   `,
   styles: [`
-    .filter-panel {
+    .filter-bar {
       background: var(--surface-card);
       border: 1px solid var(--surface-border);
-      border-radius: 12px;
-      overflow: hidden;
-      width: 280px;
-      display: flex;
-      flex-direction: column;
-      max-height: calc(100vh - 100px);
-    }
-
-    .filter-header {
+      border-radius: 10px;
+      padding: 0.5rem 0.75rem;
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 1rem 1.25rem 0.875rem;
-      border-bottom: 1px solid var(--surface-border);
-      background: var(--surface-ground);
+      gap: 0.5rem;
+      flex-wrap: wrap;
     }
 
-    .header-title {
+    .filter-buttons {
       display: flex;
       align-items: center;
-      gap: 0.625rem;
-      font-weight: 600;
-      font-size: 1rem;
-      color: var(--text-color);
-
-      i {
-        color: var(--primary-color);
-        font-size: 1.125rem;
-      }
-    }
-
-    .reset-btn {
-      width: 2.25rem !important;
-      height: 2.25rem !important;
-    }
-
-    .filter-sections {
+      gap: 0.375rem;
+      flex-wrap: wrap;
       flex: 1;
-      overflow-y: auto;
-      overflow-x: hidden;
-      
-      /* Custom scrollbar */
-      &::-webkit-scrollbar {
-        width: 6px;
-      }
-      &::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      &::-webkit-scrollbar-thumb {
-        background: var(--surface-border);
-        border-radius: 3px;
-      }
-      &::-webkit-scrollbar-thumb:hover {
-        background: var(--text-color-secondary);
-      }
     }
 
-    .filter-section {
-      &:last-child .section-header {
-        border-bottom: 1px solid var(--surface-border);
-      }
-
-      &.collapsed .section-header {
-        border-bottom: none;
-      }
-    }
-
-    .section-header {
-      width: 100%;
-      display: flex;
+    .filter-trigger {
+      display: inline-flex;
       align-items: center;
-      justify-content: space-between;
-      padding: 0.875rem 1.25rem;
-      background: var(--surface-card);
-      border: none;
+      gap: 0.35rem;
+      padding: 0.4rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid var(--surface-border);
+      background: var(--surface-ground);
+      color: var(--text-color-secondary);
+      font-size: 0.78rem;
+      font-weight: 500;
       cursor: pointer;
-      color: var(--text-color);
-      transition: background 0.15s ease;
-      position: sticky;
-      top: 0;
-      z-index: 10;
-      border-bottom: 1px solid var(--surface-border);
+      transition: all 0.15s ease;
+      white-space: nowrap;
+
+      i:not(.arrow) {
+        font-size: 0.8rem;
+      }
+
+      .arrow {
+        font-size: 0.6rem;
+        margin-left: 0.1rem;
+        opacity: 0.6;
+      }
 
       &:hover {
+        border-color: var(--primary-color);
+        color: var(--text-color);
         background: var(--surface-hover);
       }
 
-      i {
-        font-size: 0.75rem;
-        color: var(--text-color-secondary);
+      &.has-value {
+        border-color: var(--primary-color);
+        background: rgba(var(--primary-color-rgb, 99, 102, 241), 0.08);
+        color: var(--primary-color);
       }
     }
 
-    .section-title {
-      font-size: 0.85rem;
+    .filter-count {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 18px;
+      height: 18px;
+      border-radius: 9px;
+      background: var(--primary-color);
+      color: white;
+      font-size: 0.65rem;
       font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.04em;
+      padding: 0 4px;
     }
 
-    .section-content {
-      padding: 0.25rem 1.25rem 1.25rem;
+    .filter-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-left: auto;
+      flex-shrink: 0;
+    }
+
+    .reset-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.45rem 0.7rem;
+      border-radius: 8px;
+      border: 1px solid var(--surface-border);
+      background: transparent;
+      color: var(--text-color-secondary);
+      font-size: 0.78rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+
+      i { font-size: 0.75rem; }
+
+      &:hover {
+        color: var(--text-color);
+        border-color: var(--text-color-secondary);
+        background: var(--surface-hover);
+      }
+    }
+
+    .run-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.5rem 1.1rem;
+      border-radius: 8px;
+      border: none;
+      background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      color: #fff;
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+      box-shadow: 0 2px 8px rgba(34, 197, 94, 0.3);
+
+      i { font-size: 0.85rem; }
+
+      &:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(34, 197, 94, 0.45);
+        background: linear-gradient(135deg, #16a34a 0%, #15803d 100%);
+      }
+
+      &:active:not(:disabled) {
+        transform: translateY(0);
+      }
+
+      &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+
+      &.loading {
+        background: linear-gradient(135deg, #22c55e 0%, #16a34a 100%);
+      }
+    }
+
+    /* Overlay Panel Content */
+    .overlay-content {
       display: flex;
       flex-direction: column;
-      gap: 1rem;
+      gap: 0.875rem;
+      padding: 0.25rem;
+    }
+
+    .overlay-title {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--text-color);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
     }
 
     .toggle-row {
@@ -637,11 +702,6 @@ interface FilterOption<T> {
       gap: 0.75rem;
     }
 
-    .checkbox-row {
-      display: flex;
-      gap: 1.25rem;
-    }
-
     .checkbox-item {
       display: flex;
       align-items: center;
@@ -654,47 +714,10 @@ interface FilterOption<T> {
       }
     }
 
-    .chip-group {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-    }
-
-    .filter-chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 0.375rem 0.625rem;
-      font-size: 0.75rem;
-      font-weight: 500;
-      border: 1px solid var(--surface-border);
-      border-radius: 6px;
-      background: var(--surface-ground);
-      color: var(--text-color-secondary);
-      cursor: pointer;
-      transition: all 0.15s ease;
-
-      &:hover {
-        background: var(--surface-hover);
-        border-color: var(--primary-color);
-        color: var(--text-color);
-      }
-
-      &.active {
-        background: var(--primary-color);
-        border-color: var(--primary-color);
-        color: var(--primary-color-text);
-      }
-
-      i {
-        margin-right: 0.375rem;
-      }
-    }
-
-    /* Range filter styles - Professional look */
     .range-filter-row {
       display: flex;
       flex-direction: column;
-      gap: 0.625rem;
+      gap: 0.5rem;
     }
 
     .range-filter-label {
@@ -714,10 +737,6 @@ interface FilterOption<T> {
       }
     }
 
-    .range-inputs.custom-range {
-      margin-top: 0.25rem;
-    }
-
     .range-separator {
       color: var(--text-color-secondary);
       font-size: 0.9rem;
@@ -727,7 +746,6 @@ interface FilterOption<T> {
       text-align: center;
     }
 
-    /* MA Filter styles */
     .ma-filter-row {
       display: flex;
       flex-direction: column;
@@ -746,15 +764,18 @@ interface FilterOption<T> {
       padding-top: 0.25rem;
     }
 
+    .w-full {
+      width: 100%;
+    }
+
     :host ::ng-deep {
-      /* Range input styling */
       .range-input {
         width: 100%;
 
         input.p-inputnumber-input {
           width: 100%;
           font-size: 0.85rem;
-          padding: 0.75rem 0.875rem;
+          padding: 0.65rem 0.75rem;
           border-radius: 8px;
           background: var(--surface-ground);
           border: 1px solid var(--surface-border);
@@ -770,20 +791,14 @@ interface FilterOption<T> {
             box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb, 99, 102, 241), 0.15);
             outline: none;
           }
-
-          &::placeholder {
-            color: var(--text-color-secondary);
-            opacity: 0.7;
-          }
         }
       }
 
-      /* Float label styling */
       .p-float-label {
         label {
           font-size: 0.8rem;
           color: var(--text-color-secondary);
-          left: 0.875rem;
+          left: 0.75rem;
           transition: all 0.2s ease;
         }
 
@@ -793,21 +808,20 @@ interface FilterOption<T> {
         .p-inputwrapper-filled ~ label {
           top: -0.5rem;
           font-size: 0.7rem;
-          background: var(--surface-card);
+          background: var(--surface-overlay);
           padding: 0 0.25rem;
           color: var(--primary-color);
         }
       }
 
-      /* MA toggle styling - Pill-shaped segmented control */
       p-selectbutton.ma-toggle {
         .p-selectbutton {
           display: inline-flex !important;
-          background: #1e1e2e !important;
+          background: var(--surface-ground) !important;
           border-radius: 20px !important;
           padding: 4px !important;
           gap: 3px !important;
-          border: 1px solid #3f3f5a !important;
+          border: 1px solid var(--surface-border) !important;
         }
         
         .p-togglebutton {
@@ -819,7 +833,7 @@ interface FilterOption<T> {
           border-radius: 14px !important;
           border: none !important;
           background: transparent !important;
-          color: #a0a0b0 !important;
+          color: var(--text-color-secondary) !important;
           transition: all 0.2s ease !important;
           min-width: 46px !important;
           cursor: pointer !important;
@@ -827,7 +841,7 @@ interface FilterOption<T> {
 
         .p-togglebutton:hover:not(.p-togglebutton-checked) {
           background: rgba(99, 102, 241, 0.2) !important;
-          color: #e0e0e0 !important;
+          color: var(--text-color) !important;
         }
 
         .p-togglebutton-checked {
@@ -841,15 +855,14 @@ interface FilterOption<T> {
         }
       }
 
-      /* Compact toggle - Pill-shaped segmented control */
       p-selectbutton.compact-toggle {
         .p-selectbutton {
           display: inline-flex !important;
-          background: #1e1e2e !important;
+          background: var(--surface-ground) !important;
           border-radius: 20px !important;
           padding: 4px !important;
           gap: 3px !important;
-          border: 1px solid #3f3f5a !important;
+          border: 1px solid var(--surface-border) !important;
         }
         
         .p-togglebutton {
@@ -861,14 +874,14 @@ interface FilterOption<T> {
           border-radius: 14px !important;
           border: none !important;
           background: transparent !important;
-          color: #a0a0b0 !important;
+          color: var(--text-color-secondary) !important;
           transition: all 0.2s ease !important;
           cursor: pointer !important;
         }
 
         .p-togglebutton:hover:not(.p-togglebutton-checked) {
           background: rgba(99, 102, 241, 0.2) !important;
-          color: #e0e0e0 !important;
+          color: var(--text-color) !important;
         }
 
         .p-togglebutton-checked {
@@ -900,7 +913,7 @@ interface FilterOption<T> {
 
         .p-multiselect-label {
           font-size: 0.85rem;
-          padding: 0.75rem 0.875rem;
+          padding: 0.65rem 0.75rem;
         }
 
         .p-multiselect-token {
@@ -926,54 +939,22 @@ interface FilterOption<T> {
           border-color: var(--primary-color);
         }
       }
-    }
 
-    .run-section {
-      padding: 1.25rem;
-      background: var(--surface-ground);
-      border-top: 1px solid var(--surface-border);
-    }
-
-    .run-button {
-      width: 100%;
-      font-weight: 600;
-      font-size: 0.95rem;
-      padding: 0.875rem 1.25rem;
-      border-radius: 8px;
-      background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-600, #4f46e5) 100%);
-      border: none;
-      transition: all 0.2s ease;
-
-      &:hover:not(:disabled) {
-        transform: translateY(-1px);
-        box-shadow: 0 4px 12px rgba(var(--primary-color-rgb, 99, 102, 241), 0.35);
-      }
-
-      &:active:not(:disabled) {
-        transform: translateY(0);
+      .p-overlaypanel {
+        .p-overlaypanel-content {
+          padding: 1rem;
+        }
       }
     }
 
-    .w-full {
-      width: 100%;
-    }
+    @media (max-width: 768px) {
+      .filter-bar {
+        padding: 0.375rem 0.5rem;
+      }
 
-    /* Scrollbar styling */
-    .filter-sections::-webkit-scrollbar {
-      width: 6px;
-    }
-
-    .filter-sections::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    .filter-sections::-webkit-scrollbar-thumb {
-      background: var(--surface-border);
-      border-radius: 3px;
-    }
-
-    .filter-sections::-webkit-scrollbar-thumb:hover {
-      background: var(--text-color-secondary);
+      .filter-trigger span {
+        display: none;
+      }
     }
   `]
 })
@@ -986,14 +967,6 @@ export class FilterPanelComponent implements OnInit {
 
   filters!: ScreenerFilters;
   presets: FilterPreset[] = [];
-
-  // Collapsed state for sections - all collapsed by default
-  collapsedMarketCap = true;
-  collapsedWeek52 = true;
-  collapsedValuation = true;
-  collapsedTechnical = true;
-  collapsedVolume = true;
-  collapsedSectors = true;
 
   marketCapModeOptions = [
     { label: 'Categories', value: 'categories' },
@@ -1032,6 +1005,20 @@ export class FilterPanelComponent implements OnInit {
   ];
 
   sectorOptions = SECTORS.map(sector => ({ label: sector, value: sector }));
+
+  // Industry filter (column-level, not part of screening API)
+  selectedIndustries: string[] = [];
+
+  industryOptions = computed(() => {
+    const stocks = this.screenerService.getCachedStocks();
+    let filteredStocks = stocks;
+    if (this.filters && this.filters.sectors.length > 0) {
+      const sectorSet = new Set<string>(this.filters.sectors);
+      filteredStocks = stocks.filter(s => sectorSet.has(s.sector));
+    }
+    const industries = [...new Set(filteredStocks.map(s => s.industry).filter(i => i && i !== 'Unknown'))].sort();
+    return industries.map(i => ({ label: i, value: i }));
+  });
 
   constructor() {
     // Sync with service filters
@@ -1079,6 +1066,18 @@ export class FilterPanelComponent implements OnInit {
   resetFilters(): void {
     this.screenerService.resetFilters();
     this.filters = getDefaultFilters(this.marketService.currentMarket());
+    this.selectedIndustries = [];
+  }
+
+  onSectorChange(): void {
+    this.onFilterChange();
+    // Reset industry when sectors change (industries depend on sectors)
+    this.selectedIndustries = [];
+    this.screenerService.setIndustryFilter([]);
+  }
+
+  onIndustryChange(): void {
+    this.screenerService.setIndustryFilter(this.selectedIndustries);
   }
 
   runScreen(): void {
@@ -1106,5 +1105,44 @@ export class FilterPanelComponent implements OnInit {
       signals.push(signalId);
     }
     this.onFilterChange();
+  }
+
+  // Filter active state helpers
+  hasMarketCapFilter(): boolean {
+    if (!this.filters) return false;
+    if (this.filters.marketCap.mode === 'categories' && this.filters.marketCap.categories.length > 0) return true;
+    if (this.filters.marketCap.mode === 'custom' && (this.filters.marketCap.customRange.min != null || this.filters.marketCap.customRange.max != null)) return true;
+    return false;
+  }
+
+  has52WeekFilter(): boolean {
+    if (!this.filters) return false;
+    if (this.filters.fiftyTwoWeek.nearHigh || this.filters.fiftyTwoWeek.nearLow) return true;
+    if (this.filters.fiftyTwoWeek.percentFromHigh.min != null || this.filters.fiftyTwoWeek.percentFromHigh.max != null) return true;
+    return false;
+  }
+
+  hasValuationFilter(): boolean {
+    if (!this.filters) return false;
+    if (this.filters.peRatio.min != null || this.filters.peRatio.max != null) return true;
+    if (this.filters.forwardPeRatio.min != null || this.filters.forwardPeRatio.max != null) return true;
+    if (this.filters.pbRatio.min != null || this.filters.pbRatio.max != null) return true;
+    if (this.filters.dividendYield.min != null || this.filters.dividendYield.max != null) return true;
+    return false;
+  }
+
+  hasTechnicalFilter(): boolean {
+    if (!this.filters) return false;
+    if (this.filters.movingAverages.aboveFiftyDayMA != null) return true;
+    if (this.filters.movingAverages.aboveTwoHundredDayMA != null) return true;
+    if (this.filters.movingAverages.goldenCross || this.filters.movingAverages.deathCross) return true;
+    return false;
+  }
+
+  hasVolumeFilter(): boolean {
+    if (!this.filters) return false;
+    if (this.filters.avgVolume.min != null || this.filters.avgVolume.max != null) return true;
+    if (this.filters.relativeVolume.min != null || this.filters.relativeVolume.max != null) return true;
+    return false;
   }
 }

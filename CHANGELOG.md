@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Restructured application layout with persistent left navigation sidebar visible on all pages
+- Navigation links (Screener, Breakouts, News) moved from header to a 64px icon-based sidebar
+- Screener filter panel converted from 280px vertical sidebar to compact horizontal dropdown bar above results table
+- Each filter group (Market Cap, 52-Week, Valuation, Technical, Volume, Sectors) is now a dropdown button that opens an overlay panel
+- Filter bar includes inline Run Screen and Reset buttons
+- Screener results table simplified: removed embedded search textbox and filter toggle button
+- Header streamlined: navigation links removed, retaining logo, stock search, market indices, and controls
+
 ### Added
 - Technical Breakouts page showing stocks crossing critical technical levels
 - Moving Average Crossover alerts: 50-day MA, 200-day MA, Golden Cross, Death Cross

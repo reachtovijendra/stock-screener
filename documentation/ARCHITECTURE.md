@@ -63,6 +63,16 @@ The Stock Screener is a full-stack application built with Angular and Vercel ser
 - Signal-based state management
 - SCSS for styling
 
+### Application Layout
+
+The application uses a shell layout with three major zones:
+
+1. **Header** (top, sticky): Logo, stock search autocomplete, market indices, market toggle, theme toggle
+2. **Left Navigation Sidebar** (64px, sticky, all pages): Icon-based links to Screener, Breakouts, and News
+3. **Page Content** (flexible): Route-specific content fills the remaining space
+
+The sidebar is defined in `app.component.ts` and is always visible regardless of which page is active.
+
 ### Component Structure
 
 ```
@@ -79,13 +89,20 @@ src/app/
 │   └── interceptors/     # HTTP interceptors
 │       └── api.interceptor.ts
 ├── features/
-│   └── screener/         # Main feature module
-│       ├── screener.component.ts
-│       ├── filter-panel/
-│       └── results-table/
+│   ├── screener/         # Screener feature
+│   │   ├── screener.component.ts
+│   │   ├── filter-panel/   # Horizontal dropdown filter bar
+│   │   └── results-table/
+│   ├── breakouts/        # Technical breakouts feature
+│   ├── market-news/      # Market news feature
+│   └── stock-detail/     # Individual stock detail page
 └── layout/
     └── header/
 ```
+
+### Screener Filter Layout
+
+The screener filter panel is a horizontal bar above the results table. Each filter group (Market Cap, 52-Week, Valuation, Technical, Volume, Sectors) is a dropdown trigger button. Clicking a button opens a PrimeNG OverlayPanel with that section's filter controls. The bar also includes Run Screen and Reset action buttons.
 
 ### State Management
 

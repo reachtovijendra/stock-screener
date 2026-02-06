@@ -37,22 +37,6 @@ interface MarketIndex {
             <span class="brand-name">StockScreen</span>
           </div>
 
-          <!-- Navigation Links -->
-          <nav class="header-nav">
-            <a class="nav-link" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}">
-              <i class="pi pi-table"></i>
-              <span>Screener</span>
-            </a>
-            <a class="nav-link" routerLink="/breakouts" routerLinkActive="active">
-              <i class="pi pi-chart-line"></i>
-              <span>Breakouts</span>
-            </a>
-            <a class="nav-link" routerLink="/news" routerLinkActive="active">
-              <i class="pi pi-bolt"></i>
-              <span>News</span>
-            </a>
-          </nav>
-
           <!-- Stock Search (always visible) -->
           <div class="header-search">
             <p-autoComplete 
@@ -192,43 +176,6 @@ interface MarketIndex {
       display: flex;
       align-items: center;
       gap: 1.25rem;
-    }
-
-    .header-nav {
-      display: flex;
-      align-items: center;
-      gap: 0.25rem;
-      padding: 0.2rem;
-      background: var(--surface-ground);
-      border-radius: 8px;
-    }
-
-    .nav-link {
-      display: flex;
-      align-items: center;
-      gap: 0.4rem;
-      padding: 0.4rem 0.75rem;
-      border-radius: 6px;
-      text-decoration: none;
-      color: var(--text-color-secondary);
-      font-size: 0.8rem;
-      font-weight: 500;
-      transition: all 0.2s ease;
-
-      i {
-        font-size: 0.85rem;
-      }
-
-      &:hover {
-        color: var(--text-color);
-        background: var(--surface-hover);
-      }
-
-      &.active {
-        color: var(--primary-color);
-        background: var(--surface-card);
-        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-      }
     }
 
     .header-brand {

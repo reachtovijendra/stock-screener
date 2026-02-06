@@ -502,23 +502,69 @@ export async function getQuotes(symbols: string[], market: Market): Promise<Stoc
     return results;
   }
 
-  // Fetch in batches of 50 (Yahoo limit)
+  // Try batch quote API first (faster but may be blocked on Vercel)
   const batchSize = 50;
+  const failedSymbols: string[] = [];
+
   for (let i = 0; i < uncachedSymbols.length; i += batchSize) {
     const batch = uncachedSymbols.slice(i, i + batchSize);
     const quotes = await fetchYahooQuotes(batch);
 
+    // Track which symbols we got results for
+    const fetchedSymbols = new Set<string>();
     for (const item of quotes) {
       if (item && item.regularMarketPrice) {
         const quote = transformQuote(item, market);
         cacheQuote(quote.symbol, quote);
         results.push(quote);
+        fetchedSymbols.add(item.symbol);
       }
     }
 
-    // Small delay between batches to avoid rate limiting
+    // Collect symbols that failed
+    for (const sym of batch) {
+      if (!fetchedSymbols.has(sym)) {
+        failedSymbols.push(sym);
+      }
+    }
+
+    // Small delay between batches
     if (i + batchSize < uncachedSymbols.length) {
-      await new Promise(resolve => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+  }
+
+  // Fallback: use chart API for failed symbols (works on Vercel)
+  if (failedSymbols.length > 0) {
+    console.log(`[getQuotes] Batch API missed ${failedSymbols.length} symbols, falling back to chart API...`);
+    const chartBatchSize = 10;
+    for (let i = 0; i < failedSymbols.length; i += chartBatchSize) {
+      const batch = failedSymbols.slice(i, i + chartBatchSize);
+      const chartPromises = batch.map(async (sym) => {
+        try {
+          const chartData = await fetchChartQuote(sym);
+          if (chartData) {
+            const quote = transformQuote(chartData, market);
+            cacheQuote(quote.symbol, quote);
+            return quote;
+          }
+        } catch (e) {
+          // Skip failed symbols
+        }
+        return null;
+      });
+
+      const chartResults = await Promise.allSettled(chartPromises);
+      for (const result of chartResults) {
+        if (result.status === 'fulfilled' && result.value) {
+          results.push(result.value);
+        }
+      }
+
+      // Small delay between chart batches
+      if (i + chartBatchSize < failedSymbols.length) {
+        await new Promise(resolve => setTimeout(resolve, 50));
+      }
     }
   }
 
@@ -613,15 +659,54 @@ export async function searchStocks(query: string, market: Market): Promise<any[]
  */
 export function getIndexSymbols(market: Market): string[] {
   if (market === 'US') {
-    // S&P 500 sample + popular tech stocks
+    // S&P 500 constituents + popular additional stocks
     return [
-      'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'UNH', 'JNJ',
-      'V', 'XOM', 'JPM', 'WMT', 'MA', 'PG', 'HD', 'CVX', 'MRK', 'ABBV',
-      'LLY', 'PFE', 'KO', 'PEP', 'COST', 'AVGO', 'TMO', 'MCD', 'CSCO', 'ACN',
-      'ABT', 'DHR', 'NEE', 'VZ', 'ADBE', 'NKE', 'TXN', 'CRM', 'PM', 'ORCL',
-      'AMD', 'INTC', 'NFLX', 'QCOM', 'HON', 'UPS', 'LOW', 'BA', 'SBUX', 'CAT',
-      'GE', 'IBM', 'GS', 'MS', 'AXP', 'BLK', 'C', 'WFC', 'BAC', 'SCHW',
-      'RTX', 'LMT', 'MMM', 'DIS', 'CMCSA', 'T', 'TMUS', 'COP', 'SLB', 'EOG'
+      // Mega & Large Cap Tech
+      'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO', 'ORCL',
+      'ADBE', 'CRM', 'AMD', 'INTC', 'NFLX', 'QCOM', 'TXN', 'CSCO', 'ACN', 'IBM',
+      'NOW', 'INTU', 'AMAT', 'ADI', 'LRCX', 'MU', 'KLAC', 'SNPS', 'CDNS', 'MRVL',
+      'PANW', 'CRWD', 'FTNT', 'WDAY', 'TEAM', 'DDOG', 'ZS', 'SNOW', 'NET', 'PLTR',
+      'UBER', 'ABNB', 'SQ', 'SHOP', 'MELI', 'SE', 'COIN', 'HOOD', 'RBLX', 'U',
+      'DELL', 'HPQ', 'HPE', 'ANET', 'MSI', 'KEYS', 'ZBRA', 'CTSH', 'EPAM', 'IT',
+      // Healthcare
+      'UNH', 'JNJ', 'LLY', 'PFE', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY',
+      'AMGN', 'GILD', 'ISRG', 'VRTX', 'REGN', 'MDT', 'SYK', 'BDX', 'ZTS', 'BSX',
+      'EW', 'CI', 'HCA', 'CVS', 'MCK', 'HUM', 'CNC', 'MOH', 'A', 'IQV',
+      'DXCM', 'IDXX', 'BIIB', 'MRNA', 'ALGN', 'HOLX', 'BAX', 'RMD', 'WST', 'PODD',
+      // Financial Services
+      'BRK-B', 'JPM', 'V', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'SCHW', 'AXP',
+      'BLK', 'C', 'SPGI', 'ICE', 'CME', 'AON', 'MMC', 'PGR', 'CB', 'MET',
+      'AIG', 'TRV', 'ALL', 'AJG', 'AFL', 'PRU', 'FIS', 'FISV', 'GPN', 'COF',
+      'USB', 'PNC', 'TFC', 'BK', 'STT', 'NTRS', 'DFS', 'SYF', 'CFG', 'FITB',
+      // Consumer Cyclical
+      'HD', 'LOW', 'NKE', 'SBUX', 'MCD', 'TJX', 'ROST', 'ORLY', 'AZO', 'BKNG',
+      'MAR', 'HLT', 'RCL', 'CCL', 'GM', 'F', 'TM', 'RACE', 'CMG', 'YUM',
+      'DPZ', 'DHI', 'LEN', 'PHM', 'NVR', 'GRMN', 'POOL', 'BBY', 'TSCO', 'DG',
+      'DLTR', 'EBAY', 'ETSY', 'W', 'LULU', 'GPS', 'TPR', 'RL', 'DECK', 'BIRK',
+      // Consumer Defensive
+      'WMT', 'PG', 'KO', 'PEP', 'COST', 'PM', 'MO', 'CL', 'MDLZ', 'GIS',
+      'KHC', 'SYY', 'HSY', 'K', 'KMB', 'CAG', 'CPB', 'SJM', 'HRL', 'TSN',
+      'ADM', 'BG', 'STZ', 'TAP', 'SAM', 'KDP', 'MNST', 'EL', 'CHD', 'CLX',
+      // Industrials
+      'CAT', 'DE', 'HON', 'UPS', 'BA', 'GE', 'RTX', 'LMT', 'GD', 'NOC',
+      'MMM', 'EMR', 'ROK', 'ETN', 'ITW', 'PH', 'IR', 'CMI', 'PCAR', 'OTIS',
+      'CARR', 'JCI', 'SWK', 'FDX', 'CSX', 'UNP', 'NSC', 'DAL', 'UAL', 'LUV',
+      'WM', 'RSG', 'VRSK', 'PAYX', 'ADP', 'CTAS', 'FAST', 'GWW', 'URI', 'PWR',
+      // Energy
+      'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'VLO', 'PSX', 'PXD', 'OXY',
+      'WMB', 'KMI', 'HAL', 'DVN', 'FANG', 'HES', 'BKR', 'TRGP', 'OKE', 'CTRA',
+      // Communication Services
+      'DIS', 'CMCSA', 'T', 'TMUS', 'VZ', 'CHTR', 'EA', 'TTWO', 'MTCH', 'LYV',
+      'NWSA', 'OMC', 'IPG', 'FOXA', 'PARA', 'WBD', 'ROKU', 'SPOT', 'PINS', 'SNAP',
+      // Utilities
+      'NEE', 'DUK', 'SO', 'D', 'AEP', 'SRE', 'EXC', 'XEL', 'ED', 'WEC',
+      'ES', 'AEE', 'DTE', 'PEG', 'CMS', 'FE', 'AWK', 'EVRG', 'ATO', 'NI',
+      // Real Estate
+      'PLD', 'AMT', 'CCI', 'EQIX', 'PSA', 'SPG', 'O', 'WELL', 'DLR', 'AVB',
+      'EQR', 'VTR', 'ARE', 'MAA', 'UDR', 'ESS', 'PEAK', 'HST', 'KIM', 'REG',
+      // Basic Materials
+      'LIN', 'APD', 'SHW', 'ECL', 'NEM', 'FCX', 'NUE', 'DOW', 'DD', 'PPG',
+      'VMC', 'MLM', 'ALB', 'FMC', 'CE', 'CF', 'MOS', 'CTVA', 'IFF', 'EMN'
     ];
   } else {
     // NIFTY 50 stocks

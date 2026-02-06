@@ -725,3 +725,230 @@ export function getIndexSymbols(market: Market): string[] {
     ];
   }
 }
+
+/**
+ * Fetch stocks from Yahoo Finance Screener API (same approach as mock server).
+ * Falls back to static symbol list + getQuotes if the screener API is blocked.
+ */
+export async function fetchScreenerStocks(market: Market, filters?: any): Promise<StockQuote[]> {
+  const auth = await getYahooCrumb();
+  const region = market === 'IN' ? 'in' : 'us';
+  const isIndia = market === 'IN';
+
+  // Market cap ranges to query
+  const marketCapRanges = isIndia ? [
+    { name: 'mega', min: 2000e9, max: null, limit: 100 },
+    { name: 'large', min: 200e9, max: 2000e9, limit: 300 },
+    { name: 'mid', min: 50e9, max: 200e9, limit: 500 },
+    { name: 'small', min: 10e9, max: 50e9, limit: 500 },
+  ] : [
+    { name: 'mega', min: 200e9, max: null, limit: 250 },
+    { name: 'large', min: 10e9, max: 200e9, limit: 500 },
+    { name: 'mid', min: 2e9, max: 10e9, limit: 750 },
+    { name: 'small', min: 1e9, max: 2e9, limit: 500 },
+  ];
+
+  // Filter ranges based on user's marketCap filter
+  let rangesToFetch = marketCapRanges;
+  if (filters?.marketCap?.categories?.length > 0 && filters.marketCap.categories.length < marketCapRanges.length) {
+    const cats = filters.marketCap.categories;
+    rangesToFetch = marketCapRanges.filter(r => cats.includes(r.name));
+  }
+
+  console.log(`[Screener] Querying ${market} market across ${rangesToFetch.length} ranges...`);
+
+  const allResults: StockQuote[] = [];
+  const seenSymbols = new Set<string>();
+
+  for (const range of rangesToFetch) {
+    try {
+      const rangeStocks = await fetchScreenerRange(auth, region, range.min, range.max, range.limit, isIndia);
+      for (const stock of rangeStocks) {
+        if (!seenSymbols.has(stock.symbol)) {
+          seenSymbols.add(stock.symbol);
+          allResults.push(stock);
+        }
+      }
+      console.log(`[Screener] ${range.name}: got ${rangeStocks.length} (total: ${allResults.length})`);
+    } catch (err: any) {
+      console.error(`[Screener] Range ${range.name} failed:`, err.message);
+    }
+  }
+
+  // If screener API returned results, use them
+  if (allResults.length > 50) {
+    // Post-filter: only major exchange stocks with valid data
+    const usExchanges = ['NMS', 'NYQ', 'NGM', 'NCM', 'NYS', 'NASDAQ', 'NYSE'];
+    const indianExchanges = ['NSI', 'BSE', 'BOM', 'NSE'];
+    const validExchanges = isIndia ? indianExchanges : usExchanges;
+    const minMarketCap = isIndia ? 83e9 : 1e9;
+
+    const filtered = allResults.filter(stock => {
+      const exchange = (stock.exchange || '').toUpperCase();
+      if (!validExchanges.some(ex => exchange.includes(ex))) return false;
+      if (stock.marketCap && stock.marketCap > 0 && stock.marketCap < minMarketCap) return false;
+      if (!stock.price || stock.price <= 0) return false;
+      return true;
+    });
+
+    console.log(`[Screener] ${market}: ${allResults.length} raw -> ${filtered.length} after filter`);
+    return filtered;
+  }
+
+  // Fallback: use static symbol list
+  console.log(`[Screener] Screener API returned only ${allResults.length} results, falling back to static list...`);
+  const symbols = getIndexSymbols(market);
+  return getQuotes(symbols, market);
+}
+
+/**
+ * Fetch a single market cap range from Yahoo Screener API
+ */
+async function fetchScreenerRange(
+  auth: { crumb: string | null; cookies: string | null },
+  region: string,
+  minMarketCap: number | null,
+  maxMarketCap: number | null,
+  maxResults: number,
+  isIndia: boolean
+): Promise<StockQuote[]> {
+  const results: StockQuote[] = [];
+  let offset = 0;
+
+  while (offset < maxResults) {
+    const screenerQuery: any = {
+      size: 250,
+      offset: offset,
+      sortField: 'intradaymarketcap',
+      sortType: 'DESC',
+      quoteType: 'EQUITY',
+      query: {
+        operator: 'AND',
+        operands: [
+          { operator: 'eq', operands: ['region', region] }
+        ]
+      },
+      userId: '',
+      userIdType: 'guid'
+    };
+
+    // Exchange filter
+    if (isIndia) {
+      screenerQuery.query.operands.push({
+        operator: 'or',
+        operands: [
+          { operator: 'eq', operands: ['exchange', 'NSI'] },
+          { operator: 'eq', operands: ['exchange', 'BSE'] },
+          { operator: 'eq', operands: ['exchange', 'BOM'] }
+        ]
+      });
+    } else {
+      screenerQuery.query.operands.push({
+        operator: 'or',
+        operands: [
+          { operator: 'eq', operands: ['exchange', 'NMS'] },
+          { operator: 'eq', operands: ['exchange', 'NYQ'] },
+          { operator: 'eq', operands: ['exchange', 'NGM'] },
+          { operator: 'eq', operands: ['exchange', 'NCM'] },
+          { operator: 'eq', operands: ['exchange', 'NYS'] }
+        ]
+      });
+    }
+
+    // Market cap range
+    const minThreshold = isIndia ? 83e9 : 1e9;
+    const effectiveMin = minMarketCap != null ? Math.max(minMarketCap, minThreshold) : minThreshold;
+    screenerQuery.query.operands.push({ operator: 'gte', operands: ['intradaymarketcap', effectiveMin] });
+
+    if (maxMarketCap != null) {
+      screenerQuery.query.operands.push({ operator: 'lt', operands: ['intradaymarketcap', maxMarketCap] });
+    }
+
+    const postData = JSON.stringify(screenerQuery);
+    const url = '/v1/finance/screener?crumb=' + encodeURIComponent(auth.crumb || '');
+
+    const response = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      port: 443,
+      path: url,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(postData).toString(),
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+        'Cookie': auth.cookies || ''
+      }
+    }, postData);
+
+    if (response.statusCode !== 200) {
+      console.log(`[Screener] Range query returned ${response.statusCode}`);
+      break;
+    }
+
+    const data = JSON.parse(response.body);
+    const quotes = data?.finance?.result?.[0]?.quotes || [];
+
+    if (quotes.length === 0) break;
+
+    const market: Market = isIndia ? 'IN' : 'US';
+    for (const q of quotes) {
+      if (!q || !q.symbol) continue;
+      const price = q.regularMarketPrice || 0;
+      const high52 = q.fiftyTwoWeekHigh || price;
+      const low52 = q.fiftyTwoWeekLow || price;
+      const fiftyDayMA = q.fiftyDayAverage || null;
+      const twoHundredDayMA = q.twoHundredDayAverage || null;
+      const avgVol = q.averageDailyVolume3Month || q.averageDailyVolume10Day || 1;
+      const vol = q.regularMarketVolume || 0;
+      const mktCap = q.marketCap || 0;
+      const eps = q.epsTrailingTwelveMonths || null;
+      const fwdEps = q.epsForward || null;
+
+      results.push({
+        symbol: q.symbol,
+        name: q.shortName || q.longName || q.symbol,
+        price,
+        change: q.regularMarketChange || 0,
+        changePercent: q.regularMarketChangePercent || 0,
+        market,
+        exchange: q.exchange || 'Unknown',
+        currency: q.currency || (isIndia ? 'INR' : 'USD'),
+        marketCap: mktCap,
+        marketCapCategory: categorizeMarketCap(mktCap, market),
+        fiftyTwoWeekHigh: high52,
+        fiftyTwoWeekLow: low52,
+        percentFromFiftyTwoWeekHigh: high52 > 0 ? ((price - high52) / high52) * 100 : 0,
+        percentFromFiftyTwoWeekLow: low52 > 0 ? ((price - low52) / low52) * 100 : 0,
+        peRatio: q.trailingPE ?? (eps && eps !== 0 ? price / eps : null),
+        forwardPeRatio: q.forwardPE ?? (fwdEps && fwdEps !== 0 ? price / fwdEps : null),
+        pbRatio: q.priceToBook || null,
+        psRatio: q.priceToSalesTrailing12Months || null,
+        eps,
+        forwardEps: fwdEps,
+        earningsGrowth: q.earningsQuarterlyGrowth ? q.earningsQuarterlyGrowth * 100 : null,
+        revenueGrowth: q.revenueGrowth ? q.revenueGrowth * 100 : null,
+        dividendYield: q.trailingAnnualDividendYield ? q.trailingAnnualDividendYield * 100 : (q.dividendYield || null),
+        avgVolume: avgVol,
+        volume: vol,
+        relativeVolume: avgVol > 0 ? vol / avgVol : 1,
+        sector: q.sector || getStaticSectorInfo(q.symbol)?.sector || 'Unknown',
+        industry: q.industry || getStaticSectorInfo(q.symbol)?.industry || 'Unknown',
+        beta: q.beta || null,
+        fiftyDayMA,
+        twoHundredDayMA,
+        percentFromFiftyDayMA: fiftyDayMA && fiftyDayMA > 0 ? ((price - fiftyDayMA) / fiftyDayMA) * 100 : null,
+        percentFromTwoHundredDayMA: twoHundredDayMA && twoHundredDayMA > 0 ? ((price - twoHundredDayMA) / twoHundredDayMA) * 100 : null,
+        lastUpdated: new Date()
+      });
+    }
+
+    if (quotes.length < 250) break;
+    offset += 250;
+
+    // Small delay between pages
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+
+  return results;
+}

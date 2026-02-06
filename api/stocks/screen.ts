@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getQuotes, getIndexSymbols, Market, StockQuote } from '../_lib/yahoo-client';
+import { getQuotes, getIndexSymbols, fetchScreenerStocks, Market, StockQuote } from '../_lib/yahoo-client';
 
 interface RangeFilter {
   min?: number;
@@ -254,11 +254,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const startTime = Date.now();
     
-    // Get base stock list for screening
-    const symbols = getIndexSymbols(filters.market);
-    
-    // Fetch quotes for all symbols
-    const allQuotes = await getQuotes(symbols, filters.market);
+    // Fetch stocks using Yahoo Screener API (falls back to static list if blocked)
+    const allQuotes = await fetchScreenerStocks(filters.market, filters);
     
     // Apply filters
     const filteredStocks = allQuotes.filter(stock => passesFilters(stock, filters));

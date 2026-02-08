@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -10,6 +10,9 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TooltipModule } from 'primeng/tooltip';
 import { BadgeModule } from 'primeng/badge';
 import { ToggleButtonModule } from 'primeng/togglebutton';
+
+import { MarketService } from '../../core/services';
+import { Market } from '../../core/models';
 
 interface NewsItem {
   title: string;
@@ -136,7 +139,7 @@ interface NewsCategory {
         <div class="loading-container">
           <p-progressSpinner strokeWidth="3" [style]="{ width: '50px', height: '50px' }"></p-progressSpinner>
           <span>Fetching latest market news...</span>
-          <span class="loading-sub">Scanning {{ stocksToFetch.length }} large-cap stocks</span>
+          <span class="loading-sub">Scanning {{ stocksToFetch().length }} large-cap stocks</span>
         </div>
       }
 
@@ -569,14 +572,27 @@ interface NewsCategory {
 export class MarketNewsComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private router = inject(Router);
+  private marketService = inject(MarketService);
+  private previousMarket: Market | null = null;
 
-  // Large-cap stocks to fetch news from (>$100B market cap)
-  stocksToFetch = [
-    'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
-    'UNH', 'JNJ', 'V', 'XOM', 'JPM', 'WMT', 'MA', 'PG', 'HD', 'CVX',
-    'MRK', 'ABBV', 'LLY', 'PFE', 'KO', 'PEP', 'COST', 'AVGO', 'TMO',
-    'MCD', 'CSCO', 'ACN', 'CRM', 'ORCL', 'NFLX', 'AMD', 'INTC'
-  ];
+  // Large-cap stocks to fetch news from (display only, actual list is on server)
+  stocksToFetch = computed(() => {
+    const market = this.marketService.currentMarket();
+    return market === 'IN' 
+      ? ['RELIANCE', 'TCS', 'HDFCBANK', 'INFY', 'ICICIBANK', 'HINDUNILVR', 'SBIN', 'BHARTIARTL', 'ITC', 'KOTAKBANK', 'LT', 'AXISBANK', 'BAJFINANCE', 'ASIANPAINT', 'MARUTI']
+      : ['AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'UNH', 'JNJ', 'V', 'XOM', 'JPM', 'WMT', 'MA'];
+  });
+
+  constructor() {
+    // React to market changes
+    effect(() => {
+      const market = this.marketService.currentMarket();
+      if (this.previousMarket !== null && this.previousMarket !== market) {
+        this.loadNews();
+      }
+      this.previousMarket = market;
+    });
+  }
 
   // State
   allNews = signal<NewsItem[]>([]);
@@ -639,8 +655,9 @@ export class MarketNewsComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     
     try {
+      const market = this.marketService.currentMarket();
       const result = await this.http.get<{ news: NewsItem[], categories: Record<string, number> }>(
-        '/api/market/news'
+        `/api/market/news?market=${market}`
       ).toPromise();
       
       if (result?.news) {

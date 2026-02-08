@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject, signal, computed } from '@angular/core';
+import { Component, OnInit, OnDestroy, inject, signal, computed, effect } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -812,6 +812,18 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
   totalAlerts = computed(() => this.filteredBreakouts().length);
 
   private refreshInterval: ReturnType<typeof setInterval> | null = null;
+  private previousMarket: Market | null = null;
+
+  constructor() {
+    // React to market changes
+    effect(() => {
+      const market = this.marketService.currentMarket();
+      if (this.previousMarket !== null && this.previousMarket !== market) {
+        this.loadBreakouts();
+      }
+      this.previousMarket = market;
+    });
+  }
 
   ngOnInit(): void {
     this.loadBreakouts();
@@ -832,8 +844,9 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
     this.loading.set(true);
     
     try {
+      const market = this.marketService.currentMarket();
       const result = await this.http.get<{ breakouts: BreakoutStock[] }>(
-        '/api/market/breakouts'
+        `/api/market/breakouts?market=${market}`
       ).toPromise();
       
       if (result?.breakouts) {

@@ -28,8 +28,8 @@ interface BreakoutStock {
   market?: string;
 }
 
-// Large-cap stocks to scan (100+ stocks)
-const STOCKS_TO_SCAN = [
+// US Large-cap stocks to scan (100+ stocks)
+const US_STOCKS_TO_SCAN = [
   // Mega cap tech
   'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
   // Healthcare
@@ -52,6 +52,36 @@ const STOCKS_TO_SCAN = [
   // Other popular
   'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID'
 ];
+
+// Indian Large-cap stocks to scan (NIFTY 50 + popular stocks)
+const IN_STOCKS_TO_SCAN = [
+  // NIFTY 50 constituents
+  'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+  'HINDUNILVR.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'ITC.NS', 'KOTAKBANK.NS',
+  'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
+  'HCLTECH.NS', 'TITAN.NS', 'SUNPHARMA.NS', 'WIPRO.NS', 'ULTRACEMCO.NS',
+  'NTPC.NS', 'NESTLEIND.NS', 'POWERGRID.NS', 'TATAMOTORS.NS', 'M&M.NS',
+  'JSWSTEEL.NS', 'TATASTEEL.NS', 'ADANIPORTS.NS', 'BAJAJFINSV.NS', 'TECHM.NS',
+  'ONGC.NS', 'HDFCLIFE.NS', 'DIVISLAB.NS', 'COALINDIA.NS', 'GRASIM.NS',
+  'BRITANNIA.NS', 'BPCL.NS', 'DRREDDY.NS', 'CIPLA.NS', 'APOLLOHOSP.NS',
+  'EICHERMOT.NS', 'INDUSINDBK.NS', 'SBILIFE.NS', 'TATACONSUM.NS', 'HEROMOTOCO.NS',
+  // Additional popular Indian stocks
+  'ADANIENT.NS', 'ADANIGREEN.NS', 'ADANIPOWER.NS', 'ATGL.NS', 'AWL.NS',
+  'BAJAJ-AUTO.NS', 'BANKBARODA.NS', 'BEL.NS', 'BERGEPAINT.NS', 'BIOCON.NS',
+  'BOSCHLTD.NS', 'CANBK.NS', 'CHOLAFIN.NS', 'COLPAL.NS', 'DLF.NS',
+  'DABUR.NS', 'GAIL.NS', 'GODREJCP.NS', 'HAVELLS.NS', 'HINDALCO.NS',
+  'HINDPETRO.NS', 'ICICIPRULI.NS', 'IDEA.NS', 'INDIGO.NS', 'IOC.NS',
+  'IRCTC.NS', 'JINDALSTEL.NS', 'JUBLFOOD.NS', 'LICI.NS', 'LUPIN.NS',
+  'MARICO.NS', 'MCDOWELL-N.NS', 'MUTHOOTFIN.NS', 'NAUKRI.NS', 'PAYTM.NS',
+  'PEL.NS', 'PETRONET.NS', 'PIDILITIND.NS', 'PNB.NS', 'POLYCAB.NS',
+  'RECLTD.NS', 'SBICARD.NS', 'SHREECEM.NS', 'SIEMENS.NS', 'SRF.NS',
+  'TATAPOWER.NS', 'TATAELXSI.NS', 'TORNTPHARM.NS', 'TRENT.NS', 'VEDL.NS',
+  'ZOMATO.NS', 'ZYDUSLIFE.NS'
+];
+
+function getStocksToScan(market: string): string[] {
+  return market === 'IN' ? IN_STOCKS_TO_SCAN : US_STOCKS_TO_SCAN;
+}
 
 function httpsRequest(options: https.RequestOptions, timeout = 8000): Promise<{ statusCode: number; headers: any; body: string }> {
   return new Promise((resolve, reject) => {
@@ -204,7 +234,7 @@ function calculateMACD(prices: number[]): MACDResult | null {
   return { macdLine, signalLine: signal, histogram, signalType };
 }
 
-function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null): BreakoutStock[] {
+function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, market: string = 'US'): BreakoutStock[] {
   const breakouts: BreakoutStock[] = [];
   
   const baseStock = {
@@ -226,7 +256,7 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null): 
     percentFromFiftyTwoWeekHigh: quote.fiftyTwoWeekHigh ? ((quote.regularMarketPrice - quote.fiftyTwoWeekHigh) / quote.fiftyTwoWeekHigh) * 100 : undefined,
     percentFromFiftyTwoWeekLow: quote.fiftyTwoWeekLow ? ((quote.regularMarketPrice - quote.fiftyTwoWeekLow) / quote.fiftyTwoWeekLow) * 100 : undefined,
     rsi: rsi ? Math.round(rsi * 10) / 10 : undefined,
-    market: 'US'
+    market: market
   };
 
   const price = baseStock.price;
@@ -391,8 +421,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
 
   try {
+    // Get market from query parameter (default to US)
+    const market = (req.query.market as string)?.toUpperCase() === 'IN' ? 'IN' : 'US';
+    const stocksToScan = getStocksToScan(market);
+    
+    console.log(`[Breakouts] Scanning ${stocksToScan.length} ${market} stocks...`);
+
     // Fetch all stocks in parallel using chart API (no auth needed)
-    const stockPromises = STOCKS_TO_SCAN.map(async (symbol) => {
+    const stockPromises = stocksToScan.map(async (symbol) => {
       try {
         const data = await fetchStockData(symbol);
         if (data && data.prices) {
@@ -428,7 +464,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           regularMarketVolume: data.regularMarketVolume,
           averageDailyVolume3Month: data.averageDailyVolume3Month
         };
-        const breakouts = analyzeStock(quote, rsi, macd);
+        const breakouts = analyzeStock(quote, rsi, macd, market);
         allBreakouts.push(...breakouts);
       }
     }

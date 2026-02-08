@@ -28,32 +28,93 @@ interface BreakoutStock {
   market?: string;
 }
 
-// US Large-cap stocks to scan (100+ stocks)
-const US_STOCKS_TO_SCAN = [
+// Fallback US Large-cap stocks (used if dynamic fetch fails)
+const US_STOCKS_FALLBACK = [
   // Mega cap tech
-  'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
+  'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'BRK-A',
   // Healthcare
   'UNH', 'JNJ', 'LLY', 'PFE', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY',
   // Financial
-  'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP',
+  'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP', 'C', 'USB', 'PNC',
   // Consumer
-  'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT',
+  'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT', 'LOW', 'TJX',
   // Energy
-  'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL',
+  'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL', 'DVN', 'FANG',
   // Tech & Semiconductors
   'AVGO', 'CSCO', 'ACN', 'CRM', 'ORCL', 'NFLX', 'AMD', 'INTC', 'QCOM', 'TXN',
   'IBM', 'AMAT', 'LRCX', 'MU', 'ADI', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON',
+  'WDC', 'STX', 'NXPI', 'MCHP', 'MPWR', 'SWKS', 'QRVO', 'TER', 'ENTG',
   // Industrial
-  'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP',
+  'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP', 'FDX', 'NSC', 'EMR',
   // Telecom & Media
   'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'CHTR', 'WBD', 'PARA', 'FOX', 'NWSA',
   // Utilities & REITs
-  'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'AMT', 'PLD', 'CCI',
+  'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'SPG',
   // Other popular
-  'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID'
+  'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID',
+  'NOW', 'INTU', 'ADBE', 'PANW', 'CRWD', 'ZS', 'DDOG', 'NET', 'MDB', 'TEAM'
 ];
 
-// Indian Large-cap stocks to scan (NIFTY 50 + popular stocks)
+// Dynamically fetch large-cap stocks from Yahoo Finance screener
+async function fetchLargeCapStocks(market: string, minMarketCap: number = 10_000_000_000): Promise<string[]> {
+  try {
+    const region = market === 'IN' ? 'in' : 'us';
+    const exchange = market === 'IN' ? 'NSI' : ''; // NSE for India
+    
+    // Yahoo Finance screener query for large-cap stocks
+    const screenerBody = JSON.stringify({
+      size: 250, // Get up to 250 stocks
+      offset: 0,
+      sortField: 'intradaymarketcap',
+      sortType: 'DESC',
+      quoteType: 'EQUITY',
+      query: {
+        operator: 'AND',
+        operands: [
+          { operator: 'GT', operands: ['intradaymarketcap', minMarketCap] },
+          ...(market === 'IN' 
+            ? [{ operator: 'EQ', operands: ['exchange', 'NSI'] }]
+            : [{ operator: 'EQ', operands: ['region', 'us'] }]
+          )
+        ]
+      },
+      userId: '',
+      userIdType: 'guid'
+    });
+
+    const response = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      port: 443,
+      path: '/v1/finance/screener?crumb=&lang=en-US&region=US&formatted=false&corsDomain=finance.yahoo.com',
+      method: 'POST',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(screenerBody)
+      }
+    }, 15000, screenerBody);
+
+    if (response.statusCode === 200) {
+      const data = JSON.parse(response.body);
+      const quotes = data?.finance?.result?.[0]?.quotes || [];
+      const symbols = quotes
+        .map((q: any) => q.symbol)
+        .filter((s: string) => s && !s.includes('^')); // Filter out indices
+      
+      if (symbols.length > 50) {
+        console.log(`[Screener] Fetched ${symbols.length} ${market} large-cap stocks dynamically`);
+        return symbols;
+      }
+    }
+  } catch (e) {
+    console.error('[Screener] Dynamic fetch failed:', e);
+  }
+  
+  return []; // Return empty to trigger fallback
+}
+
+// Fallback Indian Large-cap stocks (NIFTY 50 + popular stocks)
 const IN_STOCKS_TO_SCAN = [
   // NIFTY 50 constituents
   'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
@@ -79,11 +140,21 @@ const IN_STOCKS_TO_SCAN = [
   'ZOMATO.NS', 'ZYDUSLIFE.NS'
 ];
 
-function getStocksToScan(market: string): string[] {
-  return market === 'IN' ? IN_STOCKS_TO_SCAN : US_STOCKS_TO_SCAN;
+// Get stocks to scan - tries dynamic fetch first, falls back to hardcoded list
+async function getStocksToScan(market: string): Promise<string[]> {
+  // Try dynamic fetch first
+  const dynamicStocks = await fetchLargeCapStocks(market);
+  
+  if (dynamicStocks.length > 50) {
+    return dynamicStocks;
+  }
+  
+  // Fallback to hardcoded lists
+  console.log(`[Breakouts] Using fallback stock list for ${market}`);
+  return market === 'IN' ? IN_STOCKS_TO_SCAN : US_STOCKS_FALLBACK;
 }
 
-function httpsRequest(options: https.RequestOptions, timeout = 8000): Promise<{ statusCode: number; headers: any; body: string }> {
+function httpsRequest(options: https.RequestOptions, timeout = 8000, body?: string): Promise<{ statusCode: number; headers: any; body: string }> {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
       let data = '';
@@ -92,6 +163,9 @@ function httpsRequest(options: https.RequestOptions, timeout = 8000): Promise<{ 
     });
     req.on('error', reject);
     req.setTimeout(timeout, () => { req.destroy(); reject(new Error('Timeout')); });
+    if (body) {
+      req.write(body);
+    }
     req.end();
   });
 }
@@ -237,6 +311,11 @@ function calculateMACD(prices: number[]): MACDResult | null {
 function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, market: string = 'US'): BreakoutStock[] {
   const breakouts: BreakoutStock[] = [];
   
+  // Parse analyst rating string to numeric score (e.g., "2.0 - Buy" -> 2.0)
+  const analystRatingScore = quote.averageAnalystRating 
+    ? parseFloat(quote.averageAnalystRating.match(/^([\d.]+)/)?.[1] || '') || null
+    : null;
+  
   const baseStock = {
     symbol: quote.symbol,
     name: quote.shortName || quote.longName || quote.symbol,
@@ -256,7 +335,10 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     percentFromFiftyTwoWeekHigh: quote.fiftyTwoWeekHigh ? ((quote.regularMarketPrice - quote.fiftyTwoWeekHigh) / quote.fiftyTwoWeekHigh) * 100 : undefined,
     percentFromFiftyTwoWeekLow: quote.fiftyTwoWeekLow ? ((quote.regularMarketPrice - quote.fiftyTwoWeekLow) / quote.fiftyTwoWeekLow) * 100 : undefined,
     rsi: rsi ? Math.round(rsi * 10) / 10 : undefined,
-    market: market
+    market: market,
+    // Analyst data
+    averageAnalystRating: quote.averageAnalystRating || undefined,  // e.g., "2.0 - Buy"
+    analystRatingScore: analystRatingScore  // Numeric: 1.0 (Strong Buy) to 5.0 (Sell)
   };
 
   const price = baseStock.price;
@@ -408,6 +490,38 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     }
   }
 
+  // Supplementary: Strong Technicals - include stocks with strong setups
+  // even if they haven't triggered a specific breakout alert above.
+  // This ensures the pick panels can score all technically strong stocks.
+  if (breakouts.length === 0) {
+    let techScore = 0;
+    // Momentum: well above 50 MA
+    if (pct50MA != null && pct50MA > 5) techScore += 2;
+    // Uptrend: above 200 MA
+    if (pct200MA != null && pct200MA > 0) techScore += 1;
+    // RSI in bullish zone (50-75)
+    if (rsi != null && rsi >= 50 && rsi <= 75) techScore += 1;
+    // Positive day with decent move
+    if (baseStock.changePercent >= 1.5) techScore += 1;
+    // Volume above average
+    if (relVol >= 1.2) techScore += 1;
+    // Strong analyst rating
+    if (analystRatingScore != null && analystRatingScore <= 2.2) techScore += 1;
+    // MACD bullish (from macd data, even if not a crossover)
+    if (macd && macd.signalType && (macd.signalType === 'strong_bullish' || macd.signalType === 'bullish_crossover')) techScore += 1;
+
+    // Include if at least 4 out of 8 criteria met
+    if (techScore >= 4) {
+      breakouts.push({
+        ...baseStock,
+        alertType: 'strong_technicals',
+        alertCategory: 'strong_technicals',
+        alertDescription: `Strong technical setup (${techScore}/8 criteria) - momentum candidate`,
+        severity: 'bullish'
+      });
+    }
+  }
+
   return breakouts;
 }
 
@@ -423,7 +537,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // Get market from query parameter (default to US)
     const market = (req.query.market as string)?.toUpperCase() === 'IN' ? 'IN' : 'US';
-    const stocksToScan = getStocksToScan(market);
+    const stocksToScan = await getStocksToScan(market);
     
     console.log(`[Breakouts] Scanning ${stocksToScan.length} ${market} stocks...`);
 

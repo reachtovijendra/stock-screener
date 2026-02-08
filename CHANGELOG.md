@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Supplementary "Strong Technicals" alert type in breakouts API: stocks with strong technical setups (4+ of 8 criteria) are now included in the breakout pool even without a specific crossover event, ensuring technically strong stocks are visible to the pick panels
+- Informational banners in score search popup explaining whether a stock is in today's breakout alerts or scored from general technicals only
+- SNDK (Sandisk) added to the US stock scan list in the mock server
+
+### Fixed
+- Unified scoring logic across all three panels (Top Picks, Day Trade Picks, Momentum Picks) and the search popup to evaluate each stock exactly once per factor, eliminating inflated scores caused by per-alert accumulation
+- Stocks are now scored identically whether found in breakouts data or searched via the API, ensuring consistent and comparable scores across all views
+
 ### Changed
+- Expanded pick panels from top 10 to top 15 stocks for all three panels (Top Picks, Day Trade Picks, Momentum Picks), surfacing more qualifying recommendations
 - Restructured application layout with persistent left navigation sidebar visible on all pages
 - Navigation links (Screener, Breakouts, News) moved from header to a 64px icon-based sidebar
 - Screener filter panel converted from 280px vertical sidebar to compact horizontal dropdown bar above results table

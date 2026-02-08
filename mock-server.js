@@ -1126,8 +1126,21 @@ function transformQuote(q, symbol) {
     macdSignal: null,
     macdHistogram: null,
     macdSignalType: null,
+    // Analyst data
+    averageAnalystRating: q.averageAnalystRating || null,  // e.g., "2.0 - Buy", "1.2 - Strong Buy"
+    analystRatingScore: parseAnalystRating(q.averageAnalystRating),  // Numeric: 1.0 (Strong Buy) to 5.0 (Sell)
     lastUpdated: new Date()
   };
+}
+
+/**
+ * Parse analyst rating string to numeric score
+ * e.g., "2.0 - Buy" -> 2.0, "1.2 - Strong Buy" -> 1.2
+ */
+function parseAnalystRating(ratingStr) {
+  if (!ratingStr) return null;
+  const match = ratingStr.match(/^([\d.]+)/);
+  return match ? parseFloat(match[1]) : null;
 }
 
 function categorizeMarketCap(marketCap, currency) {
@@ -1499,6 +1512,9 @@ function transformScreenerQuote(q) {
     macdSignal: null,
     macdHistogram: null,
     macdSignalType: null,
+    // Analyst data
+    averageAnalystRating: q.averageAnalystRating || null,
+    analystRatingScore: parseAnalystRating(q.averageAnalystRating),
     lastUpdated: new Date()
   };
 }
@@ -1739,6 +1755,36 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // Debug endpoint to see raw Yahoo Finance response
+    if (path.startsWith('/api/debug/raw-quote/') && req.method === 'GET') {
+      const symbol = path.split('/').pop();
+      try {
+        const auth = await getYahooCrumb();
+        let quotePath = `/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
+        if (auth.crumb) {
+          quotePath += `&crumb=${encodeURIComponent(auth.crumb)}`;
+        }
+        
+        const response = await httpsRequest({
+          hostname: 'query1.finance.yahoo.com',
+          port: 443,
+          path: quotePath,
+          method: 'GET',
+          headers: {
+            'Cookie': auth.cookies,
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+          }
+        });
+        
+        res.writeHead(200);
+        res.end(response.body);
+      } catch (error) {
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: error.message }));
+      }
+      return;
+    }
+
     // Market indices endpoint
     if (path === '/api/market/indices' && req.method === 'GET') {
       const market = url.searchParams.get('market') || 'US';
@@ -1818,9 +1864,11 @@ const server = http.createServer(async (req, res) => {
         const quotes = [];
         const seenSymbols = new Set();
         
-        // Always try exact symbol match first (handles cases like "HOOD" directly)
+        // Always try exact symbol match first (handles cases like "HOOD" or "TATAELXSI.NS" directly)
         const exactSymbol = query.toUpperCase().trim();
-        if (/^[A-Z\-\.]{1,10}$/.test(exactSymbol)) {
+        // Allow up to 20 chars for Indian stocks like BAJAJ-AUTO.NS
+        if (/^[A-Z0-9\-\.&]{1,20}$/.test(exactSymbol)) {
+          console.log(`[Search] Trying exact match for: ${exactSymbol}`);
           const exactQuote = await fetchYahooQuote(exactSymbol);
           if (exactQuote) {
             let transformed = transformQuote(exactQuote, exactSymbol);
@@ -1830,6 +1878,26 @@ const server = http.createServer(async (req, res) => {
               }
               quotes.push(transformed);
               seenSymbols.add(exactSymbol);
+              console.log(`[Search] Found exact match for: ${exactSymbol}`);
+            }
+          } else {
+            // Fallback: try chart API which is more reliable
+            console.log(`[Search] Quote API failed for ${exactSymbol}, trying chart API...`);
+            try {
+              const chartData = await fetchChartQuote(exactSymbol);
+              if (chartData) {
+                let transformed = transformQuote(chartData, exactSymbol);
+                if (transformed) {
+                  if (includeTechnicals) {
+                    await enrichWithTechnicals(transformed);
+                  }
+                  quotes.push(transformed);
+                  seenSymbols.add(exactSymbol);
+                  console.log(`[Search] Found via chart API: ${exactSymbol}`);
+                }
+              }
+            } catch (chartErr) {
+              console.log(`[Search] Chart API also failed for ${exactSymbol}`);
             }
           }
         }
@@ -1969,19 +2037,40 @@ const server = http.createServer(async (req, res) => {
 
     // Market-wide news endpoint (aggregates news from large-cap stocks + general market news)
     if (path === '/api/market/news' && req.method === 'GET') {
-      const LARGE_CAP_STOCKS = [
+      // US stocks
+      const US_LARGE_CAP_STOCKS = [
         'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
         'UNH', 'JNJ', 'V', 'XOM', 'JPM', 'WMT', 'MA'
       ];
       
-      // General market news RSS feeds
-      const MARKET_NEWS_FEEDS = [
+      // Indian stocks
+      const IN_LARGE_CAP_STOCKS = [
+        'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+        'HINDUNILVR.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'ITC.NS', 'KOTAKBANK.NS',
+        'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS'
+      ];
+      
+      // US General market news RSS feeds
+      const US_MARKET_NEWS_FEEDS = [
         { url: 'https://news.google.com/rss/search?q=stock+market+today&hl=en-US&gl=US&ceid=US:en', source: 'Market News', symbol: 'MARKET' },
         { url: 'https://news.google.com/rss/search?q=fed+interest+rates+economy&hl=en-US&gl=US&ceid=US:en', source: 'Economic News', symbol: 'ECONOMY' },
         { url: 'https://news.google.com/rss/search?q=S%26P+500+dow+jones+nasdaq&hl=en-US&gl=US&ceid=US:en', source: 'Market Indices', symbol: 'INDICES' }
       ];
       
-      // Helper to classify if news is market-related
+      // Indian General market news RSS feeds
+      const IN_MARKET_NEWS_FEEDS = [
+        { url: 'https://news.google.com/rss/search?q=indian+stock+market+today&hl=en-IN&gl=IN&ceid=IN:en', source: 'Market News', symbol: 'MARKET' },
+        { url: 'https://news.google.com/rss/search?q=nifty+sensex+today&hl=en-IN&gl=IN&ceid=IN:en', source: 'Market Indices', symbol: 'INDICES' },
+        { url: 'https://news.google.com/rss/search?q=RBI+interest+rate+india&hl=en-IN&gl=IN&ceid=IN:en', source: 'Economic News', symbol: 'ECONOMY' },
+        { url: 'https://news.google.com/rss/search?q=BSE+NSE+market+news&hl=en-IN&gl=IN&ceid=IN:en', source: 'BSE/NSE News', symbol: 'MARKET' }
+      ];
+      
+      // Get market from query parameter
+      const market = (url.searchParams.get('market') || 'US').toUpperCase() === 'IN' ? 'IN' : 'US';
+      const LARGE_CAP_STOCKS = market === 'IN' ? IN_LARGE_CAP_STOCKS : US_LARGE_CAP_STOCKS;
+      const MARKET_NEWS_FEEDS = market === 'IN' ? IN_MARKET_NEWS_FEEDS : US_MARKET_NEWS_FEEDS;
+      
+      // Helper to classify if news is market-related (US and India)
       function isMarketNews(title, description) {
         const text = `${title} ${description}`.toLowerCase();
         return text.includes('fed ') || text.includes('federal reserve') || text.includes('interest rate') ||
@@ -1990,11 +2079,15 @@ const server = http.createServer(async (req, res) => {
                text.includes('s&p 500') || text.includes('dow jones') || text.includes('nasdaq') ||
                text.includes('market today') || text.includes('markets ') || text.includes('wall street') ||
                text.includes('rally') || text.includes('selloff') || text.includes('bull market') ||
-               text.includes('bear market') || text.includes('treasury') || text.includes('bond yield');
+               text.includes('bear market') || text.includes('treasury') || text.includes('bond yield') ||
+               // Indian market keywords
+               text.includes('nifty') || text.includes('sensex') || text.includes('bse') || text.includes('nse') ||
+               text.includes('rbi') || text.includes('reserve bank') || text.includes('dalal street') ||
+               text.includes('sebi') || text.includes('fii') || text.includes('dii') || text.includes('rupee');
       }
       
       try {
-        console.log('[Market News] Fetching news from large-cap stocks and market feeds...');
+        console.log(`[Market News] Fetching news for ${market} market from ${LARGE_CAP_STOCKS.length} stocks...`);
         
         // Fetch general market news
         const marketNewsPromises = MARKET_NEWS_FEEDS.map(async (feed) => {
@@ -2105,32 +2198,71 @@ const server = http.createServer(async (req, res) => {
 
     // Technical Breakouts endpoint
     if (path === '/api/market/breakouts' && req.method === 'GET') {
-      const STOCKS_TO_SCAN = [
+      // US stocks - expanded list including storage/semiconductors
+      const US_STOCKS_TO_SCAN = [
         // Mega cap tech
         'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'BRK-A',
         // Healthcare
         'UNH', 'JNJ', 'LLY', 'PFE', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY',
         // Financial
-        'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP',
+        'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP', 'C', 'USB', 'PNC',
         // Consumer
-        'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT',
+        'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT', 'LOW', 'TJX',
         // Energy
-        'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL',
-        // Tech & Semiconductors
+        'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL', 'DVN', 'FANG',
+        // Tech & Semiconductors (expanded)
         'AVGO', 'CSCO', 'ACN', 'CRM', 'ORCL', 'NFLX', 'AMD', 'INTC', 'QCOM', 'TXN',
         'IBM', 'AMAT', 'LRCX', 'MU', 'ADI', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON',
+        'WDC', 'STX', 'SNDK', 'NXPI', 'MCHP', 'MPWR', 'SWKS', 'QRVO', 'TER', 'ENTG',
         // Industrial
-        'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP',
+        'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP', 'FDX', 'NSC', 'EMR',
         // Telecom & Media
         'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'CHTR', 'WBD', 'PARA', 'FOX', 'NWSA',
         // Utilities & REITs
-        'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'AMT', 'PLD', 'CCI',
+        'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'SPG',
+        // Software & Cloud
+        'NOW', 'INTU', 'ADBE', 'PANW', 'CRWD', 'ZS', 'DDOG', 'NET', 'MDB', 'TEAM',
         // Other popular
         'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID'
       ];
 
-      function analyzeStockForBreakouts(quote, rsi, macd) {
+      // Indian stocks (NIFTY 50 + popular stocks)
+      const IN_STOCKS_TO_SCAN = [
+        // NIFTY 50 constituents
+        'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
+        'HINDUNILVR.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'ITC.NS', 'KOTAKBANK.NS',
+        'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
+        'HCLTECH.NS', 'TITAN.NS', 'SUNPHARMA.NS', 'WIPRO.NS', 'ULTRACEMCO.NS',
+        'NTPC.NS', 'NESTLEIND.NS', 'POWERGRID.NS', 'TATAMOTORS.NS', 'M&M.NS',
+        'JSWSTEEL.NS', 'TATASTEEL.NS', 'ADANIPORTS.NS', 'BAJAJFINSV.NS', 'TECHM.NS',
+        'ONGC.NS', 'HDFCLIFE.NS', 'DIVISLAB.NS', 'COALINDIA.NS', 'GRASIM.NS',
+        'BRITANNIA.NS', 'BPCL.NS', 'DRREDDY.NS', 'CIPLA.NS', 'APOLLOHOSP.NS',
+        'EICHERMOT.NS', 'INDUSINDBK.NS', 'SBILIFE.NS', 'TATACONSUM.NS', 'HEROMOTOCO.NS',
+        // Additional popular Indian stocks
+        'ADANIENT.NS', 'ADANIGREEN.NS', 'ADANIPOWER.NS', 'ATGL.NS',
+        'BAJAJ-AUTO.NS', 'BANKBARODA.NS', 'BEL.NS', 'BERGEPAINT.NS', 'BIOCON.NS',
+        'BOSCHLTD.NS', 'CANBK.NS', 'CHOLAFIN.NS', 'COLPAL.NS', 'DLF.NS',
+        'DABUR.NS', 'GAIL.NS', 'GODREJCP.NS', 'HAVELLS.NS', 'HINDALCO.NS',
+        'HINDPETRO.NS', 'ICICIPRULI.NS', 'IDEA.NS', 'INDIGO.NS', 'IOC.NS',
+        'IRCTC.NS', 'JINDALSTEL.NS', 'JUBLFOOD.NS', 'LICI.NS', 'LUPIN.NS',
+        'MARICO.NS', 'MCDOWELL-N.NS', 'MUTHOOTFIN.NS', 'NAUKRI.NS', 'PAYTM.NS',
+        'PEL.NS', 'PETRONET.NS', 'PIDILITIND.NS', 'PNB.NS', 'POLYCAB.NS',
+        'RECLTD.NS', 'SBICARD.NS', 'SHREECEM.NS', 'SIEMENS.NS', 'SRF.NS',
+        'TATAPOWER.NS', 'TATAELXSI.NS', 'TORNTPHARM.NS', 'TRENT.NS', 'VEDL.NS',
+        'ZOMATO.NS', 'ZYDUSLIFE.NS'
+      ];
+
+      // Get market from query parameter
+      const market = (url.searchParams.get('market') || 'US').toUpperCase() === 'IN' ? 'IN' : 'US';
+      const STOCKS_TO_SCAN = market === 'IN' ? IN_STOCKS_TO_SCAN : US_STOCKS_TO_SCAN;
+
+      function analyzeStockForBreakouts(quote, rsi, macd, marketCode) {
         const breakouts = [];
+        
+        // Parse analyst rating string to numeric score (e.g., "2.0 - Buy" -> 2.0)
+        const analystRatingScore = quote.averageAnalystRating 
+          ? parseFloat(quote.averageAnalystRating.match(/^([\d.]+)/)?.[1]) 
+          : null;
         
         const baseStock = {
           symbol: quote.symbol,
@@ -2151,7 +2283,10 @@ const server = http.createServer(async (req, res) => {
           percentFromFiftyTwoWeekHigh: quote.fiftyTwoWeekHigh ? ((quote.regularMarketPrice - quote.fiftyTwoWeekHigh) / quote.fiftyTwoWeekHigh) * 100 : null,
           percentFromFiftyTwoWeekLow: quote.fiftyTwoWeekLow ? ((quote.regularMarketPrice - quote.fiftyTwoWeekLow) / quote.fiftyTwoWeekLow) * 100 : null,
           rsi: rsi ? Math.round(rsi * 10) / 10 : undefined,
-          market: 'US'
+          market: marketCode,
+          // Analyst data
+          averageAnalystRating: quote.averageAnalystRating || null,  // e.g., "2.0 - Buy"
+          analystRatingScore: analystRatingScore  // Numeric: 1.0 (Strong Buy) to 5.0 (Sell)
         };
 
         const price = baseStock.price;
@@ -2303,11 +2438,43 @@ const server = http.createServer(async (req, res) => {
           }
         }
 
+        // Supplementary: Strong Technicals - include stocks with strong setups
+        // even if they haven't triggered a specific breakout alert above.
+        // This ensures the pick panels can score all technically strong stocks.
+        if (breakouts.length === 0) {
+          let techScore = 0;
+          // Momentum: well above 50 MA
+          if (pct50MA != null && pct50MA > 5) techScore += 2;
+          // Uptrend: above 200 MA
+          if (pct200MA != null && pct200MA > 0) techScore += 1;
+          // RSI in bullish zone (50-75)
+          if (rsi != null && rsi >= 50 && rsi <= 75) techScore += 1;
+          // Positive day with decent move
+          if (baseStock.changePercent >= 1.5) techScore += 1;
+          // Volume above average
+          if (relVol >= 1.2) techScore += 1;
+          // Strong analyst rating
+          if (analystRatingScore != null && analystRatingScore <= 2.2) techScore += 1;
+          // MACD bullish (from macd data, even if not a crossover)
+          if (macd && macd.signalType && (macd.signalType === 'strong_bullish' || macd.signalType === 'bullish_crossover')) techScore += 1;
+
+          // Include if at least 4 out of 8 criteria met
+          if (techScore >= 4) {
+            breakouts.push({
+              ...baseStock,
+              alertType: 'strong_technicals',
+              alertCategory: 'strong_technicals',
+              alertDescription: `Strong technical setup (${techScore}/8 criteria) - momentum candidate`,
+              severity: 'bullish'
+            });
+          }
+        }
+
         return breakouts;
       }
 
       try {
-        console.log('[Breakouts] Scanning stocks for technical breakouts...');
+        console.log(`[Breakouts] Scanning ${STOCKS_TO_SCAN.length} ${market} stocks for technical breakouts...`);
         const startTime = Date.now();
         
         // Fetch quotes and calculate technicals
@@ -2344,7 +2511,7 @@ const server = http.createServer(async (req, res) => {
                 const prices = await fetchHistoricalPrices(quote.symbol, 50);
                 const rsi = prices ? calculateRSI(prices) : null;
                 const macd = prices ? calculateMACD(prices) : null;
-                const breakouts = analyzeStockForBreakouts(quote, rsi, macd);
+                const breakouts = analyzeStockForBreakouts(quote, rsi, macd, market);
                 allBreakouts.push(...breakouts);
               } catch (err) {
                 // Skip stocks with errors

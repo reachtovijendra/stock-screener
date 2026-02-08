@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, inject, signal, computed, effect } from '@angular/core';
+import { Component, OnInit, inject, signal, computed, effect } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -12,7 +12,7 @@ import { InputTextModule } from 'primeng/inputtext';
 import { AutoCompleteModule, AutoCompleteCompleteEvent } from 'primeng/autocomplete';
 
 import { MarketService } from '../../core/services';
-import { Market } from '../../core/models';
+import { Market, Stock, ScreenResult, getDefaultFilters } from '../../core/models';
 
 interface BreakoutStock {
   symbol: string;
@@ -134,6 +134,9 @@ interface AlertCategory {
               </button>
             }
           </div>
+          @if (loading() || screenerLoading()) {
+            <i class="pi pi-spin pi-spinner header-spinner"></i>
+          }
         </div>
         <div class="stats-summary">
           <div class="stat">
@@ -143,16 +146,7 @@ interface AlertCategory {
         </div>
       </div>
 
-      <!-- Loading State -->
-      @if (loading()) {
-        <div class="loading-container">
-          <p-progressSpinner strokeWidth="3" [style]="{ width: '50px', height: '50px' }"></p-progressSpinner>
-          <span>Scanning stocks for technical breakouts...</span>
-        </div>
-      }
-
       <!-- Top Picks Panel - Always visible at top -->
-      @if (!loading()) {
         <div class="top-picks-section" [class.collapsed]="topPicksCollapsed()">
           <div class="top-picks-header" (click)="toggleTopPicks()">
             <div class="top-picks-title">
@@ -181,7 +175,12 @@ interface AlertCategory {
           
           @if (!topPicksCollapsed()) {
           <div class="top-picks-content">
-            @if (topPicks().length === 0) {
+            @if (screenerLoading()) {
+              <div class="empty-top-picks">
+                <i class="pi pi-spin pi-spinner"></i>
+                <span>Scanning full market...</span>
+              </div>
+            } @else if (topPicks().length === 0) {
               <div class="empty-top-picks">
                 <i class="pi pi-search"></i>
                 <span>No stocks currently meet all criteria. Check back later.</span>
@@ -189,7 +188,7 @@ interface AlertCategory {
             } @else {
               <div class="top-picks-grid">
                 @for (pick of topPicks(); track pick.stock.symbol; let i = $index) {
-                  <div class="top-pick-card" (click)="goToStock(pick.stock.symbol)">
+                  <div class="top-pick-card">
                     <div class="pick-rank">#{{ i + 1 }}</div>
                     <div class="pick-header">
                       <div class="pick-info">
@@ -203,10 +202,31 @@ interface AlertCategory {
                     </div>
                     
                     <div class="pick-price-row">
-                      <span class="pick-price">{{ marketService.formatCurrency(pick.stock.price, pick.stock.market || 'US') }}</span>
-                      <span class="pick-change" [class.positive]="pick.stock.changePercent >= 0" [class.negative]="pick.stock.changePercent < 0">
-                        {{ pick.stock.changePercent >= 0 ? '+' : '' }}{{ pick.stock.changePercent | number:'1.2-2' }}%
-                      </span>
+                      <div class="price-info">
+                        <span class="pick-price">{{ marketService.formatCurrency(pick.stock.price, pick.stock.market || 'US') }}</span>
+                        <span class="pick-change" [class.positive]="pick.stock.changePercent >= 0" [class.negative]="pick.stock.changePercent < 0">
+                          {{ pick.stock.changePercent >= 0 ? '+' : '' }}{{ pick.stock.changePercent | number:'1.2-2' }}%
+                        </span>
+                      </div>
+                      <div class="card-actions">
+                        @if ((pick.stock.market || 'US') === 'US') {
+                          <a class="robinhood-link" 
+                             [href]="'https://robinhood.com/stocks/' + pick.stock.symbol + '?source=search'" 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             pTooltip="Trade on Robinhood"
+                             tooltipPosition="top">
+                            <img src="robinhood.png" alt="Robinhood" class="robinhood-icon" />
+                          </a>
+                        }
+                          <a class="detail-link" 
+                             [href]="'/stock/' + pick.stock.symbol" 
+                             target="_blank"
+                             pTooltip="Stock details"
+                             tooltipPosition="top">
+                            <img src="stock-detail.svg" alt="Details" class="detail-icon" />
+                          </a>
+                        </div>
                     </div>
                     
                     <div class="pick-signals">
@@ -277,10 +297,8 @@ interface AlertCategory {
           </div>
           }
         </div>
-      }
 
       <!-- Day Trade Picks Panel -->
-      @if (!loading()) {
         <div class="day-trade-section" [class.collapsed]="dayTradeCollapsed()">
           <div class="day-trade-header" (click)="toggleDayTrade()">
             <div class="day-trade-title">
@@ -309,7 +327,12 @@ interface AlertCategory {
           
           @if (!dayTradeCollapsed()) {
           <div class="day-trade-content">
-            @if (dayTradePicks().length === 0) {
+            @if (screenerLoading()) {
+              <div class="empty-day-trade">
+                <i class="pi pi-spin pi-spinner"></i>
+                <span>Scanning full market...</span>
+              </div>
+            } @else if (dayTradePicks().length === 0) {
               <div class="empty-day-trade">
                 <i class="pi pi-search"></i>
                 <span>No high-momentum stocks found. Market may be quiet today.</span>
@@ -317,7 +340,7 @@ interface AlertCategory {
             } @else {
               <div class="day-trade-grid">
                 @for (pick of dayTradePicks(); track pick.stock.symbol; let i = $index) {
-                  <div class="day-trade-card" (click)="goToStock(pick.stock.symbol)">
+                  <div class="day-trade-card">
                     <div class="dt-rank">#{{ i + 1 }}</div>
                     <div class="dt-header">
                       <div class="dt-info">
@@ -331,10 +354,31 @@ interface AlertCategory {
                     </div>
                     
                     <div class="dt-price-row">
-                      <span class="dt-price">{{ marketService.formatCurrency(pick.stock.price, pick.stock.market || 'US') }}</span>
-                      <span class="dt-change positive">
-                        +{{ pick.stock.changePercent | number:'1.2-2' }}%
-                      </span>
+                      <div class="price-info">
+                        <span class="dt-price">{{ marketService.formatCurrency(pick.stock.price, pick.stock.market || 'US') }}</span>
+                        <span class="dt-change positive">
+                          +{{ pick.stock.changePercent | number:'1.2-2' }}%
+                        </span>
+                      </div>
+                      <div class="card-actions">
+                        @if ((pick.stock.market || 'US') === 'US') {
+                          <a class="robinhood-link" 
+                             [href]="'https://robinhood.com/stocks/' + pick.stock.symbol + '?source=search'" 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             pTooltip="Trade on Robinhood"
+                             tooltipPosition="top">
+                            <img src="robinhood.png" alt="Robinhood" class="robinhood-icon" />
+                          </a>
+                        }
+                        <a class="detail-link" 
+                           [href]="'/stock/' + pick.stock.symbol" 
+                           target="_blank"
+                           pTooltip="Stock details"
+                           tooltipPosition="top">
+                          <img src="stock-detail.svg" alt="Details" class="detail-icon" />
+                        </a>
+                      </div>
                     </div>
                     
                     <div class="dt-signals">
@@ -375,10 +419,8 @@ interface AlertCategory {
           </div>
           }
         </div>
-      }
 
       <!-- Momentum Picks Panel -->
-      @if (!loading()) {
         <div class="momentum-section" [class.collapsed]="momentumCollapsed()">
           <div class="momentum-header" (click)="toggleMomentum()">
             <div class="momentum-title">
@@ -407,7 +449,12 @@ interface AlertCategory {
           
           @if (!momentumCollapsed()) {
           <div class="momentum-content">
-            @if (momentumPicks().length === 0) {
+            @if (screenerLoading()) {
+              <div class="empty-momentum">
+                <i class="pi pi-spin pi-spinner"></i>
+                <span>Scanning full market...</span>
+              </div>
+            } @else if (momentumPicks().length === 0) {
               <div class="empty-momentum">
                 <i class="pi pi-search"></i>
                 <span>No momentum stocks found meeting criteria.</span>
@@ -415,7 +462,7 @@ interface AlertCategory {
             } @else {
               <div class="momentum-grid">
                 @for (pick of momentumPicks(); track pick.stock.symbol; let i = $index) {
-                  <div class="momentum-card" (click)="goToStock(pick.stock.symbol)">
+                  <div class="momentum-card">
                     <div class="mom-rank">#{{ i + 1 }}</div>
                     <div class="mom-header">
                       <div class="mom-info">
@@ -429,10 +476,31 @@ interface AlertCategory {
                     </div>
                     
                     <div class="mom-price-row">
-                      <span class="mom-price">{{ marketService.formatCurrency(pick.stock.price, pick.stock.market || 'US') }}</span>
-                      <span class="mom-change" [class.positive]="pick.stock.changePercent >= 0" [class.negative]="pick.stock.changePercent < 0">
-                        {{ pick.stock.changePercent >= 0 ? '+' : '' }}{{ pick.stock.changePercent | number:'1.2-2' }}%
-                      </span>
+                      <div class="price-info">
+                        <span class="mom-price">{{ marketService.formatCurrency(pick.stock.price, pick.stock.market || 'US') }}</span>
+                        <span class="mom-change" [class.positive]="pick.stock.changePercent >= 0" [class.negative]="pick.stock.changePercent < 0">
+                          {{ pick.stock.changePercent >= 0 ? '+' : '' }}{{ pick.stock.changePercent | number:'1.2-2' }}%
+                        </span>
+                      </div>
+                      <div class="card-actions">
+                        @if ((pick.stock.market || 'US') === 'US') {
+                          <a class="robinhood-link" 
+                             [href]="'https://robinhood.com/stocks/' + pick.stock.symbol + '?source=search'" 
+                             target="_blank" 
+                             rel="noopener noreferrer"
+                             pTooltip="Trade on Robinhood"
+                             tooltipPosition="top">
+                            <img src="robinhood.png" alt="Robinhood" class="robinhood-icon" />
+                          </a>
+                        }
+                        <a class="detail-link" 
+                           [href]="'/stock/' + pick.stock.symbol" 
+                           target="_blank"
+                           pTooltip="Stock details"
+                           tooltipPosition="top">
+                          <img src="stock-detail.svg" alt="Details" class="detail-icon" />
+                        </a>
+                      </div>
                     </div>
                     
                     <div class="mom-signals">
@@ -479,7 +547,6 @@ interface AlertCategory {
           </div>
           }
         </div>
-      }
 
       <!-- Alert Categories -->
       @if (!loading()) {
@@ -505,7 +572,7 @@ interface AlertCategory {
                   } @else {
                     <div class="stocks-grid">
                       @for (stock of getStocksByCategory(category.id); track stock.symbol + stock.alertType) {
-                        <div class="stock-card" [class]="stock.severity" (click)="goToStock(stock.symbol)">
+                        <div class="stock-card" [class]="stock.severity">
                           <div class="card-header">
                             <div class="stock-info">
                               <span class="symbol">{{ stock.symbol }}</span>
@@ -517,10 +584,31 @@ interface AlertCategory {
                           </div>
                           
                           <div class="price-row">
-                            <span class="price">{{ marketService.formatCurrency(stock.price, stock.market || 'US') }}</span>
-                            <span class="change" [class.positive]="stock.changePercent >= 0" [class.negative]="stock.changePercent < 0">
-                              {{ stock.changePercent >= 0 ? '+' : '' }}{{ stock.changePercent | number:'1.2-2' }}%
-                            </span>
+                            <div class="price-info">
+                              <span class="price">{{ marketService.formatCurrency(stock.price, stock.market || 'US') }}</span>
+                              <span class="change" [class.positive]="stock.changePercent >= 0" [class.negative]="stock.changePercent < 0">
+                                {{ stock.changePercent >= 0 ? '+' : '' }}{{ stock.changePercent | number:'1.2-2' }}%
+                              </span>
+                            </div>
+                            <div class="card-actions">
+                              @if ((stock.market || 'US') === 'US') {
+                                <a class="robinhood-link" 
+                                   [href]="'https://robinhood.com/stocks/' + stock.symbol + '?source=search'" 
+                                   target="_blank" 
+                                   rel="noopener noreferrer"
+                                   pTooltip="Trade on Robinhood"
+                                   tooltipPosition="top">
+                                  <img src="robinhood.png" alt="Robinhood" class="robinhood-icon" />
+                                </a>
+                              }
+                              <a class="detail-link" 
+                                 [href]="'/stock/' + stock.symbol" 
+                                 target="_blank"
+                                 pTooltip="Stock details"
+                                 tooltipPosition="top">
+                                <img src="stock-detail.svg" alt="Details" class="detail-icon" />
+                              </a>
+                            </div>
                           </div>
                           
                           <div class="alert-description">
@@ -816,8 +904,8 @@ interface AlertCategory {
                   <span class="score-name">{{ scoreSearchResult.name }}</span>
                 </div>
                 <div class="score-total" [class]="getScoreClass(scoreSearchResult.score)">
-                  <span class="score-number">{{ scoreSearchResult.score }}</span>
-                  <span class="score-label">Total Score</span>
+                  <span class="score-number">{{ scoreSearchResult.score }}<small>/100</small></span>
+                  <span class="score-label">Score</span>
                 </div>
               </div>
               
@@ -828,16 +916,16 @@ interface AlertCategory {
                   <span class="reason">- {{ scoreSearchResult.reason }}</span>
                 }
               </div>
-              @if (scoreSearchResult.qualifies && !scoreSearchResult.inBreakouts) {
-                <div class="score-info-banner">
-                  <i class="pi pi-info-circle"></i>
-                  <span>Qualifies based on technicals, but not in today's breakout alerts. Stock will appear on panel once a new technical breakout is triggered.</span>
-                </div>
-              }
               @if (scoreSearchResult.qualifies && scoreSearchResult.inBreakouts) {
                 <div class="score-info-banner in-pool">
                   <i class="pi pi-check"></i>
-                  <span>Active in today's breakout alerts. Ranked by score on panel (top 15 shown).</span>
+                  <span>In the screener pool. Ranked by score on panel (top 15 shown).</span>
+                </div>
+              }
+              @if (scoreSearchResult.qualifies && !scoreSearchResult.inBreakouts) {
+                <div class="score-info-banner">
+                  <i class="pi pi-info-circle"></i>
+                  <span>Qualifies based on technicals but not found in today's market data. This stock may be outside the current market scan.</span>
                 </div>
               }
               
@@ -1011,6 +1099,13 @@ interface AlertCategory {
     .filter-buttons {
       display: flex;
       gap: 0.5rem;
+      align-items: center;
+    }
+
+    .header-spinner {
+      font-size: 1.1rem;
+      color: #60a5fa;
+      margin-left: 0.5rem;
     }
 
     .filter-btn {
@@ -1232,15 +1327,7 @@ interface AlertCategory {
       border: 1px solid var(--surface-border);
       border-radius: 10px;
       padding: 1rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
       position: relative;
-    }
-
-    .top-pick-card:hover {
-      border-color: #fbbf24;
-      box-shadow: 0 4px 20px rgba(251, 191, 36, 0.2);
-      transform: translateY(-2px);
     }
 
     .pick-rank {
@@ -1280,6 +1367,65 @@ interface AlertCategory {
       color: var(--text-color);
     }
 
+    .price-info {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+    }
+
+    .card-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .robinhood-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.2s;
+      &:hover {
+        transform: scale(1.1);
+        box-shadow: 0 0 8px rgba(192, 255, 0, 0.4);
+      }
+    }
+
+    .robinhood-icon {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+      object-fit: cover;
+      display: block;
+    }
+
+    .detail-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.2s;
+      text-decoration: none;
+      &:hover {
+        transform: scale(1.1);
+        box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+      }
+    }
+
+    .detail-icon {
+      width: 28px;
+      height: 28px;
+      flex-shrink: 0;
+      object-fit: cover;
+      display: block;
+    }
+
     .pick-name {
       font-size: 0.75rem;
       color: var(--text-color-secondary);
@@ -1312,8 +1458,8 @@ interface AlertCategory {
 
     .pick-price-row {
       display: flex;
-      align-items: baseline;
-      gap: 0.5rem;
+      align-items: center;
+      justify-content: space-between;
       margin-bottom: 0.75rem;
       margin-left: 1rem;
     }
@@ -1490,15 +1636,7 @@ interface AlertCategory {
       border: 1px solid var(--surface-border);
       border-radius: 10px;
       padding: 1rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
       position: relative;
-    }
-
-    .day-trade-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(249, 115, 22, 0.15);
-      border-color: rgba(249, 115, 22, 0.4);
     }
 
     .dt-rank {
@@ -1565,8 +1703,8 @@ interface AlertCategory {
 
     .dt-price-row {
       display: flex;
-      align-items: baseline;
-      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
       margin-bottom: 0.5rem;
     }
 
@@ -1715,15 +1853,7 @@ interface AlertCategory {
       border: 1px solid var(--surface-border);
       border-radius: 10px;
       padding: 1rem;
-      cursor: pointer;
-      transition: all 0.2s ease;
       position: relative;
-    }
-
-    .momentum-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(139, 92, 246, 0.15);
-      border-color: rgba(139, 92, 246, 0.4);
     }
 
     .mom-rank {
@@ -1790,8 +1920,8 @@ interface AlertCategory {
 
     .mom-price-row {
       display: flex;
-      align-items: baseline;
-      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
       margin-bottom: 0.5rem;
     }
 
@@ -2354,14 +2484,7 @@ interface AlertCategory {
       background: var(--surface-ground);
       border-radius: 10px;
       padding: 1rem;
-      cursor: pointer;
-      transition: all 0.2s;
       border-left: 4px solid var(--surface-border);
-    }
-
-    .stock-card:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
     }
 
     .stock-card.bullish {
@@ -2425,8 +2548,8 @@ interface AlertCategory {
 
     .price-row {
       display: flex;
-      align-items: baseline;
-      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
       margin-bottom: 0.75rem;
     }
 
@@ -2539,7 +2662,7 @@ interface AlertCategory {
     }
   `]
 })
-export class BreakoutsComponent implements OnInit, OnDestroy {
+export class BreakoutsComponent implements OnInit {
   private http = inject(HttpClient);
   private router = inject(Router);
   marketService = inject(MarketService);
@@ -2598,6 +2721,8 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
 
   // State
   allBreakouts = signal<BreakoutStock[]>([]);
+  allScreenerStocks = signal<Stock[]>([]);
+  screenerLoading = signal(false);
   loading = signal(false);
   lastUpdated = signal<Date | null>(null);
   collapsedCategories = signal<string[]>(['ma_crossover', '52w_highs', '52w_lows', 'rsi_signals', 'macd_signals', 'volume_breakout']);
@@ -2618,115 +2743,230 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
   neutralCount = computed(() => this.allBreakouts().filter(b => b.severity === 'neutral').length);
   totalAlerts = computed(() => this.filteredBreakouts().length);
 
-  // Top Picks - Best stocks to buy for medium-term (1-3 months) with moderate risk
-  // Optimized for: Strong uptrend, momentum with room to grow, trend confirmation
-  topPicks = computed(() => {
-    const breakouts = this.allBreakouts();
+  // Helper: infer alert types from a Stock's technical data
+  private inferAlertTypes(s: Stock): { alertTypes: Set<string>; alertCategories: Set<string> } {
+    const alertTypes = new Set<string>();
+    const alertCategories = new Set<string>();
     
-    // Group breakouts by symbol - collect all alert types per stock
-    const stockAlerts = new Map<string, { stock: BreakoutStock; alertTypes: Set<string>; alertCategories: Set<string> }>();
-    const skipSymbols = new Set(['BRK-A']);
-    
-    for (const b of breakouts) {
-      if (skipSymbols.has(b.symbol)) continue;
-      if (!stockAlerts.has(b.symbol)) {
-        stockAlerts.set(b.symbol, { stock: b, alertTypes: new Set(), alertCategories: new Set() });
+    // Golden / Death cross from MA proximity
+    if (s.fiftyDayMA && s.twoHundredDayMA) {
+      if (s.fiftyDayMA > s.twoHundredDayMA) {
+        const maDiff = ((s.fiftyDayMA - s.twoHundredDayMA) / s.twoHundredDayMA) * 100;
+        if (maDiff <= 3 && maDiff > 0) { alertTypes.add('golden_cross'); alertCategories.add('ma_crossover'); }
+      } else {
+        const maDiff = ((s.twoHundredDayMA - s.fiftyDayMA) / s.twoHundredDayMA) * 100;
+        if (maDiff <= 3 && maDiff > 0) { alertTypes.add('death_cross'); alertCategories.add('ma_crossover'); }
       }
-      const entry = stockAlerts.get(b.symbol)!;
-      if (b.alertType) entry.alertTypes.add(b.alertType);
-      if (b.alertCategory) entry.alertCategories.add(b.alertCategory);
     }
     
-    // Score each stock ONCE using its technical data + collected alert types
-    const stockScores = Array.from(stockAlerts.values()).map(({ stock: b, alertTypes, alertCategories }) => {
-      let score = 0;
-      const signals: string[] = [];
-      
-      // === TREND CONFIRMATION (Most Important for Medium-Term) ===
-      if (b.percentFromFiftyDayMA != null && b.percentFromFiftyDayMA > 0 && b.percentFromFiftyDayMA <= 8) {
-        score += 3; signals.push('Above 50 MA');
-      }
-      if (b.percentFromTwoHundredDayMA != null && b.percentFromTwoHundredDayMA > 0 && b.percentFromTwoHundredDayMA <= 20) {
-        score += 3; signals.push('Above 200 MA');
-      }
-      if (alertTypes.has('golden_cross')) {
-        score += 5; signals.push('Golden Cross');
-      }
-      
-      // === MOMENTUM INDICATORS ===
-      if (b.rsi != null && b.rsi >= 50 && b.rsi <= 65) {
-        score += 3; signals.push('Strong Momentum');
-      } else if (b.rsi != null && b.rsi >= 40 && b.rsi < 50) {
-        score += 1; signals.push('Building Momentum');
-      } else if (b.rsi != null && b.rsi >= 30 && b.rsi < 40) {
-        score += 2; signals.push('Oversold Bounce');
-      }
-      
-      if (alertTypes.has('macd_bullish_cross') || alertTypes.has('macd_strong_bullish')) {
-        score += 4; signals.push('MACD Bullish');
-      }
-      
-      // === PRICE ACTION ===
-      if (b.percentFromFiftyTwoWeekHigh != null && b.percentFromFiftyTwoWeekHigh >= -10) {
-        score += 2; signals.push('Near 52W High');
-      }
-      if (b.changePercent > 2 && b.relativeVolume != null && b.relativeVolume > 1.2) {
-        score += 2; signals.push('Breakout Move');
-      } else if (b.changePercent > 0) {
-        score += 1; signals.push('Positive Day');
-      }
-      if (alertCategories.has('volume_breakout') && b.changePercent > 0) {
-        score += 2; signals.push('Volume Surge');
-      }
-      
-      // === ANALYST RATINGS ===
-      const analystScore = (b as any).analystRatingScore;
-      if (analystScore != null) {
-        if (analystScore <= 1.5) { score += 3; signals.push('Strong Buy Rating'); }
-        else if (analystScore <= 2.2) { score += 2; signals.push('Buy Rating'); }
-        else if (analystScore >= 3.5) { score -= 2; signals.push('Weak Rating'); }
-      }
-      
-      // === PENALTIES ===
-      if (b.rsi != null && b.rsi > 70) { score -= 4; signals.push('Overbought'); }
-      if (alertTypes.has('death_cross')) { score -= 5; signals.push('Death Cross'); }
-      if (alertTypes.has('macd_bearish_cross') || alertTypes.has('macd_strong_bearish')) { score -= 3; signals.push('Bearish MACD'); }
-      if (b.percentFromFiftyDayMA != null && b.percentFromFiftyDayMA > 15) { score -= 2; signals.push('Too Extended'); }
-      if (b.percentFromTwoHundredDayMA != null && b.percentFromTwoHundredDayMA < 0) { score -= 2; signals.push('Below 200 MA'); }
-      
-      return { stock: b, score, signals };
-    });
+    // MACD signal type
+    if (s.macdSignalType === 'bullish_crossover' || s.macdSignalType === 'strong_bullish') {
+      alertTypes.add('macd_bullish_cross'); alertCategories.add('macd_signals');
+    } else if (s.macdSignalType === 'bearish_crossover' || s.macdSignalType === 'strong_bearish') {
+      alertTypes.add('macd_bearish_cross'); alertCategories.add('macd_signals');
+    }
     
-    // Filter and sort
-    // Require: score >= 6, at least 3 bullish signals, must be above 200 MA
+    // Volume breakout
+    if (s.relativeVolume >= 2 && s.changePercent > 0) {
+      alertCategories.add('volume_breakout');
+    }
+    
+    return { alertTypes, alertCategories };
+  }
+
+  // ===== SHARED SCORING METHODS =====
+  // Single source of truth for each panel's scoring logic.
+  // Both computed signals and popup call these.
+
+  private scoreTopPicks(data: {
+    pct50MA: number | null; pct200MA: number | null; pct52High: number | null;
+    rsi: number | null; changePercent: number; relVolume: number | null;
+    alertTypes: Set<string>; alertCategories: Set<string>;
+  }): { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[] } {
+    const { pct50MA, pct200MA, pct52High, rsi, changePercent, relVolume, alertTypes, alertCategories } = data;
+    let rawScore = 0;
+    const signals: string[] = [];
+    const breakdown: { label: string; value: string; points: number }[] = [];
+    const add = (label: string, value: string, pts: number) => { breakdown.push({ label, value, points: pts }); rawScore += pts; };
+
+    // TREND CONFIRMATION
+    if (pct50MA != null && pct50MA > 0 && pct50MA <= 8) { add('Above 50 MA (0-8%)', `+${pct50MA.toFixed(1)}%`, 3); signals.push('Above 50 MA'); }
+    if (pct200MA != null && pct200MA > 0 && pct200MA <= 20) { add('Above 200 MA (0-20%)', `+${pct200MA.toFixed(1)}%`, 3); signals.push('Above 200 MA'); }
+    if (alertTypes.has('golden_cross')) { add('Golden Cross', '50 MA > 200 MA', 5); signals.push('Golden Cross'); }
+
+    // MOMENTUM INDICATORS
+    if (rsi != null && rsi >= 50 && rsi <= 65) { add('RSI 50-65 (Strong Momentum)', `${rsi.toFixed(0)}`, 3); signals.push('Strong Momentum'); }
+    else if (rsi != null && rsi >= 40 && rsi < 50) { add('RSI 40-50 (Building)', `${rsi.toFixed(0)}`, 1); signals.push('Building Momentum'); }
+    else if (rsi != null && rsi >= 30 && rsi < 40) { add('RSI 30-40 (Oversold Bounce)', `${rsi.toFixed(0)}`, 2); signals.push('Oversold Bounce'); }
+
+    if (alertTypes.has('macd_bullish_cross') || alertTypes.has('macd_strong_bullish')) { add('MACD Bullish', 'Crossover', 4); signals.push('MACD Bullish'); }
+
+    // PRICE ACTION
+    if (pct52High != null && pct52High >= -10) { add('Near 52W High (within 10%)', `${pct52High.toFixed(1)}%`, 2); signals.push('Near 52W High'); }
+    if (changePercent > 2 && relVolume != null && relVolume > 1.2) { add('Breakout Move (>2% + volume)', `+${changePercent.toFixed(1)}%`, 2); signals.push('Breakout Move'); }
+    else if (changePercent > 0) { add('Positive Day', `+${changePercent.toFixed(2)}%`, 1); signals.push('Positive Day'); }
+    if (alertCategories.has('volume_breakout') && changePercent > 0) { add('Volume Surge', `${relVolume?.toFixed(1)}x`, 2); signals.push('Volume Surge'); }
+
+    // PENALTIES
+    if (rsi != null && rsi > 70) { add('Overbought RSI (>70)', `${rsi.toFixed(0)}`, -4); signals.push('Overbought'); }
+    if (alertTypes.has('death_cross')) { add('Death Cross', '50 MA < 200 MA', -5); signals.push('Death Cross'); }
+    if (alertTypes.has('macd_bearish_cross') || alertTypes.has('macd_strong_bearish')) { add('Bearish MACD', 'Crossover', -3); signals.push('Bearish MACD'); }
+    if (pct50MA != null && pct50MA > 15) { add('Too Extended from 50 MA (>15%)', `+${pct50MA.toFixed(1)}%`, -2); signals.push('Too Extended'); }
+    if (pct200MA != null && pct200MA < 0) { add('Below 200 MA', `${pct200MA.toFixed(1)}%`, -2); signals.push('Below 200 MA'); }
+
+    const MAX = 24;
+    const score = Math.max(0, Math.min(100, Math.round((rawScore / MAX) * 100)));
+    return { score, signals, breakdown };
+  }
+
+  private scoreDayTrade(data: {
+    pct50MA: number | null; pct200MA: number | null; pct52High: number | null;
+    rsi: number | null; changePercent: number; relVolume: number | null;
+    alertTypes: Set<string>;
+  }): { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[] } {
+    const { pct50MA, pct200MA, pct52High, rsi, changePercent, relVolume, alertTypes } = data;
+    let rawScore = 0;
+    const signals: string[] = [];
+    const breakdown: { label: string; value: string; points: number }[] = [];
+    const add = (label: string, value: string, pts: number) => { breakdown.push({ label, value, points: pts }); rawScore += pts; };
+
+    // TODAY'S PRICE ACTION
+    if (changePercent >= 5) { add('Big Mover (5%+)', `+${changePercent.toFixed(2)}%`, 7); signals.push('Big Mover'); }
+    else if (changePercent >= 3) { add('Strong Move (3-5%)', `+${changePercent.toFixed(2)}%`, 5); signals.push('Strong Move'); }
+    else if (changePercent >= 1.5) { add('Good Move (1.5-3%)', `+${changePercent.toFixed(2)}%`, 3); signals.push('Good Move'); }
+    else if (changePercent > 0) { add('Positive Day', `+${changePercent.toFixed(2)}%`, 1); signals.push('Positive Day'); }
+
+    // VOLUME
+    if (relVolume != null) {
+      if (relVolume >= 2.5) { add('Massive Volume (2.5x+)', `${relVolume.toFixed(2)}x`, 6); signals.push('Massive Volume'); }
+      else if (relVolume >= 1.8) { add('High Volume (1.8-2.5x)', `${relVolume.toFixed(2)}x`, 4); signals.push('High Volume'); }
+      else if (relVolume >= 1.3) { add('Above Avg Volume (1.3-1.8x)', `${relVolume.toFixed(2)}x`, 2); signals.push('Above Avg Volume'); }
+    }
+
+    // BREAKOUT SIGNALS
+    if (pct52High != null) {
+      if (pct52High >= 0) { add('New 52W High', 'Breakout', 5); signals.push('New 52W High'); }
+      else if (pct52High >= -3) { add('Near 52W High', `${pct52High.toFixed(1)}%`, 3); signals.push('Near 52W High'); }
+    }
+    if (alertTypes.has('macd_bullish_cross') || alertTypes.has('macd_strong_bullish')) { add('MACD Bullish', 'Crossover', 3); signals.push('MACD Bullish'); }
+
+    // RSI
+    if (rsi != null) {
+      if (rsi >= 60 && rsi <= 75) { add('Strong RSI (60-75)', `${rsi.toFixed(0)}`, 3); signals.push('Strong RSI'); }
+      else if (rsi != null && rsi >= 50 && rsi < 60) { add('RSI 50-60', `${rsi.toFixed(0)}`, 1); }
+      if (rsi > 80) { add('Extreme RSI (>80)', `${rsi.toFixed(0)}`, -2); signals.push('Extreme RSI'); }
+    }
+
+    // TREND SUPPORT
+    if (pct50MA != null && pct50MA > 0) { add('Above 50 MA', `+${pct50MA.toFixed(1)}%`, 1); signals.push('Above 50 MA'); }
+    if (pct200MA != null && pct200MA > 0) { add('Above 200 MA', `+${pct200MA.toFixed(1)}%`, 1); signals.push('Above 200 MA'); }
+
+    // PENALTIES
+    if (changePercent < 0) { add('Negative Day', `${changePercent.toFixed(2)}%`, -3); signals.push('Negative Day'); }
+    if (relVolume != null && relVolume < 0.7) { add('Low Volume (<0.7x)', `${relVolume.toFixed(2)}x`, -2); signals.push('Low Volume'); }
+    if (alertTypes.has('macd_bearish_cross') || alertTypes.has('macd_strong_bearish')) { add('Bearish MACD', 'Crossover', -2); signals.push('Bearish MACD'); }
+
+    const MAX = 26;
+    const score = Math.max(0, Math.min(100, Math.round((rawScore / MAX) * 100)));
+    return { score, signals, breakdown };
+  }
+
+  private scoreMomentum(data: {
+    pct50MA: number | null; pct200MA: number | null; pct52High: number | null;
+    rsi: number | null; changePercent: number; relVolume: number | null;
+    alertTypes: Set<string>;
+  }): { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[] } {
+    const { pct50MA, pct200MA, pct52High, rsi, changePercent, relVolume, alertTypes } = data;
+    let rawScore = 0;
+    const signals: string[] = [];
+    const breakdown: { label: string; value: string; points: number }[] = [];
+    const add = (label: string, value: string, pts: number) => { breakdown.push({ label, value, points: pts }); rawScore += pts; };
+
+    // MOMENTUM STRENGTH
+    if (pct50MA != null) {
+      if (pct50MA >= 30) { add('Strong Momentum (30%+ from 50 MA)', `+${pct50MA.toFixed(1)}%`, 5); signals.push('Strong Momentum'); }
+      else if (pct50MA >= 15) { add('Good Momentum (15-30% from 50 MA)', `+${pct50MA.toFixed(1)}%`, 3); signals.push('Good Momentum'); }
+      else if (pct50MA >= 5) { add('Above 50 MA (5-15%)', `+${pct50MA.toFixed(1)}%`, 1); signals.push('Mild Momentum'); }
+    }
+    if (pct200MA != null) {
+      if (pct200MA >= 50) { add('Major Uptrend (50%+ from 200 MA)', `+${pct200MA.toFixed(1)}%`, 4); signals.push('Major Uptrend'); }
+      else if (pct200MA >= 20) { add('Uptrend (20-50% from 200 MA)', `+${pct200MA.toFixed(1)}%`, 2); signals.push('Uptrend'); }
+    }
+
+    // BREAKOUT SIGNALS
+    if (pct52High != null && pct52High >= -5) { add('Near 52W High (within 5%)', `${pct52High.toFixed(1)}%`, 4); signals.push('52W High Zone'); }
+    if (alertTypes.has('macd_bullish_cross') || alertTypes.has('macd_strong_bullish')) { add('MACD Bullish', 'Crossover', 3); signals.push('MACD Bullish'); }
+
+    // TODAY'S ACTION
+    if (changePercent >= 5) { add('Big Move Today (5%+)', `+${changePercent.toFixed(2)}%`, 4); signals.push('Big Move Today'); }
+    else if (changePercent >= 2) { add('Moving Today (2-5%)', `+${changePercent.toFixed(2)}%`, 2); signals.push('Moving Today'); }
+
+    if (relVolume != null && relVolume >= 1.5) { add('High Volume (1.5x+)', `${relVolume.toFixed(2)}x`, 2); signals.push('High Volume'); }
+
+    // RSI
+    if (rsi != null && rsi >= 55 && rsi <= 75) { add('RSI Momentum Zone (55-75)', `${rsi.toFixed(0)}`, 2); signals.push('RSI Momentum'); }
+
+    // PENALTIES
+    if (changePercent < 0) { add('Down Today', `${changePercent.toFixed(2)}%`, -3); signals.push('Down Today'); }
+    if (rsi != null && rsi > 80) { add('Overbought RSI (>80)', `${rsi.toFixed(0)}`, -2); signals.push('Overbought'); }
+    if (pct50MA != null && pct50MA < 0) { add('Below 50 MA', `${pct50MA.toFixed(1)}%`, -3); signals.push('Below 50 MA'); }
+
+    const MAX = 24;
+    const score = Math.max(0, Math.min(100, Math.round((rawScore / MAX) * 100)));
+    return { score, signals, breakdown };
+  }
+
+  // Helper: deduplicate Indian dual-listed stocks (.NS / .BO) keeping the higher-volume listing
+  private deduplicateStocks(stocks: Stock[]): Stock[] {
+    const baseMap = new Map<string, Stock>();
+    for (const s of stocks) {
+      const baseSymbol = s.symbol.replace(/\.(NS|BO)$/, '');
+      const existing = baseMap.get(baseSymbol);
+      if (!existing || (s.volume ?? 0) > (existing.volume ?? 0)) {
+        baseMap.set(baseSymbol, s);
+      }
+    }
+    return Array.from(baseMap.values());
+  }
+
+  // Top Picks - Best stocks to buy for medium-term (1-3 months) with moderate risk
+  // Scans the FULL market (screener data) for the best setups
+  topPicks = computed(() => {
+    const stocks = this.deduplicateStocks(this.allScreenerStocks());
+    if (stocks.length === 0) return [];
+    
+    const market = this.marketService.currentMarket();
+    const MIN_MARKET_CAP = market === 'IN' ? 20_000_000_000 : 100_000_000_000; // IN: 2000 Cr INR, US: $100B
+    
+    const stockScores = stocks
+      .filter(s => s.marketCap >= MIN_MARKET_CAP && !s.symbol.includes('-'))
+      .map(s => {
+        const { alertTypes, alertCategories } = this.inferAlertTypes(s);
+        const result = this.scoreTopPicks({
+          pct50MA: s.percentFromFiftyDayMA, pct200MA: s.percentFromTwoHundredDayMA,
+          pct52High: s.percentFromFiftyTwoWeekHigh, rsi: s.rsi,
+          changePercent: s.changePercent, relVolume: s.relativeVolume,
+          alertTypes, alertCategories
+        });
+        return { stock: s as any, score: result.score, signals: result.signals };
+      });
+    
     const ranked = stockScores
       .filter(s => {
         const validSignals = s.signals.filter(sig => !['Overbought', 'Death Cross', 'Bearish MACD', 'Too Extended', 'Below 200 MA', 'Weak Rating'].includes(sig));
         const above200MA = s.stock.percentFromTwoHundredDayMA != null && s.stock.percentFromTwoHundredDayMA > 0;
-        return s.score >= 6 && validSignals.length >= 3 && above200MA;
+        return s.score >= 25 && validSignals.length >= 3 && above200MA;
       })
       .sort((a, b) => {
-        // Primary: Score
         if (b.score !== a.score) return b.score - a.score;
-        
-        // Tie-breaker 1: More bullish signals
         const aSignals = a.signals.filter(s => s !== 'Overbought').length;
         const bSignals = b.signals.filter(s => s !== 'Overbought').length;
         if (bSignals !== aSignals) return bSignals - aSignals;
-        
-        // Tie-breaker 2: RSI in ideal zone (50-65)
         const aRsi = a.stock.rsi ?? 50;
         const bRsi = b.stock.rsi ?? 50;
         const aIdeal = (aRsi >= 50 && aRsi <= 65) ? 1 : 0;
         const bIdeal = (bRsi >= 50 && bRsi <= 65) ? 1 : 0;
         if (bIdeal !== aIdeal) return bIdeal - aIdeal;
-        
-        // Tie-breaker 3: Better analyst rating (lower score = more bullish)
-        const aAnalyst = (a.stock as any).analystRatingScore ?? 3;
-        const bAnalyst = (b.stock as any).analystRatingScore ?? 3;
-        if (aAnalyst !== bAnalyst) return aAnalyst - bAnalyst;
-        
-        // Tie-breaker 4: Higher relative volume (more interest)
         const aVol = a.stock.relativeVolume ?? 1;
         const bVol = b.stock.relativeVolume ?? 1;
         return bVol - aVol;
@@ -2737,74 +2977,31 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
   });
 
   // Day Trade Picks - Best stocks for intraday trading (momentum-based)
-  // Optimized for: High momentum, volume surge, breakouts, strong price action TODAY
+  // Scans the FULL market for: High momentum, volume surge, breakouts, strong price action TODAY
   dayTradePicks = computed(() => {
-    const breakouts = this.allBreakouts();
+    const stocks = this.deduplicateStocks(this.allScreenerStocks());
+    if (stocks.length === 0) return [];
     
-    // Group by symbol - collect alert types
-    const stockAlerts = new Map<string, { stock: BreakoutStock; alertTypes: Set<string> }>();
-    const skipSymbols = new Set(['BRK-A']);
+    const market = this.marketService.currentMarket();
+    const MIN_MARKET_CAP = market === 'IN' ? 20_000_000_000 : 100_000_000_000; // IN: 2000 Cr INR, US: $100B
     
-    for (const b of breakouts) {
-      if (skipSymbols.has(b.symbol)) continue;
-      if (!stockAlerts.has(b.symbol)) {
-        stockAlerts.set(b.symbol, { stock: b, alertTypes: new Set() });
-      }
-      if (b.alertType) stockAlerts.get(b.symbol)!.alertTypes.add(b.alertType);
-    }
+    const stockScores = stocks
+      .filter(s => s.marketCap >= MIN_MARKET_CAP && !s.symbol.includes('-'))
+      .map(s => {
+        const { alertTypes } = this.inferAlertTypes(s);
+        const result = this.scoreDayTrade({
+          pct50MA: s.percentFromFiftyDayMA, pct200MA: s.percentFromTwoHundredDayMA,
+          pct52High: s.percentFromFiftyTwoWeekHigh, rsi: s.rsi,
+          changePercent: s.changePercent, relVolume: s.relativeVolume,
+          alertTypes
+        });
+        return { stock: s as any, score: result.score, signals: result.signals };
+      });
     
-    // Score each stock ONCE
-    const stockScores = Array.from(stockAlerts.values()).map(({ stock: b, alertTypes }) => {
-      let score = 0;
-      const signals: string[] = [];
-      
-      // === TODAY'S PRICE ACTION ===
-      if (b.changePercent >= 5) { score += 7; signals.push('Big Mover'); }
-      else if (b.changePercent >= 3) { score += 5; signals.push('Strong Move'); }
-      else if (b.changePercent >= 1.5) { score += 3; signals.push('Good Move'); }
-      else if (b.changePercent > 0) { score += 1; signals.push('Positive Day'); }
-      
-      // === VOLUME ===
-      if (b.relativeVolume != null) {
-        if (b.relativeVolume >= 2.5) { score += 6; signals.push('Massive Volume'); }
-        else if (b.relativeVolume >= 1.8) { score += 4; signals.push('High Volume'); }
-        else if (b.relativeVolume >= 1.3) { score += 2; signals.push('Above Avg Volume'); }
-      }
-      
-      // === BREAKOUT SIGNALS ===
-      if (b.percentFromFiftyTwoWeekHigh != null) {
-        if (b.percentFromFiftyTwoWeekHigh >= 0) { score += 5; signals.push('New 52W High'); }
-        else if (b.percentFromFiftyTwoWeekHigh >= -3) { score += 3; signals.push('Near 52W High'); }
-      }
-      
-      if (alertTypes.has('macd_bullish_cross') || alertTypes.has('macd_strong_bullish')) {
-        score += 3; signals.push('MACD Bullish');
-      }
-      
-      // === RSI ===
-      if (b.rsi != null) {
-        if (b.rsi >= 60 && b.rsi <= 75) { score += 3; signals.push('Strong RSI'); }
-        else if (b.rsi >= 50 && b.rsi < 60) { score += 1; }
-        if (b.rsi > 80) { score -= 2; signals.push('Extreme RSI'); }
-      }
-      
-      // === TREND SUPPORT ===
-      if (b.percentFromFiftyDayMA != null && b.percentFromFiftyDayMA > 0) { score += 1; signals.push('Above 50 MA'); }
-      if (b.percentFromTwoHundredDayMA != null && b.percentFromTwoHundredDayMA > 0) { score += 1; signals.push('Above 200 MA'); }
-      
-      // === PENALTIES ===
-      if (b.changePercent < 0) { score -= 3; signals.push('Negative Day'); }
-      if (b.relativeVolume != null && b.relativeVolume < 0.7) { score -= 2; signals.push('Low Volume'); }
-      if (alertTypes.has('macd_bearish_cross') || alertTypes.has('macd_strong_bearish')) { score -= 2; signals.push('Bearish MACD'); }
-      
-      return { stock: b, score, signals };
-    });
-    
-    // Filter and sort for day trading
     const ranked = stockScores
       .filter(s => {
         const validSignals = s.signals.filter(sig => !['Extreme RSI', 'Negative Day', 'Low Volume', 'Bearish MACD'].includes(sig));
-        return s.score >= 8 && s.stock.changePercent > 0 && validSignals.length >= 2;
+        return s.score >= 31 && s.stock.changePercent > 0 && validSignals.length >= 2;
       })
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
@@ -2831,70 +3028,32 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
   }
 
   // Momentum Picks - High-flying stocks with strong momentum regardless of extension
-  // For traders who want to ride momentum trends even if stocks are extended from MAs
+  // Scans the FULL market for: momentum trends, breakout signals, strong price action
   momentumPicks = computed(() => {
-    const breakouts = this.allBreakouts();
+    const stocks = this.deduplicateStocks(this.allScreenerStocks());
+    if (stocks.length === 0) return [];
     
-    // Group by symbol - collect alert types
-    const stockAlertMap = new Map<string, { stock: BreakoutStock; alertTypes: Set<string> }>();
-    const skipSymbols = new Set(['BRK-A']);
+    const market = this.marketService.currentMarket();
+    const MIN_MARKET_CAP = market === 'IN' ? 20_000_000_000 : 100_000_000_000; // IN: 2000 Cr INR, US: $100B
     
-    for (const b of breakouts) {
-      if (skipSymbols.has(b.symbol)) continue;
-      if (!stockAlertMap.has(b.symbol)) {
-        stockAlertMap.set(b.symbol, { stock: b, alertTypes: new Set() });
-      }
-      if (b.alertType) stockAlertMap.get(b.symbol)!.alertTypes.add(b.alertType);
-    }
+    const stockScores = stocks
+      .filter(s => s.marketCap >= MIN_MARKET_CAP && !s.symbol.includes('-'))
+      .map(s => {
+        const { alertTypes } = this.inferAlertTypes(s);
+        const result = this.scoreMomentum({
+          pct50MA: s.percentFromFiftyDayMA, pct200MA: s.percentFromTwoHundredDayMA,
+          pct52High: s.percentFromFiftyTwoWeekHigh, rsi: s.rsi,
+          changePercent: s.changePercent, relVolume: s.relativeVolume,
+          alertTypes
+        });
+        return { stock: s as any, score: result.score, signals: result.signals };
+      });
     
-    // Score each stock ONCE
-    const stockScores = Array.from(stockAlertMap.values()).map(({ stock: b, alertTypes }) => {
-      let score = 0;
-      const signals: string[] = [];
-      
-      // === MOMENTUM STRENGTH ===
-      if (b.percentFromFiftyDayMA != null) {
-        if (b.percentFromFiftyDayMA >= 30) { score += 5; signals.push('Strong Momentum'); }
-        else if (b.percentFromFiftyDayMA >= 15) { score += 3; signals.push('Good Momentum'); }
-        else if (b.percentFromFiftyDayMA >= 5) { score += 1; signals.push('Mild Momentum'); }
-      }
-      
-      if (b.percentFromTwoHundredDayMA != null) {
-        if (b.percentFromTwoHundredDayMA >= 50) { score += 4; signals.push('Major Uptrend'); }
-        else if (b.percentFromTwoHundredDayMA >= 20) { score += 2; signals.push('Uptrend'); }
-      }
-      
-      // === BREAKOUT SIGNALS ===
-      if (b.percentFromFiftyTwoWeekHigh != null && b.percentFromFiftyTwoWeekHigh >= -5) { score += 4; signals.push('52W High Zone'); }
-      if (alertTypes.has('macd_bullish_cross') || alertTypes.has('macd_strong_bullish')) { score += 3; signals.push('MACD Bullish'); }
-      
-      // === TODAY'S ACTION ===
-      if (b.changePercent >= 5) { score += 4; signals.push('Big Move Today'); }
-      else if (b.changePercent >= 2) { score += 2; signals.push('Moving Today'); }
-      
-      if (b.relativeVolume != null && b.relativeVolume >= 1.5) { score += 2; signals.push('High Volume'); }
-      
-      // === RSI ===
-      if (b.rsi != null && b.rsi >= 55 && b.rsi <= 75) { score += 2; signals.push('RSI Momentum'); }
-      
-      // === ANALYST SUPPORT ===
-      const analystRating = (b as any).analystRatingScore;
-      if (analystRating != null && analystRating <= 2.0) { score += 2; signals.push('Analyst Buy'); }
-      
-      // === PENALTIES ===
-      if (b.changePercent < 0) { score -= 3; signals.push('Down Today'); }
-      if (b.rsi != null && b.rsi > 80) { score -= 2; signals.push('Overbought'); }
-      if (b.percentFromFiftyDayMA != null && b.percentFromFiftyDayMA < 0) { score -= 3; signals.push('Below 50 MA'); }
-      
-      return { stock: b, score, signals };
-    });
-    
-    // Filter and sort
     const ranked = stockScores
       .filter(s => {
         const validSignals = s.signals.filter(sig => !['Down Today', 'Overbought', 'Below 50 MA'].includes(sig));
         const above50MA = s.stock.percentFromFiftyDayMA != null && s.stock.percentFromFiftyDayMA > 0;
-        return s.score >= 10 && above50MA && validSignals.length >= 3;
+        return s.score >= 42 && above50MA && validSignals.length >= 3;
       })
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
@@ -2969,9 +3128,9 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
   }
 
   getScoreClass(score: number): string {
-    if (score >= 15) return 'excellent';
-    if (score >= 10) return 'good';
-    if (score >= 5) return 'fair';
+    if (score >= 63) return 'excellent';
+    if (score >= 42) return 'good';
+    if (score >= 21) return 'fair';
     return 'poor';
   }
 
@@ -3004,234 +3163,97 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
   }
 
   calculateStockScore(stock: any): void {
-    // Unified scoring: same logic for ALL stocks, whether in breakouts or not.
-    // For breakouts stocks, we also know their alert types (golden_cross, macd, etc.)
-    // For non-breakouts stocks, we infer what we can from technical data.
-    
-    const breakouts = this.allBreakouts();
-    const stockAlerts = breakouts.filter(b => b.symbol === stock.symbol);
-    const useBreakoutsData = stockAlerts.length > 0;
-    
-    // Get base stock data (prefer breakouts data for accuracy)
-    const baseStock = useBreakoutsData ? stockAlerts[0] : stock;
-    const price = baseStock.price || 0;
-    const changePercent = baseStock.changePercent || 0;
-    const rsi = baseStock.rsi ?? stock.rsi ?? null;
-    
-    // Calculate derived metrics
-    let pct50MA: number | null;
-    let pct200MA: number | null;
-    let pct52High: number | null;
-    let relVolume: number | null;
-    
-    if (useBreakoutsData) {
-      pct50MA = baseStock.percentFromFiftyDayMA ?? null;
-      pct200MA = baseStock.percentFromTwoHundredDayMA ?? null;
-      pct52High = baseStock.percentFromFiftyTwoWeekHigh ?? null;
-      relVolume = baseStock.relativeVolume ?? null;
-    } else {
-      const fiftyDayMA = stock.fiftyDayMA ?? stock.percentFromFiftyDayMA != null ? null : stock.fiftyDayMA;
-      const twoHundredDayMA = stock.twoHundredDayMA ?? null;
-      const fiftyTwoWeekHigh = stock.fiftyTwoWeekHigh ?? null;
-      const volume = stock.volume ?? null;
-      const avgVolume = stock.avgVolume ?? null;
-      
-      pct50MA = stock.percentFromFiftyDayMA ?? (stock.fiftyDayMA && price ? ((price - stock.fiftyDayMA) / stock.fiftyDayMA) * 100 : null);
-      pct200MA = stock.percentFromTwoHundredDayMA ?? (twoHundredDayMA && price ? ((price - twoHundredDayMA) / twoHundredDayMA) * 100 : null);
-      pct52High = stock.percentFromFiftyTwoWeekHigh ?? (fiftyTwoWeekHigh && price ? ((price - fiftyTwoWeekHigh) / fiftyTwoWeekHigh) * 100 : null);
-      relVolume = stock.relativeVolume ?? (avgVolume && volume ? volume / avgVolume : null);
-    }
-    
-    // Get analyst rating
-    const averageAnalystRating = (baseStock as any).averageAnalystRating || stock.averageAnalystRating || null;
-    let analystScore: number | null = (baseStock as any).analystRatingScore ?? null;
-    if (analystScore == null && averageAnalystRating) {
-      const match = averageAnalystRating.match(/^([\d.]+)/);
-      analystScore = match ? parseFloat(match[1]) : null;
-    }
-    
-    // Collect alert types from breakouts data
-    const alertTypes = new Set<string>();
-    const alertCategories = new Set<string>();
-    if (useBreakoutsData) {
-      for (const b of stockAlerts) {
-        if (b.alertType) alertTypes.add(b.alertType);
-        if (b.alertCategory) alertCategories.add(b.alertCategory);
-      }
-    } else {
-      // Infer alert types from technical data for non-breakout stocks
-      const fiftyDayMA = stock.fiftyDayMA ?? null;
-      const twoHundredDayMA = stock.twoHundredDayMA ?? null;
-      if (fiftyDayMA && twoHundredDayMA && fiftyDayMA > twoHundredDayMA) {
-        const maDiff = ((fiftyDayMA - twoHundredDayMA) / twoHundredDayMA) * 100;
-        if (maDiff <= 3 && maDiff > 0) alertTypes.add('golden_cross');
-      }
-      if (fiftyDayMA && twoHundredDayMA && fiftyDayMA < twoHundredDayMA) {
-        const maDiff = ((twoHundredDayMA - fiftyDayMA) / twoHundredDayMA) * 100;
-        if (maDiff <= 3 && maDiff > 0) alertTypes.add('death_cross');
-      }
-      // MACD signal type from search API
-      if (stock.macdSignalType === 'bullish_crossover' || stock.macdSignalType === 'strong_bullish') {
-        alertTypes.add('macd_bullish_cross');
-      } else if (stock.macdSignalType === 'bearish_crossover' || stock.macdSignalType === 'strong_bearish') {
-        alertTypes.add('macd_bearish_cross');
-      }
-    }
+    // SINGLE CODE PATH: prepare data exactly the way the panel computed signals do,
+    // then call the same shared scoring method. No shortcuts, no overrides.
 
-    const breakdown: { label: string; value: string; points: number }[] = [];
-    const signals: string[] = [];
-    let totalScore = 0;
+    // Resolve data source: screener pool (same source the panels use) or search API fallback
+    const screenerStocks = this.deduplicateStocks(this.allScreenerStocks());
+    const screenerMatch = screenerStocks.find(s => s.symbol === stock.symbol);
+    const inScreenerPool = !!screenerMatch;
+    const src = screenerMatch || stock;
 
-    // Helper to add a scoring item
-    const addScore = (label: string, value: string, points: number) => {
-      breakdown.push({ label, value, points });
-      totalScore += points;
-    };
+    // Extract fields EXACTLY like the panel does: raw property access, no || 0 coercion.
+    // Panel does: pct50MA: s.percentFromFiftyDayMA  (undefined is fine, scoreXxx checks != null)
+    //             changePercent: s.changePercent      (could be negative, 0, or undefined)
+    //             relVolume: s.relativeVolume          (could be undefined)
+    const pct50MA = src.percentFromFiftyDayMA ?? ((!screenerMatch && src.fiftyDayMA && src.price) ? ((src.price - src.fiftyDayMA) / src.fiftyDayMA) * 100 : null);
+    const pct200MA = src.percentFromTwoHundredDayMA ?? ((!screenerMatch && src.twoHundredDayMA && src.price) ? ((src.price - src.twoHundredDayMA) / src.twoHundredDayMA) * 100 : null);
+    const pct52High = src.percentFromFiftyTwoWeekHigh ?? ((!screenerMatch && src.fiftyTwoWeekHigh && src.price) ? ((src.price - src.fiftyTwoWeekHigh) / src.fiftyTwoWeekHigh) * 100 : null);
+    const relVolume = src.relativeVolume ?? ((!screenerMatch && src.avgVolume && src.volume) ? src.volume / src.avgVolume : null);
+    const rsi = src.rsi ?? null;
+    const changePercent = src.changePercent ?? 0;
 
-    // Calculate score based on type - SINGLE PASS, same factors for all stocks
+    // Infer alerts from technical data -- same call the panel makes
+    const { alertTypes, alertCategories } = this.inferAlertTypes(src as Stock);
+
+    // Call the SAME shared scoring method as the panel
+    const scoringData = { pct50MA, pct200MA, pct52High, rsi, changePercent, relVolume, alertTypes, alertCategories };
+    let result: { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[] };
+
     if (this.scoreSearchType === 'topPicks') {
-      // Top Picks scoring (medium-term) - EXACT same logic as topPicks computed signal
-      if (pct50MA != null && pct50MA > 0 && pct50MA <= 8) { addScore('Above 50 MA (0-8%)', `+${pct50MA.toFixed(1)}%`, 3); signals.push('Above 50 MA'); }
-      if (pct200MA != null && pct200MA > 0 && pct200MA <= 20) { addScore('Above 200 MA (0-20%)', `+${pct200MA.toFixed(1)}%`, 3); signals.push('Above 200 MA'); }
-      if (alertTypes.has('golden_cross')) { addScore('Golden Cross', '50 MA > 200 MA', 5); signals.push('Golden Cross'); }
-      
-      if (rsi != null && rsi >= 50 && rsi <= 65) { addScore('RSI 50-65 (Strong Momentum)', `${rsi.toFixed(0)}`, 3); signals.push('Strong Momentum'); }
-      else if (rsi != null && rsi >= 40 && rsi < 50) { addScore('RSI 40-50 (Building)', `${rsi.toFixed(0)}`, 1); signals.push('Building Momentum'); }
-      else if (rsi != null && rsi >= 30 && rsi < 40) { addScore('RSI 30-40 (Oversold Bounce)', `${rsi.toFixed(0)}`, 2); signals.push('Oversold Bounce'); }
-      
-      if (alertTypes.has('macd_bullish_cross') || alertTypes.has('macd_strong_bullish')) { addScore('MACD Bullish', 'Crossover', 4); signals.push('MACD Bullish'); }
-      if (pct52High != null && pct52High >= -10) { addScore('Near 52W High (within 10%)', `${pct52High.toFixed(1)}%`, 2); signals.push('Near 52W High'); }
-      
-      if (changePercent > 2 && relVolume != null && relVolume > 1.2) { addScore('Breakout Move (>2% + volume)', `+${changePercent.toFixed(1)}%`, 2); signals.push('Breakout Move'); }
-      else if (changePercent > 0) { addScore('Positive Day', `+${changePercent.toFixed(2)}%`, 1); signals.push('Positive Day'); }
-      
-      if (alertCategories.has('volume_breakout') && changePercent > 0) { addScore('Volume Surge', `${relVolume?.toFixed(1)}x`, 2); signals.push('Volume Surge'); }
-      
-      // Analyst
-      if (analystScore != null) {
-        if (analystScore <= 1.5) { addScore('Strong Buy Rating', `${analystScore.toFixed(1)}`, 3); signals.push('Strong Buy Rating'); }
-        else if (analystScore <= 2.2) { addScore('Buy Rating', `${analystScore.toFixed(1)}`, 2); signals.push('Buy Rating'); }
-        else if (analystScore >= 3.5) { addScore('Weak Rating', `${analystScore.toFixed(1)}`, -2); signals.push('Weak Rating'); }
-      }
-      
-      // Penalties
-      if (rsi != null && rsi > 70) { addScore('Overbought RSI (>70)', `${rsi.toFixed(0)}`, -4); signals.push('Overbought'); }
-      if (alertTypes.has('death_cross')) { addScore('Death Cross', '50 MA < 200 MA', -5); signals.push('Death Cross'); }
-      if (alertTypes.has('macd_bearish_cross') || alertTypes.has('macd_strong_bearish')) { addScore('Bearish MACD', 'Crossover', -3); signals.push('Bearish MACD'); }
-      if (pct50MA != null && pct50MA > 15) { addScore('Too Extended from 50 MA (>15%)', `+${pct50MA.toFixed(1)}%`, -2); signals.push('Too Extended'); }
-      if (pct200MA != null && pct200MA < 0) { addScore('Below 200 MA', `${pct200MA.toFixed(1)}%`, -2); signals.push('Below 200 MA'); }
-      
-      const validSignals = signals.filter(s => !['Overbought', 'Death Cross', 'Bearish MACD', 'Too Extended', 'Below 200 MA', 'Weak Rating'].includes(s));
+      result = this.scoreTopPicks(scoringData);
+    } else if (this.scoreSearchType === 'dayTrade') {
+      result = this.scoreDayTrade(scoringData);
+    } else {
+      result = this.scoreMomentum(scoringData);
+    }
+
+    // For display metrics
+    const price = src.price || 0;
+    const averageAnalystRating = (src as any).averageAnalystRating || stock.averageAnalystRating || null;
+
+    // Determine qualification and build result
+    if (this.scoreSearchType === 'topPicks') {
+      const validSignals = result.signals.filter(s => !['Overbought', 'Death Cross', 'Bearish MACD', 'Too Extended', 'Below 200 MA', 'Weak Rating'].includes(s));
       const above200MA = pct200MA != null && pct200MA > 0;
-      const qualifies = totalScore >= 6 && validSignals.length >= 3 && above200MA;
+      const qualifies = result.score >= 25 && validSignals.length >= 3 && above200MA;
       let reason = '';
       if (!qualifies) {
-        if (totalScore < 6) reason = `Score ${totalScore} < 6 required`;
+        if (result.score < 25) reason = `Score ${result.score}/100 < 25 required`;
         else if (validSignals.length < 3) reason = `Only ${validSignals.length} bullish signals (3 required)`;
         else if (!above200MA) reason = 'Not above 200 MA';
       }
-      
       this.scoreSearchResult = {
-        symbol: stock.symbol, name: baseStock.name || stock.name, score: totalScore, qualifies, inBreakouts: useBreakoutsData, reason, signals,
-        breakdown: breakdown.sort((a, b) => b.points - a.points),
-        metrics: { price, changePercent, rsi, pct50MA, pct200MA, pct52High, relVolume, analystRating: averageAnalystRating, market: baseStock.market || stock.market || 'US' }
+        symbol: stock.symbol, name: src.name || stock.name, score: result.score, qualifies, inBreakouts: inScreenerPool, reason, signals: result.signals,
+        breakdown: result.breakdown.sort((a, b) => b.points - a.points),
+        metrics: { price, changePercent, rsi, pct50MA, pct200MA, pct52High, relVolume, analystRating: averageAnalystRating, market: (src as any).market || stock.market || 'US' }
       };
-      
+
     } else if (this.scoreSearchType === 'dayTrade') {
-      // Day Trade scoring - EXACT same logic as dayTradePicks computed signal
-      if (changePercent >= 5) { addScore('Big Mover (5%+)', `+${changePercent.toFixed(2)}%`, 7); signals.push('Big Mover'); }
-      else if (changePercent >= 3) { addScore('Strong Move (3-5%)', `+${changePercent.toFixed(2)}%`, 5); signals.push('Strong Move'); }
-      else if (changePercent >= 1.5) { addScore('Good Move (1.5-3%)', `+${changePercent.toFixed(2)}%`, 3); signals.push('Good Move'); }
-      else if (changePercent > 0) { addScore('Positive Day', `+${changePercent.toFixed(2)}%`, 1); signals.push('Positive Day'); }
-      
-      if (relVolume != null) {
-        if (relVolume >= 2.5) { addScore('Massive Volume (2.5x+)', `${relVolume.toFixed(2)}x`, 6); signals.push('Massive Volume'); }
-        else if (relVolume >= 1.8) { addScore('High Volume (1.8-2.5x)', `${relVolume.toFixed(2)}x`, 4); signals.push('High Volume'); }
-        else if (relVolume >= 1.3) { addScore('Above Avg Volume (1.3-1.8x)', `${relVolume.toFixed(2)}x`, 2); signals.push('Above Avg Volume'); }
-      }
-      
-      if (pct52High != null) {
-        if (pct52High >= 0) { addScore('New 52W High', 'Breakout', 5); signals.push('New 52W High'); }
-        else if (pct52High >= -3) { addScore('Near 52W High', `${pct52High.toFixed(1)}%`, 3); signals.push('Near 52W High'); }
-      }
-      
-      if (alertTypes.has('macd_bullish_cross') || alertTypes.has('macd_strong_bullish')) { addScore('MACD Bullish', 'Crossover', 3); signals.push('MACD Bullish'); }
-      
-      if (rsi != null) {
-        if (rsi >= 60 && rsi <= 75) { addScore('Strong RSI (60-75)', `${rsi.toFixed(0)}`, 3); signals.push('Strong RSI'); }
-        if (rsi > 80) { addScore('Extreme RSI (>80)', `${rsi.toFixed(0)}`, -2); signals.push('Extreme RSI'); }
-      }
-      
-      if (pct50MA != null && pct50MA > 0) { addScore('Above 50 MA', `+${pct50MA.toFixed(1)}%`, 1); signals.push('Above 50 MA'); }
-      if (pct200MA != null && pct200MA > 0) { addScore('Above 200 MA', `+${pct200MA.toFixed(1)}%`, 1); signals.push('Above 200 MA'); }
-      
-      if (changePercent < 0) { addScore('Negative Day', `${changePercent.toFixed(2)}%`, -3); signals.push('Negative Day'); }
-      if (relVolume != null && relVolume < 0.7) { addScore('Low Volume (<0.7x)', `${relVolume.toFixed(2)}x`, -2); signals.push('Low Volume'); }
-      if (alertTypes.has('macd_bearish_cross') || alertTypes.has('macd_strong_bearish')) { addScore('Bearish MACD', 'Crossover', -2); signals.push('Bearish MACD'); }
-      
-      const validSignals = signals.filter(s => !['Negative Day', 'Low Volume', 'Bearish MACD', 'Extreme RSI'].includes(s));
-      const qualifies = totalScore >= 8 && changePercent > 0 && validSignals.length >= 2;
+      const validSignals = result.signals.filter(s => !['Negative Day', 'Low Volume', 'Bearish MACD', 'Extreme RSI'].includes(s));
+      const qualifies = result.score >= 31 && changePercent > 0 && validSignals.length >= 2;
       let reason = '';
       if (!qualifies) {
-        if (totalScore < 8) reason = `Score ${totalScore} < 8 required`;
+        if (result.score < 31) reason = `Score ${result.score}/100 < 31 required`;
         else if (changePercent <= 0) reason = 'Not a positive day';
         else if (validSignals.length < 2) reason = `Only ${validSignals.length} momentum signals (2 required)`;
       }
-      
       this.scoreSearchResult = {
-        symbol: stock.symbol, name: baseStock.name || stock.name, score: totalScore, qualifies, inBreakouts: useBreakoutsData, reason, signals,
-        breakdown: breakdown.sort((a, b) => b.points - a.points),
-        metrics: { price, changePercent, rsi, pct50MA, pct200MA, pct52High, relVolume, analystRating: averageAnalystRating, market: baseStock.market || stock.market || 'US' }
+        symbol: stock.symbol, name: src.name || stock.name, score: result.score, qualifies, inBreakouts: inScreenerPool, reason, signals: result.signals,
+        breakdown: result.breakdown.sort((a, b) => b.points - a.points),
+        metrics: { price, changePercent, rsi, pct50MA, pct200MA, pct52High, relVolume, analystRating: averageAnalystRating, market: (src as any).market || stock.market || 'US' }
       };
-      
+
     } else if (this.scoreSearchType === 'momentum') {
-      // Momentum scoring - EXACT same logic as momentumPicks computed signal
-      if (pct50MA != null) {
-        if (pct50MA >= 30) { addScore('Strong Momentum (30%+ from 50 MA)', `+${pct50MA.toFixed(1)}%`, 5); signals.push('Strong Momentum'); }
-        else if (pct50MA >= 15) { addScore('Good Momentum (15-30% from 50 MA)', `+${pct50MA.toFixed(1)}%`, 3); signals.push('Good Momentum'); }
-        else if (pct50MA >= 5) { addScore('Above 50 MA (5-15%)', `+${pct50MA.toFixed(1)}%`, 1); signals.push('Mild Momentum'); }
-      }
-      if (pct200MA != null) {
-        if (pct200MA >= 50) { addScore('Major Uptrend (50%+ from 200 MA)', `+${pct200MA.toFixed(1)}%`, 4); signals.push('Major Uptrend'); }
-        else if (pct200MA >= 20) { addScore('Uptrend (20-50% from 200 MA)', `+${pct200MA.toFixed(1)}%`, 2); signals.push('Uptrend'); }
-      }
-      
-      if (pct52High != null && pct52High >= -5) { addScore('Near 52W High (within 5%)', `${pct52High.toFixed(1)}%`, 4); signals.push('52W High Zone'); }
-      if (alertTypes.has('macd_bullish_cross') || alertTypes.has('macd_strong_bullish')) { addScore('MACD Bullish', 'Crossover', 3); signals.push('MACD Bullish'); }
-      
-      if (changePercent >= 5) { addScore('Big Move Today (5%+)', `+${changePercent.toFixed(2)}%`, 4); signals.push('Big Move Today'); }
-      else if (changePercent >= 2) { addScore('Moving Today (2-5%)', `+${changePercent.toFixed(2)}%`, 2); signals.push('Moving Today'); }
-      
-      if (relVolume != null && relVolume >= 1.5) { addScore('High Volume (1.5x+)', `${relVolume.toFixed(2)}x`, 2); signals.push('High Volume'); }
-      if (rsi != null && rsi >= 55 && rsi <= 75) { addScore('RSI Momentum Zone (55-75)', `${rsi.toFixed(0)}`, 2); signals.push('RSI Momentum'); }
-      if (analystScore != null && analystScore <= 2.0) { addScore('Analyst Buy Rating', `${analystScore.toFixed(1)}`, 2); signals.push('Analyst Buy'); }
-      
-      // Penalties
-      if (changePercent < 0) { addScore('Down Today', `${changePercent.toFixed(2)}%`, -3); signals.push('Down Today'); }
-      if (rsi != null && rsi > 80) { addScore('Overbought RSI (>80)', `${rsi.toFixed(0)}`, -2); signals.push('Overbought'); }
-      if (pct50MA != null && pct50MA < 0) { addScore('Below 50 MA', `${pct50MA.toFixed(1)}%`, -3); signals.push('Below 50 MA'); }
-      
-      const validSignals = signals.filter(s => !['Down Today', 'Overbought', 'Below 50 MA'].includes(s));
+      const validSignals = result.signals.filter(s => !['Down Today', 'Overbought', 'Below 50 MA'].includes(s));
       const above50MA = pct50MA != null && pct50MA > 0;
-      const qualifies = totalScore >= 10 && above50MA && validSignals.length >= 3;
+      const qualifies = result.score >= 42 && above50MA && validSignals.length >= 3;
       let reason = '';
       if (!qualifies) {
-        if (totalScore < 10) reason = `Score ${totalScore} < 10 required`;
+        if (result.score < 42) reason = `Score ${result.score}/100 < 42 required`;
         else if (!above50MA) reason = 'Not above 50 MA';
         else if (validSignals.length < 3) reason = `Only ${validSignals.length} momentum signals (3 required)`;
       }
-      
       this.scoreSearchResult = {
-        symbol: stock.symbol, name: baseStock.name || stock.name, score: totalScore, qualifies, inBreakouts: useBreakoutsData, reason, signals,
-        breakdown: breakdown.sort((a, b) => b.points - a.points),
-        metrics: { price, changePercent, rsi, pct50MA, pct200MA, pct52High, relVolume, analystRating: averageAnalystRating, market: baseStock.market || stock.market || 'US' }
+        symbol: stock.symbol, name: src.name || stock.name, score: result.score, qualifies, inBreakouts: inScreenerPool, reason, signals: result.signals,
+        breakdown: result.breakdown.sort((a, b) => b.points - a.points),
+        metrics: { price, changePercent, rsi, pct50MA, pct200MA, pct52High, relVolume, analystRating: averageAnalystRating, market: (src as any).market || stock.market || 'US' }
       };
     }
 
     this.scoreSearchLoading = false;
   }
 
-  private refreshInterval: ReturnType<typeof setInterval> | null = null;
   private previousMarket: Market | null = null;
 
   constructor() {
@@ -3240,6 +3262,7 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
       const market = this.marketService.currentMarket();
       if (this.previousMarket !== null && this.previousMarket !== market) {
         this.loadBreakouts();
+        this.loadScreenerStocks();
       }
       this.previousMarket = market;
     });
@@ -3247,17 +3270,7 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.loadBreakouts();
-    
-    // Auto-refresh every 5 minutes
-    this.refreshInterval = setInterval(() => {
-      this.loadBreakouts();
-    }, 5 * 60 * 1000);
-  }
-
-  ngOnDestroy(): void {
-    if (this.refreshInterval) {
-      clearInterval(this.refreshInterval);
-    }
+    this.loadScreenerStocks();
   }
 
   async loadBreakouts(): Promise<void> {
@@ -3280,9 +3293,32 @@ export class BreakoutsComponent implements OnInit, OnDestroy {
     }
   }
 
+  async loadScreenerStocks(): Promise<void> {
+    this.screenerLoading.set(true);
+    try {
+      const market = this.marketService.currentMarket();
+      const filters = getDefaultFilters(market);
+      const requestBody = {
+        filters,
+        sort: { field: 'marketCap', direction: 'desc' },
+        pagination: { page: 0, pageSize: 10000 }
+      };
+      const result = await this.http.post<ScreenResult>('/api/stocks/screen', requestBody).toPromise();
+      if (result?.stocks) {
+        this.allScreenerStocks.set(result.stocks);
+        console.log(`Loaded ${result.stocks.length} screener stocks for pick panels`);
+      }
+    } catch (err) {
+      console.error('Failed to fetch screener stocks:', err);
+    } finally {
+      this.screenerLoading.set(false);
+    }
+  }
+
   refreshData(): void {
     if (!this.loading()) {
       this.loadBreakouts();
+      this.loadScreenerStocks();
     }
   }
 

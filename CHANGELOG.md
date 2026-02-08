@@ -7,14 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Pick panels (Top Picks, Day Trade Picks, Momentum Picks) now scan the full market (~1,800+ stocks from the screener API) instead of only breakout-alerted stocks (~130), identifying the best setups from the entire market
+- Breakout alerts table remains unchanged, still showing recent technical crossover events for awareness
+- Score search popup now uses screener data as preferred data source (screener > breakout > search API) for the most accurate scoring
+- Info banners in score search popup updated to reflect screener pool status instead of breakout pool
+- Loading states added to all three pick panels showing "Scanning full market..." while screener data loads
+
 ### Added
+- Full market screener data integration in breakouts page: `loadScreenerStocks()` fetches all stocks with default filters on page load, market change, and auto-refresh
+- `inferAlertTypes()` helper method on breakouts component to derive alert signals (golden cross, death cross, MACD, volume breakout) from raw technical data for any stock
 - Supplementary "Strong Technicals" alert type in breakouts API: stocks with strong technical setups (4+ of 8 criteria) are now included in the breakout pool even without a specific crossover event, ensuring technically strong stocks are visible to the pick panels
-- Informational banners in score search popup explaining whether a stock is in today's breakout alerts or scored from general technicals only
+- Informational banners in score search popup explaining whether a stock is in the screener pool or outside the current market scan
 - SNDK (Sandisk) added to the US stock scan list in the mock server
+- Robinhood trade icon and stock detail icon on every stock card across all pick panels and alert category panels; Robinhood icon (using the official feather logo) opens the stock on Robinhood in a new tab (US market stocks only), chart-line icon opens the stock detail page in a new tab
+- Removed card-level click handler and hover effects from all stock cards; navigation is now explicit through the two action icons per card
+- Custom stock-detail SVG icon (indigo-to-cyan gradient with upward chart line) used for the stock detail action button, the header brand logo, and the browser favicon
 
 ### Fixed
 - Unified scoring logic across all three panels (Top Picks, Day Trade Picks, Momentum Picks) and the search popup to evaluate each stock exactly once per factor, eliminating inflated scores caused by per-alert accumulation
 - Stocks are now scored identically whether found in breakouts data or searched via the API, ensuring consistent and comparable scores across all views
+- Eliminated score discrepancy between panel and popup by making the popup follow the exact same data path as the panel: (1) removed breakout-alert enrichment that gave the popup different alert types than the panel, (2) fixed `changePercent || 0` coercion that converted negative values to 0 (now uses `?? 0`), (3) fixed RSI merging from two data sources (now uses single source), (4) popup now runs `deduplicateStocks()` before lookup so it resolves the same Stock object the panel uses
+- CSS component style budget increased from 16kB to 32kB to accommodate growing breakouts component styles
 
 ### Changed
 - Expanded pick panels from top 10 to top 15 stocks for all three panels (Top Picks, Day Trade Picks, Momentum Picks), surfacing more qualifying recommendations

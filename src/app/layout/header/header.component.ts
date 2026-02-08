@@ -33,7 +33,7 @@ interface MarketIndex {
         <div class="header-left">
           <!-- Logo - Clickable to go home -->
           <div class="header-brand" (click)="goHome()" [pTooltip]="'Go to Screener'" tooltipPosition="bottom">
-            <i class="pi pi-chart-bar brand-icon"></i>
+            <img src="stock-detail.svg" alt="StockScreen" class="brand-icon-img" />
             <span class="brand-name">StockScreen</span>
           </div>
 
@@ -181,10 +181,10 @@ interface MarketIndex {
     .header-brand {
       display: flex;
       align-items: center;
-      gap: 0.4rem;
+      gap: 0.5rem;
       cursor: pointer;
-      padding: 0.2rem 0.4rem;
-      border-radius: 6px;
+      padding: 0.25rem 0.5rem;
+      border-radius: 8px;
       transition: background 0.2s;
 
       &:hover {
@@ -195,6 +195,15 @@ interface MarketIndex {
     .brand-icon {
       font-size: 1.1rem;
       color: var(--primary-color);
+    }
+
+    .brand-icon-img {
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
+      object-fit: cover;
+      display: block;
+      flex-shrink: 0;
     }
 
     .brand-name {

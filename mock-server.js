@@ -791,40 +791,58 @@ async function fetchRSSWithTimeout(options, sourceName, timeoutMs = 5000) {
       resolve([]);
     }, timeoutMs);
     
-    try {
-      const response = await httpsRequest({
-        ...options,
-        port: 443,
-        method: 'GET',
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-          ...options.headers
+    const doFetch = async (fetchOptions, redirectsLeft) => {
+      try {
+        const response = await httpsRequest({
+          ...fetchOptions,
+          port: 443,
+          method: 'GET',
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+            ...fetchOptions.headers
+          }
+        });
+        
+        // Follow redirects (301, 302, 307, 308)
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers && response.headers.location) {
+          if (redirectsLeft <= 0) {
+            clearTimeout(timeout);
+            console.log(`[News] ${sourceName} RSS too many redirects`);
+            resolve([]);
+            return;
+          }
+          const redirectUrl = new URL(response.headers.location, `https://${fetchOptions.hostname}${fetchOptions.path}`);
+          console.log(`[News] ${sourceName} RSS redirecting to ${redirectUrl.hostname}${redirectUrl.pathname}`);
+          await doFetch({ hostname: redirectUrl.hostname, path: redirectUrl.pathname + redirectUrl.search }, redirectsLeft - 1);
+          return;
         }
-      });
-      
-      clearTimeout(timeout);
-      
-      if (response.statusCode !== 200) {
-        console.log(`[News] ${sourceName} RSS returned status ${response.statusCode}`);
+        
+        if (response.statusCode !== 200) {
+          clearTimeout(timeout);
+          console.log(`[News] ${sourceName} RSS returned status ${response.statusCode}`);
+          resolve([]);
+          return;
+        }
+        
+        clearTimeout(timeout);
+        const items = parseRSSXML(response.body);
+        items.forEach(item => {
+          if (!item.source) {
+            item.source = sourceName;
+          }
+        });
+        
+        console.log(`[News] ${sourceName} returned ${items.length} items`);
+        resolve(items);
+      } catch (error) {
+        clearTimeout(timeout);
+        console.log(`[News] ${sourceName} RSS error:`, error.message);
         resolve([]);
-        return;
       }
-      
-      const items = parseRSSXML(response.body);
-      items.forEach(item => {
-        if (!item.source) {
-          item.source = sourceName;
-        }
-      });
-      
-      console.log(`[News] ${sourceName} returned ${items.length} items`);
-      resolve(items);
-    } catch (error) {
-      clearTimeout(timeout);
-      console.log(`[News] ${sourceName} RSS error:`, error.message);
-      resolve([]);
-    }
+    };
+    
+    await doFetch(options, 3);
   });
 }
 
@@ -833,8 +851,8 @@ async function fetchRSSWithTimeout(options, sourceName, timeoutMs = 5000) {
  */
 async function tryYahooFinanceRSS(symbol) {
   return fetchRSSWithTimeout({
-    hostname: 'finance.yahoo.com',
-    path: `/rss/headline?s=${encodeURIComponent(symbol)}`
+    hostname: 'feeds.finance.yahoo.com',
+    path: `/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=US&lang=en-US`
   }, 'Yahoo Finance');
 }
 

@@ -213,27 +213,44 @@ function getTimeAgo(dateStr: string): string {
 /**
  * Fetch RSS feed via HTTPS
  */
-function fetchRSS(url: string, timeout: number = 8000): Promise<string> {
+function fetchRSS(url: string, timeout: number = 8000, maxRedirects: number = 3): Promise<string> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
       reject(new Error('Request timeout'));
     }, timeout);
 
-    https.get(url, (res) => {
-      let data = '';
+    const doRequest = (requestUrl: string, redirectsLeft: number) => {
+      https.get(requestUrl, (res) => {
+        // Follow redirects (301, 302, 307, 308)
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          if (redirectsLeft <= 0) {
+            clearTimeout(timer);
+            reject(new Error('Too many redirects'));
+            return;
+          }
+          const redirectUrl = res.headers.location.startsWith('http')
+            ? res.headers.location
+            : new URL(res.headers.location, requestUrl).toString();
+          res.resume(); // Consume response to free memory
+          doRequest(redirectUrl, redirectsLeft - 1);
+          return;
+        }
 
-      res.on('data', (chunk) => {
-        data += chunk;
-      });
-
-      res.on('end', () => {
+        let data = '';
+        res.on('data', (chunk) => {
+          data += chunk;
+        });
+        res.on('end', () => {
+          clearTimeout(timer);
+          resolve(data);
+        });
+      }).on('error', (err) => {
         clearTimeout(timer);
-        resolve(data);
+        reject(err);
       });
-    }).on('error', (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
+    };
+
+    doRequest(url, maxRedirects);
   });
 }
 
@@ -280,8 +297,8 @@ async function fetchStockNews(stock: { symbol: string; name: string }): Promise<
   const allNews: NewsItem[] = [];
   
   try {
-    // Use Yahoo Finance RSS for now (most reliable)
-    const url = `https://finance.yahoo.com/rss/headline?s=${stock.symbol}`;
+    // Use Yahoo Finance RSS feeds endpoint (finance.yahoo.com/rss/headline redirects with 301)
+    const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${stock.symbol}&region=US&lang=en-US`;
     const xml = await fetchRSS(url, 5000);
     const news = parseRSS(xml, 'Yahoo Finance', stock.symbol, stock.name, false);
     allNews.push(...news);

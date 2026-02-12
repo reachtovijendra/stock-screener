@@ -833,8 +833,8 @@ async function fetchRSSWithTimeout(options, sourceName, timeoutMs = 5000) {
  */
 async function tryYahooFinanceRSS(symbol) {
   return fetchRSSWithTimeout({
-    hostname: 'feeds.finance.yahoo.com',
-    path: `/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=US&lang=en-US`
+    hostname: 'finance.yahoo.com',
+    path: `/rss/headline?s=${encodeURIComponent(symbol)}`
   }, 'Yahoo Finance');
 }
 
@@ -2052,6 +2052,7 @@ const server = http.createServer(async (req, res) => {
       
       // US General market news RSS feeds
       const US_MARKET_NEWS_FEEDS = [
+        { url: 'https://finance.yahoo.com/news/rssindex', source: 'Yahoo Finance', symbol: 'MARKET' },
         { url: 'https://news.google.com/rss/search?q=stock+market+today&hl=en-US&gl=US&ceid=US:en', source: 'Market News', symbol: 'MARKET' },
         { url: 'https://news.google.com/rss/search?q=fed+interest+rates+economy&hl=en-US&gl=US&ceid=US:en', source: 'Economic News', symbol: 'ECONOMY' },
         { url: 'https://news.google.com/rss/search?q=S%26P+500+dow+jones+nasdaq&hl=en-US&gl=US&ceid=US:en', source: 'Market Indices', symbol: 'INDICES' }
@@ -2112,12 +2113,13 @@ const server = http.createServer(async (req, res) => {
           try {
             const items = await tryYahooFinanceRSS(symbol);
             // Add symbol to each news item and check if it's market news
+            // Only override to 'market' if the article has no specific category (general)
             return items.map(item => {
               const itemIsMarket = isMarketNews(item.title, item.description || '');
               return {
                 ...item,
                 symbol,
-                type: itemIsMarket ? 'market' : item.type,
+                type: (itemIsMarket && (!item.type || item.type === 'general')) ? 'market' : item.type,
                 timeAgo: getRelativeTime(item.pubDate)
               };
             });

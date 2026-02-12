@@ -110,8 +110,69 @@ function getMarketNewsFeeds(market: string): { url: string; source: string; symb
 function classifyArticleType(title: string, description: string, isMarketNews: boolean = false): string {
   const text = `${title} ${description}`.toLowerCase();
   
-  // Market-wide news (Fed/RBI, economy, indices - US and India)
-  if (isMarketNews || text.includes('fed ') || text.includes('federal reserve') || text.includes('interest rate') ||
+  // If from an explicit market feed, force market type
+  if (isMarketNews) {
+    return 'market';
+  }
+  
+  // Check specific categories FIRST (before broad market keywords)
+  // This prevents articles like "Apple earnings beat amid rally" from being swallowed into "market"
+  
+  // Price Target
+  if (text.includes('price target') || text.includes('pt ') || text.includes('target price') || 
+      text.includes('sets target') || text.includes('raises target') || text.includes('lowers target') ||
+      text.includes('maintains target') || text.includes('boosts target') || text.includes('cuts target') ||
+      text.includes('target raised') || text.includes('target lowered') || text.includes('target cut') ||
+      text.includes('new target') || text.includes('price objective')) {
+    return 'price_target';
+  }
+  
+  // Rating/Upgrade/Downgrade
+  if (text.includes('upgrade') || text.includes('downgrade') || text.includes('rating') || 
+      text.includes('analyst') || text.includes('outperform') || text.includes('underperform') ||
+      text.includes('buy rating') || text.includes('sell rating') || text.includes('hold rating') ||
+      text.includes('overweight') || text.includes('underweight') || text.includes('neutral rating') ||
+      text.includes('equal-weight') || text.includes('market perform') || text.includes('sector perform') ||
+      text.includes('initiated') || text.includes('reiterate') ||
+      text.includes('maintains buy') || text.includes('maintains sell') ||
+      text.includes('raises to buy') || text.includes('cuts to sell')) {
+    return 'upgrade_downgrade';
+  }
+  
+  // Earnings
+  if (text.includes('earnings') || text.includes(' eps') || text.includes('revenue') || 
+      text.includes('quarterly') || text.includes('q1 ') || text.includes('q2 ') || 
+      text.includes('q3 ') || text.includes('q4 ') || text.includes('beat') || 
+      text.includes('miss') || text.includes('guidance') || text.includes('forecast') ||
+      text.includes('profit') || text.includes('loss') || text.includes('outlook') ||
+      text.includes('fiscal year') || text.includes('annual report') || text.includes('quarterly report') ||
+      text.includes('earnings call')) {
+    return 'earnings';
+  }
+  
+  // Insider Trading
+  if (text.includes('insider') || text.includes('ceo buy') || text.includes('cfo buy') ||
+      text.includes('director buy') || text.includes('sells shares') || text.includes('buys shares') ||
+      text.includes('stock purchase') || text.includes('form 4') || text.includes('sec filing') ||
+      text.includes('bought shares') || text.includes('sold shares') || text.includes('insider buying') ||
+      text.includes('insider selling') || text.includes('ceo buys') || text.includes('ceo sells') ||
+      text.includes('director buys') || text.includes('director sells') ||
+      text.includes('executive') || text.includes('stock sale')) {
+    return 'insider';
+  }
+  
+  // Dividend
+  if (text.includes('dividend') || text.includes('payout') || text.includes('yield') ||
+      text.includes('distribution') || text.includes('ex-div') || text.includes('ex-dividend') ||
+      text.includes('dividend increase') || text.includes('dividend cut') ||
+      text.includes('special dividend') || text.includes('dividend declared') ||
+      text.includes('quarterly dividend')) {
+    return 'dividend';
+  }
+  
+  // Market-wide news checked LAST (Fed/RBI, economy, indices - US and India)
+  // Only classify as market if no specific category matched above
+  if (text.includes('fed ') || text.includes('federal reserve') || text.includes('interest rate') ||
       text.includes('inflation') || text.includes('gdp') || text.includes('jobs report') ||
       text.includes('unemployment') || text.includes('recession') || text.includes('economy') ||
       text.includes('s&p 500') || text.includes('dow jones') || text.includes('nasdaq') ||
@@ -123,41 +184,6 @@ function classifyArticleType(title: string, description: string, isMarketNews: b
       text.includes('rbi') || text.includes('reserve bank') || text.includes('dalal street') ||
       text.includes('sebi') || text.includes('fii') || text.includes('dii') || text.includes('rupee')) {
     return 'market';
-  }
-  
-  // Price Target
-  if (text.includes('price target') || text.includes('pt ') || text.includes('target price') || 
-      text.includes('sets target') || text.includes('raises target') || text.includes('lowers target')) {
-    return 'price_target';
-  }
-  
-  // Rating/Upgrade/Downgrade
-  if (text.includes('upgrade') || text.includes('downgrade') || text.includes('rating') || 
-      text.includes('analyst') || text.includes('outperform') || text.includes('underperform') ||
-      text.includes('buy rating') || text.includes('sell rating') || text.includes('hold rating') ||
-      text.includes('overweight') || text.includes('underweight') || text.includes('neutral rating')) {
-    return 'upgrade_downgrade';
-  }
-  
-  // Earnings
-  if (text.includes('earnings') || text.includes(' eps') || text.includes('revenue') || 
-      text.includes('quarterly') || text.includes('q1 ') || text.includes('q2 ') || 
-      text.includes('q3 ') || text.includes('q4 ') || text.includes('beat') || 
-      text.includes('miss') || text.includes('guidance') || text.includes('forecast')) {
-    return 'earnings';
-  }
-  
-  // Insider Trading
-  if (text.includes('insider') || text.includes('ceo buy') || text.includes('cfo buy') ||
-      text.includes('director buy') || text.includes('sells shares') || text.includes('buys shares') ||
-      text.includes('stock purchase') || text.includes('form 4') || text.includes('sec filing')) {
-    return 'insider';
-  }
-  
-  // Dividend
-  if (text.includes('dividend') || text.includes('payout') || text.includes('yield') ||
-      text.includes('distribution') || text.includes('ex-div')) {
-    return 'dividend';
   }
   
   return 'general';

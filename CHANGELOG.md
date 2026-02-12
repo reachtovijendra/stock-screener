@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Fixed stock detail page returning "Stock not found" for every stock on Vercel by rewriting `api/stocks/search.ts` to fetch full stock quotes (price, fundamentals, volume) via `getQuote()` instead of returning only basic symbol/name from the search API; added `technicals=true` parameter support with RSI and MACD calculation from historical prices; response format now returns `{ stocks: [...] }` matching the mock server contract expected by the Angular frontend
+- Fixed news article count mismatch between local (mock-server) and Vercel deployments by aligning RSS feed sources: added the missing Yahoo Finance `rssindex` general market feed to the mock server's US feeds, and aligned the stock-specific RSS endpoint URL (`finance.yahoo.com/rss/headline`) to match Vercel
+- Fixed low counts for non-market news categories (Price Target, Rating, Earnings, Insider, Dividend) caused by broad market keywords (e.g., `economy`, `rally`, `yield`) being checked first in the Vercel `classifyArticleType()` function, which absorbed most articles into the `market` bucket before specific categories could match
+- Restructured article classification in both `api/market/news.ts` and `mock-server.js` to check specific categories (price_target, upgrade_downgrade, earnings, insider, dividend) before broad market keywords, ensuring articles like "Apple earnings beat amid market rally" are correctly classified as `earnings` instead of `market`
+- Fixed mock server's stock news `isMarketNews` override to only reclassify articles with `general` type to `market`, preserving articles that already have a specific category from the initial keyword classification
+- Expanded keyword lists in Vercel `classifyArticleType()` to match the mock server's comprehensive `ARTICLE_TYPE_KEYWORDS`, adding terms such as `price objective`, `equal-weight`, `sector perform`, `initiated`, `reiterate`, `profit`, `loss`, `outlook`, `fiscal year`, `earnings call`, `bought shares`, `insider buying`, `executive`, `stock sale`, `ex-dividend`, `dividend declared`, and others
+
 ### Changed
 - Pick panels (Top Picks, Day Trade Picks, Momentum Picks) now scan the full market (~1,800+ stocks from the screener API) instead of only breakout-alerted stocks (~130), identifying the best setups from the entire market
 - Breakout alerts table remains unchanged, still showing recent technical crossover events for awareness

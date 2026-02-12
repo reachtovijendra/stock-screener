@@ -291,19 +291,33 @@ function parseRSS(xml: string, source: string, symbol: string, stockName: string
 }
 
 /**
- * Fetch news for a single stock
+ * Fetch news for a single stock using multiple sources with fallback
  */
 async function fetchStockNews(stock: { symbol: string; name: string }): Promise<NewsItem[]> {
   const allNews: NewsItem[] = [];
   
+  // Try Yahoo Finance RSS first
   try {
-    // Use Yahoo Finance RSS feeds endpoint (finance.yahoo.com/rss/headline redirects with 301)
-    const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${stock.symbol}&region=US&lang=en-US`;
-    const xml = await fetchRSS(url, 5000);
+    const yahooUrl = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${stock.symbol}&region=US&lang=en-US`;
+    const xml = await fetchRSS(yahooUrl, 5000);
     const news = parseRSS(xml, 'Yahoo Finance', stock.symbol, stock.name, false);
+    if (news.length > 0) {
+      allNews.push(...news);
+      return allNews;
+    }
+  } catch (error: any) {
+    console.log(`[News] Yahoo RSS failed for ${stock.symbol}: ${error.message}`);
+  }
+  
+  // Fallback: Google News search for stock-specific news
+  try {
+    const searchQuery = encodeURIComponent(`${stock.symbol} stock`);
+    const googleUrl = `https://news.google.com/rss/search?q=${searchQuery}&hl=en-US&gl=US&ceid=US:en`;
+    const xml = await fetchRSS(googleUrl, 5000);
+    const news = parseRSS(xml, 'Google News', stock.symbol, stock.name, false);
     allNews.push(...news);
-  } catch (error) {
-    // Silently fail for individual stocks
+  } catch (error: any) {
+    console.log(`[News] Google News RSS also failed for ${stock.symbol}: ${error.message}`);
   }
   
   return allNews;
@@ -362,11 +376,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     // Collect all news items
     let allNews: NewsItem[] = [...marketNews];
+    let stockNewsCount = 0;
     stockNewsResults.forEach((result) => {
       if (result.status === 'fulfilled' && result.value) {
+        stockNewsCount += result.value.length;
         allNews.push(...result.value);
       }
     });
+
+    console.log(`[News] Collected ${marketNews.length} market + ${stockNewsCount} stock-specific = ${allNews.length} total articles`);
 
     // Filter out articles older than 7 days
     const sevenDaysAgo = new Date();
@@ -407,6 +425,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         categories[item.type]++;
       }
     });
+
+    console.log(`[News] Categories:`, JSON.stringify(categories));
 
     // Build limited news ensuring all categories are represented
     // First, reserve slots for non-market categories (up to 10 each) to ensure visibility

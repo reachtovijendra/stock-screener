@@ -374,7 +374,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return dateB.getTime() - dateA.getTime();
     });
 
-    // Calculate category counts
+    // Calculate category counts from ALL articles (before limiting)
     const categories: Record<string, number> = {
       market: 0,
       price_target: 0,
@@ -391,8 +391,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     });
 
-    // Limit to 150 articles
-    const limitedNews = uniqueNews.slice(0, 150);
+    // Build limited news ensuring all categories are represented
+    // First, reserve slots for non-market categories (up to 10 each) to ensure visibility
+    const MAX_ARTICLES = 150;
+    const RESERVE_PER_CATEGORY = 10;
+    const nonMarketCategories = ['price_target', 'upgrade_downgrade', 'earnings', 'insider', 'dividend', 'general'];
+    
+    const reserved: NewsItem[] = [];
+    const reservedLinks = new Set<string>();
+    
+    for (const cat of nonMarketCategories) {
+      const catArticles = uniqueNews
+        .filter(item => item.type === cat)
+        .slice(0, RESERVE_PER_CATEGORY);
+      for (const article of catArticles) {
+        if (!reservedLinks.has(article.link)) {
+          reserved.push(article);
+          reservedLinks.add(article.link);
+        }
+      }
+    }
+    
+    // Fill remaining slots with newest articles (by date, which is the current sort order)
+    const remaining = uniqueNews.filter(item => !reservedLinks.has(item.link));
+    const fillCount = Math.max(0, MAX_ARTICLES - reserved.length);
+    const filler = remaining.slice(0, fillCount);
+    
+    // Merge and re-sort by date (newest first)
+    const limitedNews = [...reserved, ...filler].sort((a, b) => {
+      const dateA = new Date(a.pubDate);
+      const dateB = new Date(b.pubDate);
+      return dateB.getTime() - dateA.getTime();
+    });
 
     return res.status(200).json({ 
       news: limitedNews,

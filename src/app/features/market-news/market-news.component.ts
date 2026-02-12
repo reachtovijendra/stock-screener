@@ -664,10 +664,13 @@ export class MarketNewsComponent implements OnInit, OnDestroy {
         this.allNews.set(result.news);
         this.lastUpdated.set(new Date());
         
-        // Compute category counts from actual news items (not API totals, which may differ due to deduplication/limits)
-        const countsByCategory: Record<string, number> = {};
-        for (const item of result.news) {
-          countsByCategory[item.type] = (countsByCategory[item.type] || 0) + 1;
+        // Use API's category counts (computed from all articles before the 150 limit)
+        // Fall back to recounting from returned articles if API categories are missing
+        const countsByCategory: Record<string, number> = result.categories || {};
+        if (!result.categories || Object.keys(result.categories).length === 0) {
+          for (const item of result.news) {
+            countsByCategory[item.type] = (countsByCategory[item.type] || 0) + 1;
+          }
         }
         const updatedCategories = this.categories().map(cat => ({
           ...cat,

@@ -2161,7 +2161,7 @@ const server = http.createServer(async (req, res) => {
           return dateB.getTime() - dateA.getTime();
         });
         
-        // Calculate category counts
+        // Calculate category counts from ALL articles (before limiting)
         const categories = {
           market: 0,
           price_target: 0,
@@ -2178,8 +2178,38 @@ const server = http.createServer(async (req, res) => {
           }
         });
         
-        // Limit to 150 articles
-        const limitedNews = allNews.slice(0, 150);
+        // Build limited news ensuring all categories are represented
+        // Reserve slots for non-market categories (up to 10 each) to ensure visibility
+        const MAX_ARTICLES = 150;
+        const RESERVE_PER_CATEGORY = 10;
+        const nonMarketCategories = ['price_target', 'upgrade_downgrade', 'earnings', 'insider', 'dividend', 'general'];
+        
+        const reserved = [];
+        const reservedLinks = new Set();
+        
+        for (const cat of nonMarketCategories) {
+          const catArticles = allNews
+            .filter(item => item.type === cat)
+            .slice(0, RESERVE_PER_CATEGORY);
+          for (const article of catArticles) {
+            if (!reservedLinks.has(article.link)) {
+              reserved.push(article);
+              reservedLinks.add(article.link);
+            }
+          }
+        }
+        
+        // Fill remaining slots with newest articles (by date, which is the current sort order)
+        const remaining = allNews.filter(item => !reservedLinks.has(item.link));
+        const fillCount = Math.max(0, MAX_ARTICLES - reserved.length);
+        const filler = remaining.slice(0, fillCount);
+        
+        // Merge and re-sort by date (newest first)
+        const limitedNews = [...reserved, ...filler].sort((a, b) => {
+          const dateA = new Date(a.pubDate || 0);
+          const dateB = new Date(b.pubDate || 0);
+          return dateB.getTime() - dateA.getTime();
+        });
         
         console.log(`[Market News] Total: ${limitedNews.length} articles (${categories.market} market news)`);
         

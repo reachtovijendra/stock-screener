@@ -9,8 +9,18 @@
     "api/**/*.ts": {
       "memory": 1024,
       "maxDuration": 60
+    },
+    "api/cron/daily-picks.ts": {
+      "memory": 1024,
+      "maxDuration": 120
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/daily-picks",
+      "schedule": "0 13 * * 1-5"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/market/indices",
@@ -55,6 +65,10 @@
     {
       "source": "/api/stocks/:symbol/news",
       "destination": "/api/stocks/[symbol]/news"
+    },
+    {
+      "source": "/api/cron/daily-picks",
+      "destination": "/api/cron/daily-picks"
     },
     {
       "source": "/((?!api/).*)",

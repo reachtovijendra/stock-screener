@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Daily day-trade recommendation email sent at 8 AM EST (1 PM UTC) on weekdays via Vercel Cron to reachtovijendra@gmail.com
+- New `api/cron/daily-picks.ts` endpoint that fetches ~200 US and ~50 India large-cap stocks, computes RSI/MACD/ATR technical indicators, scores each for day-trade potential, and selects the top 10 picks (7 US + 3 India)
+- New `api/_lib/day-trade-scorer.ts` shared module with `scoreDayTrade()`, `calculateATR()`, and `calculateBuySellTargets()` functions; scoring factors include price action, volume surge, 52W breakout, MACD momentum, RSI sweet spot, trend support (50/200 MA), multi-day uptrend streak, and beta volatility; penalties for negative days, low volume, bearish MACD, and overbought RSI
+- ATR-based buy/sell/stop-loss price targets: buy at `close - 0.3*ATR`, sell at `close + 1.0*ATR`, stop loss at `buy - 0.5*ATR`
+- New `api/_lib/resend.ts` email utility using the Resend REST API via native `https` (no npm dependency); requires `RESEND_API_KEY` environment variable
+- Professional HTML email template with dark theme, market index summary (S&P 500, Dow Jones, NIFTY 50), per-market pick tables (rank, symbol, score, price, buy/sell/stop targets, key signals), and a financial disclaimer footer
+- Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
+
 ### Fixed
 - Fixed Market News page showing 0 articles for non-market categories (Price Target, Rating, etc.) by implementing category-aware article selection in both `api/market/news.ts` and `mock-server.js`: reserves up to 10 slots per non-market category before filling remaining slots with newest articles, ensuring all categories with articles are represented in the 150-article response; updated Angular component to use API-provided category counts instead of recalculating from the limited response
 - Fixed stock detail page returning "Stock not found" for every stock on Vercel by rewriting `api/stocks/search.ts` to fetch full stock quotes (price, fundamentals, volume) via `getQuote()` instead of returning only basic symbol/name from the search API; added `technicals=true` parameter support with RSI and MACD calculation from historical prices; response format now returns `{ stocks: [...] }` matching the mock server contract expected by the Angular frontend

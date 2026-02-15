@@ -63,6 +63,10 @@
       "destination": "/api/stocks/[symbol]/news"
     },
     {
+      "source": "/api/stocks/dma-crossovers",
+      "destination": "/api/stocks/dma-crossovers"
+    },
+    {
       "source": "/api/cron/daily-picks",
       "destination": "/api/cron/daily-picks"
     },

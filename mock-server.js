@@ -1970,6 +1970,138 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Bulk technicals calculation - processes many symbols in parallel
+    // DMA Crossovers endpoint
+    if (path === '/api/stocks/dma-crossovers' && req.method === 'GET') {
+      const symbol = url.searchParams.get('symbol');
+      if (!symbol) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: 'symbol query parameter is required' }));
+        return;
+      }
+
+      try {
+        console.log(`[DMA] Fetching 5y daily data for ${symbol.toUpperCase()}...`);
+
+        const chartData = await new Promise((resolve, reject) => {
+          const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol.toUpperCase())}?interval=1d&range=5y`;
+          require('https').get(chartUrl, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+              'Accept': '*/*',
+            },
+          }, (response) => {
+            let data = '';
+            response.on('data', chunk => data += chunk);
+            response.on('end', () => {
+              try {
+                resolve(JSON.parse(data));
+              } catch (e) {
+                reject(new Error('Failed to parse Yahoo response'));
+              }
+            });
+          }).on('error', reject);
+        });
+
+        const result = chartData.chart?.result?.[0];
+        if (!result?.timestamp || !result?.indicators?.quote?.[0]?.close) {
+          res.writeHead(404);
+          res.end(JSON.stringify({ error: `No price data found for ${symbol}` }));
+          return;
+        }
+
+        const timestamps = result.timestamp;
+        const rawCloses = result.indicators.quote[0].close;
+
+        // Filter out null values
+        const validDays = [];
+        for (let i = 0; i < timestamps.length; i++) {
+          if (rawCloses[i] != null) {
+            validDays.push({ timestamp: timestamps[i], close: rawCloses[i] });
+          }
+        }
+
+        if (validDays.length < 200) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: `Insufficient data for ${symbol}. Need at least 200 trading days, got ${validDays.length}.` }));
+          return;
+        }
+
+        console.log(`[DMA] ${symbol.toUpperCase()}: ${validDays.length} valid trading days`);
+
+        // Rolling SMA
+        const allCloses = validDays.map(d => d.close);
+        const rollingSMA = (closes, period) => {
+          const sma = new Array(closes.length).fill(null);
+          for (let i = period - 1; i < closes.length; i++) {
+            let sum = 0;
+            for (let j = i - period + 1; j <= i; j++) sum += closes[j];
+            sma[i] = Math.round((sum / period) * 100) / 100;
+          }
+          return sma;
+        };
+
+        const sma50 = rollingSMA(allCloses, 50);
+        const sma200 = rollingSMA(allCloses, 200);
+
+        // 3-year cutoff
+        const now = Date.now();
+        const threeYearsMs = 3 * 365.25 * 24 * 60 * 60 * 1000;
+        const cutoff = now - threeYearsMs;
+
+        // Detect crossovers
+        const crossovers = [];
+        for (let i = 1; i < validDays.length; i++) {
+          if (sma50[i] == null || sma200[i] == null || sma50[i - 1] == null || sma200[i - 1] == null) continue;
+
+          const dateMs = validDays[i].timestamp * 1000;
+          if (dateMs < cutoff) continue;
+
+          const prev50 = sma50[i - 1], prev200 = sma200[i - 1];
+          const curr50 = sma50[i], curr200 = sma200[i];
+
+          if (prev50 <= prev200 && curr50 > curr200) {
+            crossovers.push({
+              date: new Date(dateMs).toISOString().slice(0, 10),
+              type: 'golden_cross',
+              sma50: curr50, sma200: curr200, close: validDays[i].close,
+            });
+          }
+          if (prev50 >= prev200 && curr50 < curr200) {
+            crossovers.push({
+              date: new Date(dateMs).toISOString().slice(0, 10),
+              type: 'death_cross',
+              sma50: curr50, sma200: curr200, close: validDays[i].close,
+            });
+          }
+        }
+
+        const lastIdx = validDays.length - 1;
+        const currentSMA50 = sma50[lastIdx];
+        const currentSMA200 = sma200[lastIdx];
+        const currentClose = validDays[lastIdx].close;
+        const currentDate = new Date(validDays[lastIdx].timestamp * 1000).toISOString().slice(0, 10);
+        let currentState = 'unknown';
+        if (currentSMA50 != null && currentSMA200 != null) {
+          currentState = currentSMA50 > currentSMA200 ? 'golden' : 'death';
+        }
+
+        console.log(`[DMA] ${symbol.toUpperCase()}: ${crossovers.length} crossovers found, current state: ${currentState}`);
+
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          symbol: symbol.toUpperCase(),
+          crossovers,
+          currentSMA50, currentSMA200, currentClose, currentDate, currentState,
+          totalTradingDays: validDays.length,
+        }));
+      } catch (error) {
+        console.error(`[DMA] Error for ${symbol}:`, error.message);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: `Failed to analyze ${symbol}: ${error.message}` }));
+      }
+      return;
+    }
+
     if (path === '/api/stocks/technicals' && req.method === 'POST') {
       let body = '';
       req.on('data', chunk => { body += chunk; });

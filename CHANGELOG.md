@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New "DMA Simulator" screen accessible from the left sidebar; allows searching for any stock and displays all 50/200 DMA golden cross and death cross events from the last 3 years in a chronological timeline with closing prices and SMA values
+- New `api/stocks/dma-crossovers.ts` Vercel endpoint that fetches 5 years of daily price data from Yahoo Finance, computes rolling 50-day and 200-day SMAs, detects all golden cross and death cross events within the last 3 years, and returns the current DMA state
+- Corresponding mock server handler for local development
 - Daily day-trade recommendation email sent at 8 AM EST (1 PM UTC) on weekdays via Vercel Cron to reachtovijendra@gmail.com
 - New `api/cron/daily-picks.ts` endpoint that fetches ~200 US and ~50 India large-cap stocks, computes RSI/MACD/ATR technical indicators, scores each for day-trade potential, and selects the top 10 picks (7 US + 3 India)
 - New `api/_lib/day-trade-scorer.ts` shared module with `scoreDayTrade()`, `calculateATR()`, and `calculateBuySellTargets()` functions; scoring factors include price action, volume surge, 52W breakout, MACD momentum, RSI sweet spot, trend support (50/200 MA), multi-day uptrend streak, and beta volatility; penalties for negative days, low volume, bearish MACD, and overbought RSI

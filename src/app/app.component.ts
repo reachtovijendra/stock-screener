@@ -27,6 +27,10 @@ import { ThemeService } from './core/services';
             <i class="pi pi-bolt"></i>
             <span class="nav-label">News</span>
           </a>
+          <a class="nav-item" routerLink="/dma-simulator" routerLinkActive="active" title="DMA Simulator">
+            <i class="pi pi-chart-bar"></i>
+            <span class="nav-label">DMA</span>
+          </a>
         </nav>
 
         <!-- Page Content -->

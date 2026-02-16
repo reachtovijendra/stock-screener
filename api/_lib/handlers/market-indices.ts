@@ -1,7 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getMarketIndices, Market, MarketIndex } from '../_lib/yahoo-client';
+import { getMarketIndices, Market, MarketIndex } from '../yahoo-client';
 
-// Fallback data in case Yahoo Finance is unavailable
 const FALLBACK_DATA: Record<string, MarketIndex> = {
   '^GSPC': { symbol: '^GSPC', name: 'S&P 500', price: 5000, change: 0, changePercent: 0, fiftyTwoWeekLow: 4500, fiftyTwoWeekHigh: 5200 },
   '^DJI': { symbol: '^DJI', name: 'Dow Jones', price: 38000, change: 0, changePercent: 0, fiftyTwoWeekLow: 36000, fiftyTwoWeekHigh: 39000 },
@@ -13,16 +12,8 @@ const FALLBACK_DATA: Record<string, MarketIndex> = {
 const US_INDICES = ['^GSPC', '^DJI', '^IXIC'];
 const IN_INDICES = ['^NSEI', '^BSESN'];
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+export async function handleMarketIndices(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=300');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
 
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -32,7 +23,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { market = 'US' } = req.query;
     const marketType = (market as string).toUpperCase() as Market;
 
-    // Try to fetch from Yahoo Finance
     try {
       const indices = await getMarketIndices(marketType);
       
@@ -40,12 +30,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         return res.status(200).json({ indices });
       }
       
-      // If no data returned, use fallback
       throw new Error('No index data returned');
     } catch (yahooError: any) {
       console.warn('Yahoo Finance unavailable, using fallback data:', yahooError.message);
 
-      // Return fallback data
       const symbols = marketType === 'IN' ? IN_INDICES : US_INDICES;
       const indices = symbols.map(symbol => FALLBACK_DATA[symbol]);
       return res.status(200).json({
@@ -57,7 +45,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error: any) {
     console.error('Market indices API error:', error);
 
-    // Return fallback data on any error
     const { market = 'US' } = req.query;
     const marketType = (market as string).toUpperCase();
     const symbols = marketType === 'IN' ? IN_INDICES : US_INDICES;

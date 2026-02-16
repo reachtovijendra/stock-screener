@@ -12,7 +12,6 @@ interface NewsItem {
   timeAgo: string;
 }
 
-// US Large-cap stocks (>$100B market cap) to fetch news from
 const US_LARGE_CAP_STOCKS = [
   { symbol: 'AAPL', name: 'Apple' },
   { symbol: 'MSFT', name: 'Microsoft' },
@@ -46,7 +45,6 @@ const US_LARGE_CAP_STOCKS = [
   { symbol: 'INTC', name: 'Intel' }
 ];
 
-// Indian Large-cap stocks to fetch news from
 const IN_LARGE_CAP_STOCKS = [
   { symbol: 'RELIANCE.NS', name: 'Reliance' },
   { symbol: 'TCS.NS', name: 'TCS' },
@@ -80,7 +78,6 @@ const IN_LARGE_CAP_STOCKS = [
   { symbol: 'LICI.NS', name: 'LIC' }
 ];
 
-// US General market news RSS feeds
 const US_MARKET_NEWS_FEEDS = [
   { url: 'https://finance.yahoo.com/news/rssindex', source: 'Yahoo Finance', symbol: 'MARKET' },
   { url: 'https://news.google.com/rss/search?q=stock+market+today&hl=en-US&gl=US&ceid=US:en', source: 'Google News', symbol: 'MARKET' },
@@ -88,7 +85,6 @@ const US_MARKET_NEWS_FEEDS = [
   { url: 'https://news.google.com/rss/search?q=S%26P+500+dow+jones+nasdaq&hl=en-US&gl=US&ceid=US:en', source: 'Market Indices', symbol: 'INDICES' }
 ];
 
-// Indian General market news RSS feeds
 const IN_MARKET_NEWS_FEEDS = [
   { url: 'https://news.google.com/rss/search?q=indian+stock+market+today&hl=en-IN&gl=IN&ceid=IN:en', source: 'Google News', symbol: 'MARKET' },
   { url: 'https://news.google.com/rss/search?q=nifty+sensex+today&hl=en-IN&gl=IN&ceid=IN:en', source: 'Market Indices', symbol: 'INDICES' },
@@ -104,21 +100,13 @@ function getMarketNewsFeeds(market: string): { url: string; source: string; symb
   return market === 'IN' ? IN_MARKET_NEWS_FEEDS : US_MARKET_NEWS_FEEDS;
 }
 
-/**
- * Classify news article type based on keywords - returns internal type ID
- */
 function classifyArticleType(title: string, description: string, isMarketNews: boolean = false): string {
   const text = `${title} ${description}`.toLowerCase();
   
-  // If from an explicit market feed, force market type
   if (isMarketNews) {
     return 'market';
   }
   
-  // Check specific categories FIRST (before broad market keywords)
-  // This prevents articles like "Apple earnings beat amid rally" from being swallowed into "market"
-  
-  // Price Target
   if (text.includes('price target') || text.includes('pt ') || text.includes('target price') || 
       text.includes('sets target') || text.includes('raises target') || text.includes('lowers target') ||
       text.includes('maintains target') || text.includes('boosts target') || text.includes('cuts target') ||
@@ -127,7 +115,6 @@ function classifyArticleType(title: string, description: string, isMarketNews: b
     return 'price_target';
   }
   
-  // Rating/Upgrade/Downgrade
   if (text.includes('upgrade') || text.includes('downgrade') || text.includes('rating') || 
       text.includes('analyst') || text.includes('outperform') || text.includes('underperform') ||
       text.includes('buy rating') || text.includes('sell rating') || text.includes('hold rating') ||
@@ -139,7 +126,6 @@ function classifyArticleType(title: string, description: string, isMarketNews: b
     return 'upgrade_downgrade';
   }
   
-  // Earnings
   if (text.includes('earnings') || text.includes(' eps') || text.includes('revenue') || 
       text.includes('quarterly') || text.includes('q1 ') || text.includes('q2 ') || 
       text.includes('q3 ') || text.includes('q4 ') || text.includes('beat') || 
@@ -150,7 +136,6 @@ function classifyArticleType(title: string, description: string, isMarketNews: b
     return 'earnings';
   }
   
-  // Insider Trading
   if (text.includes('insider') || text.includes('ceo buy') || text.includes('cfo buy') ||
       text.includes('director buy') || text.includes('sells shares') || text.includes('buys shares') ||
       text.includes('stock purchase') || text.includes('form 4') || text.includes('sec filing') ||
@@ -161,7 +146,6 @@ function classifyArticleType(title: string, description: string, isMarketNews: b
     return 'insider';
   }
   
-  // Dividend
   if (text.includes('dividend') || text.includes('payout') || text.includes('yield') ||
       text.includes('distribution') || text.includes('ex-div') || text.includes('ex-dividend') ||
       text.includes('dividend increase') || text.includes('dividend cut') ||
@@ -170,8 +154,6 @@ function classifyArticleType(title: string, description: string, isMarketNews: b
     return 'dividend';
   }
   
-  // Market-wide news checked LAST (Fed/RBI, economy, indices - US and India)
-  // Only classify as market if no specific category matched above
   if (text.includes('fed ') || text.includes('federal reserve') || text.includes('interest rate') ||
       text.includes('inflation') || text.includes('gdp') || text.includes('jobs report') ||
       text.includes('unemployment') || text.includes('recession') || text.includes('economy') ||
@@ -179,7 +161,6 @@ function classifyArticleType(title: string, description: string, isMarketNews: b
       text.includes('market today') || text.includes('markets ') || text.includes('wall street') ||
       text.includes('rally') || text.includes('selloff') || text.includes('bull market') ||
       text.includes('bear market') || text.includes('treasury') || text.includes('bond yield') ||
-      // Indian market keywords
       text.includes('nifty') || text.includes('sensex') || text.includes('bse') || text.includes('nse') ||
       text.includes('rbi') || text.includes('reserve bank') || text.includes('dalal street') ||
       text.includes('sebi') || text.includes('fii') || text.includes('dii') || text.includes('rupee')) {
@@ -189,9 +170,6 @@ function classifyArticleType(title: string, description: string, isMarketNews: b
   return 'general';
 }
 
-/**
- * Calculate time ago string from date
- */
 function getTimeAgo(dateStr: string): string {
   const date = new Date(dateStr);
   const now = new Date();
@@ -210,9 +188,6 @@ function getTimeAgo(dateStr: string): string {
   return date.toLocaleDateString();
 }
 
-/**
- * Fetch RSS feed via HTTPS
- */
 function fetchRSS(url: string, timeout: number = 8000, maxRedirects: number = 3): Promise<string> {
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -221,7 +196,6 @@ function fetchRSS(url: string, timeout: number = 8000, maxRedirects: number = 3)
 
     const doRequest = (requestUrl: string, redirectsLeft: number) => {
       https.get(requestUrl, (res) => {
-        // Follow redirects (301, 302, 307, 308)
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
           if (redirectsLeft <= 0) {
             clearTimeout(timer);
@@ -231,7 +205,7 @@ function fetchRSS(url: string, timeout: number = 8000, maxRedirects: number = 3)
           const redirectUrl = res.headers.location.startsWith('http')
             ? res.headers.location
             : new URL(res.headers.location, requestUrl).toString();
-          res.resume(); // Consume response to free memory
+          res.resume();
           doRequest(redirectUrl, redirectsLeft - 1);
           return;
         }
@@ -254,9 +228,6 @@ function fetchRSS(url: string, timeout: number = 8000, maxRedirects: number = 3)
   });
 }
 
-/**
- * Parse RSS XML to JSON
- */
 function parseRSS(xml: string, source: string, symbol: string, stockName: string, isMarketNews: boolean = false): NewsItem[] {
   const items: NewsItem[] = [];
   const itemRegex = /<item>(.*?)<\/item>/gs;
@@ -290,13 +261,9 @@ function parseRSS(xml: string, source: string, symbol: string, stockName: string
   return items;
 }
 
-/**
- * Fetch news for a single stock using multiple sources with fallback
- */
 async function fetchStockNews(stock: { symbol: string; name: string }): Promise<NewsItem[]> {
   const allNews: NewsItem[] = [];
   
-  // Try Yahoo Finance RSS first
   try {
     const yahooUrl = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${stock.symbol}&region=US&lang=en-US`;
     const xml = await fetchRSS(yahooUrl, 5000);
@@ -309,7 +276,6 @@ async function fetchStockNews(stock: { symbol: string; name: string }): Promise<
     console.log(`[News] Yahoo RSS failed for ${stock.symbol}: ${error.message}`);
   }
   
-  // Fallback: Google News search for stock-specific news
   try {
     const searchQuery = encodeURIComponent(`${stock.symbol} stock`);
     const googleUrl = `https://news.google.com/rss/search?q=${searchQuery}&hl=en-US&gl=US&ceid=US:en`;
@@ -323,9 +289,6 @@ async function fetchStockNews(stock: { symbol: string; name: string }): Promise<
   return allNews;
 }
 
-/**
- * Fetch general market news (non-stock specific)
- */
 async function fetchMarketNews(market: string): Promise<NewsItem[]> {
   const allNews: NewsItem[] = [];
   const feeds = getMarketNewsFeeds(market);
@@ -343,38 +306,26 @@ async function fetchMarketNews(market: string): Promise<NewsItem[]> {
   return allNews;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+export async function handleMarketNews(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 's-maxage=180, stale-while-revalidate=300');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
 
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    // Get market from query parameter (default to US)
     const market = (req.query.market as string)?.toUpperCase() === 'IN' ? 'IN' : 'US';
     
-    // Fetch news from top 15 stocks in parallel (limit to reduce API load)
     const allStocks = getStocksForMarket(market);
     const stocksToFetch = allStocks.slice(0, 15);
     
     console.log(`[News] Fetching news for ${stocksToFetch.length} ${market} stocks...`);
     
-    // Fetch stock-specific news and general market news in parallel
     const [stockNewsResults, marketNews] = await Promise.all([
       Promise.allSettled(stocksToFetch.map(stock => fetchStockNews(stock))),
       fetchMarketNews(market)
     ]);
 
-    // Collect all news items
     let allNews: NewsItem[] = [...marketNews];
     let stockNewsCount = 0;
     stockNewsResults.forEach((result) => {
@@ -386,7 +337,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`[News] Collected ${marketNews.length} market + ${stockNewsCount} stock-specific = ${allNews.length} total articles`);
 
-    // Filter out articles older than 7 days
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
     allNews = allNews.filter(item => {
@@ -397,19 +347,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     });
 
-    // Remove duplicates by link
     const uniqueNews = Array.from(
       new Map(allNews.map(item => [item.link, item])).values()
     );
 
-    // Sort by date (newest first)
     uniqueNews.sort((a, b) => {
       const dateA = new Date(a.pubDate);
       const dateB = new Date(b.pubDate);
       return dateB.getTime() - dateA.getTime();
     });
 
-    // Calculate category counts from ALL articles (before limiting)
     const categories: Record<string, number> = {
       market: 0,
       price_target: 0,
@@ -428,8 +375,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`[News] Categories:`, JSON.stringify(categories));
 
-    // Build limited news ensuring all categories are represented
-    // First, reserve slots for non-market categories (up to 10 each) to ensure visibility
     const MAX_ARTICLES = 150;
     const RESERVE_PER_CATEGORY = 10;
     const nonMarketCategories = ['price_target', 'upgrade_downgrade', 'earnings', 'insider', 'dividend', 'general'];
@@ -449,12 +394,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
     
-    // Fill remaining slots with newest articles (by date, which is the current sort order)
     const remaining = uniqueNews.filter(item => !reservedLinks.has(item.link));
     const fillCount = Math.max(0, MAX_ARTICLES - reserved.length);
     const filler = remaining.slice(0, fillCount);
     
-    // Merge and re-sort by date (newest first)
     const limitedNews = [...reserved, ...filler].sort((a, b) => {
       const dateA = new Date(a.pubDate);
       const dateB = new Date(b.pubDate);

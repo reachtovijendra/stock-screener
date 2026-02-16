@@ -331,7 +331,7 @@ export class ScreenerService {
       }
     };
     
-    this.http.post<ScreenResult>('/api/stocks/screen', requestBody).pipe(
+    this.http.post<ScreenResult>('/api/stocks?action=screen', requestBody).pipe(
       tap(result => {
         // Cache all stocks for client-side pagination
         this._cachedStocks.set(result.stocks);
@@ -708,7 +708,7 @@ export class ScreenerService {
       try {
         // Bulk API call - server handles parallel processing
         const result = await this.http.post<{ technicals: Record<string, any> }>(
-          '/api/stocks/technicals',
+          '/api/stocks?action=technicals',
           { symbols: chunkSymbols }
         ).toPromise();
         

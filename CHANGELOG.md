@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Consolidated 12 Vercel serverless functions into 4 using a router pattern to stay within the Hobby plan limit and free up 8 slots for future features
+- `api/stocks.ts` router now dispatches to 7 handler functions (quote, search, screen, list, indices, technicals, dma-crossovers) based on `?action=` query parameter
+- `api/market.ts` router now dispatches to 3 handler functions (indices, news, breakouts) based on `?action=` query parameter
+- `api/cron/daily-picks.ts` and `api/stocks/[symbol]/news.ts` remain as standalone functions
+- All handler logic moved to `api/_lib/handlers/` directory (excluded from serverless function count)
+- All frontend API call URLs updated to use `?action=` pattern (e.g., `/api/stocks?action=quote&symbol=X` instead of `/api/stocks/quote?symbol=X`)
+- Mock server already used the `?action=` pattern; no changes required
+- Simplified `vercel.json` rewrites from 12 entries to 2 (dynamic path rewrite and SPA fallback)
+
+### Removed
+- Deleted 10 standalone endpoint files: `api/stocks/quote.ts`, `api/stocks/search.ts`, `api/stocks/screen.ts`, `api/stocks/list.ts`, `api/stocks/indices.ts`, `api/stocks/technicals.ts`, `api/stocks/dma-crossovers.ts`, `api/market/indices.ts`, `api/market/news.ts`, `api/market/breakouts.ts`
+
 ### Added
 - New "DMA Simulator" screen accessible from the left sidebar; allows searching for any stock and displays all 50/200 DMA golden cross and death cross events from the last 3 years in a chronological timeline with closing prices and SMA values
 - New `api/stocks/dma-crossovers.ts` Vercel endpoint that fetches 5 years of daily price data from Yahoo Finance, computes rolling 50-day and 200-day SMAs, detects all golden cross and death cross events within the last 3 years, and returns the current DMA state

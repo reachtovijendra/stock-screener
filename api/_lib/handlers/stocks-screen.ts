@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getQuotes, getIndexSymbols, fetchScreenerStocks, Market, StockQuote } from '../_lib/yahoo-client';
+import { fetchScreenerStocks, Market, StockQuote } from '../yahoo-client';
 
 interface RangeFilter {
   min?: number;
@@ -63,12 +63,8 @@ interface ScreenRequest {
   pagination: PaginationConfig;
 }
 
-/**
- * Check if value passes range filter
- */
 function passesRangeFilter(value: number | null, filter: RangeFilter): boolean {
   if (value === null || value === undefined) {
-    // Allow null values to pass if no filter is set
     return filter.min === undefined && filter.max === undefined;
   }
   
@@ -81,11 +77,7 @@ function passesRangeFilter(value: number | null, filter: RangeFilter): boolean {
   return true;
 }
 
-/**
- * Check if stock passes all filters
- */
 function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
-  // Market cap filter
   if (filters.marketCap.mode === 'categories' && filters.marketCap.categories.length > 0) {
     if (!filters.marketCap.categories.includes(stock.marketCapCategory)) {
       return false;
@@ -96,12 +88,10 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
     }
   }
 
-  // Price filter
   if (!passesRangeFilter(stock.price, filters.price)) {
     return false;
   }
 
-  // 52-week filters
   if (filters.fiftyTwoWeek.nearHigh) {
     if (stock.percentFromFiftyTwoWeekHigh < -5) {
       return false;
@@ -118,7 +108,6 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
     return false;
   }
 
-  // Valuation filters
   if (!passesRangeFilter(stock.peRatio, filters.peRatio)) {
     return false;
   }
@@ -131,7 +120,6 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
     return false;
   }
 
-  // Growth filters
   if (!passesRangeFilter(stock.earningsGrowth, filters.earningsGrowth)) {
     return false;
   }
@@ -140,12 +128,10 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
     return false;
   }
 
-  // Dividend filter
   if (!passesRangeFilter(stock.dividendYield, filters.dividendYield)) {
     return false;
   }
 
-  // Volume filters
   if (!passesRangeFilter(stock.avgVolume, filters.avgVolume)) {
     return false;
   }
@@ -154,7 +140,6 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
     return false;
   }
 
-  // Moving average filters
   const ma = filters.movingAverages;
   
   if (ma.aboveFiftyDayMA !== null && stock.percentFromFiftyDayMA !== null) {
@@ -172,7 +157,6 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
   }
 
   if (ma.goldenCross) {
-    // Golden cross: 50 MA > 200 MA and price above both
     if (stock.fiftyDayMA === null || stock.twoHundredDayMA === null) {
       return false;
     }
@@ -185,7 +169,6 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
   }
 
   if (ma.deathCross) {
-    // Death cross: 50 MA < 200 MA
     if (stock.fiftyDayMA === null || stock.twoHundredDayMA === null) {
       return false;
     }
@@ -194,12 +177,10 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
     }
   }
 
-  // Sector filter
   if (filters.sectors.length > 0 && !filters.sectors.includes(stock.sector)) {
     return false;
   }
 
-  // Exchange filter
   if (filters.exchanges.length > 0 && !filters.exchanges.includes(stock.exchange)) {
     return false;
   }
@@ -207,20 +188,15 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
   return true;
 }
 
-/**
- * Sort stocks by field
- */
 function sortStocks(stocks: StockQuote[], sort: SortConfig): StockQuote[] {
   return [...stocks].sort((a, b) => {
     const aVal = (a as any)[sort.field];
     const bVal = (b as any)[sort.field];
     
-    // Handle null values
     if (aVal === null && bVal === null) return 0;
     if (aVal === null) return sort.direction === 'asc' ? 1 : -1;
     if (bVal === null) return sort.direction === 'asc' ? -1 : 1;
     
-    // Compare values
     if (typeof aVal === 'string') {
       return sort.direction === 'asc' 
         ? aVal.localeCompare(bVal)
@@ -231,16 +207,7 @@ function sortStocks(stocks: StockQuote[], sort: SortConfig): StockQuote[] {
   });
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
+export async function handleScreen(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -254,16 +221,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const startTime = Date.now();
     
-    // Fetch stocks using Yahoo Screener API (falls back to static list if blocked)
     const allQuotes = await fetchScreenerStocks(filters.market, filters);
     
-    // Apply filters
     const filteredStocks = allQuotes.filter(stock => passesFilters(stock, filters));
     
-    // Sort
     const sortedStocks = sortStocks(filteredStocks, sort || { field: 'marketCap', direction: 'desc' });
     
-    // Paginate
     const page = pagination?.page || 0;
     const pageSize = pagination?.pageSize || 50;
     const start = page * pageSize;
@@ -281,7 +244,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (error: any) {
     console.error('Screen API error:', error);
     
-    // Return empty results with error info instead of 500
     return res.status(200).json({
       stocks: [],
       totalCount: 0,

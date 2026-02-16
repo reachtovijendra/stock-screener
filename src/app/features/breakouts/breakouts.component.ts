@@ -3142,7 +3142,7 @@ export class BreakoutsComponent implements OnInit {
     }
     
     // Use the same API as header search but with technicals and fuzzy search
-    this.http.get<{ stocks: any[] }>(`/api/stocks/search?q=${encodeURIComponent(query)}&technicals=true&fuzzy=true`).subscribe({
+    this.http.get<{ stocks: any[] }>(`/api/stocks?action=search&q=${encodeURIComponent(query)}&technicals=true&fuzzy=true`).subscribe({
       next: (result) => {
         if (result.stocks && result.stocks.length > 0) {
           this.scoreSearchSuggestions.set(result.stocks.slice(0, 15));
@@ -3279,7 +3279,7 @@ export class BreakoutsComponent implements OnInit {
     try {
       const market = this.marketService.currentMarket();
       const result = await this.http.get<{ breakouts: BreakoutStock[] }>(
-        `/api/market/breakouts?market=${market}`
+        `/api/market?action=breakouts&market=${market}`
       ).toPromise();
       
       if (result?.breakouts) {
@@ -3303,7 +3303,7 @@ export class BreakoutsComponent implements OnInit {
         sort: { field: 'marketCap', direction: 'desc' },
         pagination: { page: 0, pageSize: 10000 }
       };
-      const result = await this.http.post<ScreenResult>('/api/stocks/screen', requestBody).toPromise();
+      const result = await this.http.post<ScreenResult>('/api/stocks?action=screen', requestBody).toPromise();
       if (result?.stocks) {
         this.allScreenerStocks.set(result.stocks);
         console.log(`Loaded ${result.stocks.length} screener stocks for pick panels`);

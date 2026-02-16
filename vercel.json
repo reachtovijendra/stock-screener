@@ -19,56 +19,8 @@
   ],
   "rewrites": [
     {
-      "source": "/api/market/indices",
-      "destination": "/api/market/indices"
-    },
-    {
-      "source": "/api/stocks/quote",
-      "destination": "/api/stocks/quote"
-    },
-    {
-      "source": "/api/stocks/quotes",
-      "destination": "/api/stocks/quote"
-    },
-    {
-      "source": "/api/stocks/search",
-      "destination": "/api/stocks/search"
-    },
-    {
-      "source": "/api/stocks/screen",
-      "destination": "/api/stocks/screen"
-    },
-    {
-      "source": "/api/stocks/list",
-      "destination": "/api/stocks/list"
-    },
-    {
-      "source": "/api/stocks/indices",
-      "destination": "/api/stocks/indices"
-    },
-    {
-      "source": "/api/stocks/technicals",
-      "destination": "/api/stocks/technicals"
-    },
-    {
-      "source": "/api/stocks/detail",
-      "destination": "/api/stocks/detail"
-    },
-    {
-      "source": "/api/stocks/news",
-      "destination": "/api/stocks/news"
-    },
-    {
       "source": "/api/stocks/:symbol/news",
       "destination": "/api/stocks/[symbol]/news"
-    },
-    {
-      "source": "/api/stocks/dma-crossovers",
-      "destination": "/api/stocks/dma-crossovers"
-    },
-    {
-      "source": "/api/cron/daily-picks",
-      "destination": "/api/cron/daily-picks"
     },
     {
       "source": "/((?!api/).*)",

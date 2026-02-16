@@ -1,20 +1,5 @@
-/**
- * DMA Crossover API
- *
- * Fetches 5 years of daily price data for a given stock symbol,
- * computes rolling 50-day and 200-day SMAs, and detects all
- * golden cross and death cross events within the last 3 years.
- *
- * Query params:
- *   symbol - Stock ticker (e.g., TQQQ, AAPL, RELIANCE.NS)
- */
-
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import https from 'https';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
 
 function httpsRequest(options: https.RequestOptions): Promise<{ statusCode: number; body: string }> {
   return new Promise((resolve, reject) => {
@@ -46,11 +31,7 @@ function rollingSMA(closes: number[], period: number): (number | null)[] {
   return sma;
 }
 
-// ---------------------------------------------------------------------------
-// Handler
-// ---------------------------------------------------------------------------
-
-export default async function handler(req: VercelRequest, res: VercelResponse) {
+export async function handleDmaCrossovers(req: VercelRequest, res: VercelResponse) {
   const symbol = (req.query.symbol as string || '').trim().toUpperCase();
 
   if (!symbol) {
@@ -86,7 +67,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const timestamps: number[] = result.timestamp;
     const rawCloses: (number | null)[] = result.indicators.quote[0].close;
 
-    // Filter out null values, keeping timestamp-close pairs
     const validDays: { timestamp: number; close: number }[] = [];
     for (let i = 0; i < timestamps.length; i++) {
       if (rawCloses[i] != null) {
@@ -102,17 +82,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`[DMA] ${symbol}: ${validDays.length} valid trading days`);
 
-    // Compute rolling SMAs
     const allCloses = validDays.map((d) => d.close);
     const sma50 = rollingSMA(allCloses, 50);
     const sma200 = rollingSMA(allCloses, 200);
 
-    // 3-year cutoff
     const now = Date.now();
     const threeYearsMs = 3 * 365.25 * 24 * 60 * 60 * 1000;
     const cutoff = now - threeYearsMs;
 
-    // Detect crossovers
     const crossovers: {
       date: string;
       type: 'golden_cross' | 'death_cross';
@@ -134,7 +111,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const curr50 = sma50[i]!;
       const curr200 = sma200[i]!;
 
-      // Golden cross: 50 DMA crosses above 200 DMA
       if (prev50 <= prev200 && curr50 > curr200) {
         crossovers.push({
           date: new Date(dateMs).toISOString().slice(0, 10),
@@ -145,7 +121,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         });
       }
 
-      // Death cross: 50 DMA crosses below 200 DMA
       if (prev50 >= prev200 && curr50 < curr200) {
         crossovers.push({
           date: new Date(dateMs).toISOString().slice(0, 10),
@@ -157,7 +132,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Current state
     const lastIdx = validDays.length - 1;
     const currentSMA50 = sma50[lastIdx];
     const currentSMA200 = sma200[lastIdx];

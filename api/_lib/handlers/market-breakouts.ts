@@ -28,42 +28,26 @@ interface BreakoutStock {
   market?: string;
 }
 
-// Fallback US Large-cap stocks (used if dynamic fetch fails)
 const US_STOCKS_FALLBACK = [
-  // Mega cap tech
   'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'BRK-A',
-  // Healthcare
   'UNH', 'JNJ', 'LLY', 'PFE', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY',
-  // Financial
   'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP', 'C', 'USB', 'PNC',
-  // Consumer
   'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT', 'LOW', 'TJX',
-  // Energy
   'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL', 'DVN', 'FANG',
-  // Tech & Semiconductors
   'AVGO', 'CSCO', 'ACN', 'CRM', 'ORCL', 'NFLX', 'AMD', 'INTC', 'QCOM', 'TXN',
   'IBM', 'AMAT', 'LRCX', 'MU', 'ADI', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON',
   'WDC', 'STX', 'NXPI', 'MCHP', 'MPWR', 'SWKS', 'QRVO', 'TER', 'ENTG',
-  // Industrial
   'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP', 'FDX', 'NSC', 'EMR',
-  // Telecom & Media
   'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'CHTR', 'WBD', 'PARA', 'FOX', 'NWSA',
-  // Utilities & REITs
   'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'SPG',
-  // Other popular
   'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID',
   'NOW', 'INTU', 'ADBE', 'PANW', 'CRWD', 'ZS', 'DDOG', 'NET', 'MDB', 'TEAM'
 ];
 
-// Dynamically fetch large-cap stocks from Yahoo Finance screener
 async function fetchLargeCapStocks(market: string, minMarketCap: number = 10_000_000_000): Promise<string[]> {
   try {
-    const region = market === 'IN' ? 'in' : 'us';
-    const exchange = market === 'IN' ? 'NSI' : ''; // NSE for India
-    
-    // Yahoo Finance screener query for large-cap stocks
     const screenerBody = JSON.stringify({
-      size: 250, // Get up to 250 stocks
+      size: 250,
       offset: 0,
       sortField: 'intradaymarketcap',
       sortType: 'DESC',
@@ -100,7 +84,7 @@ async function fetchLargeCapStocks(market: string, minMarketCap: number = 10_000
       const quotes = data?.finance?.result?.[0]?.quotes || [];
       const symbols = quotes
         .map((q: any) => q.symbol)
-        .filter((s: string) => s && !s.includes('^')); // Filter out indices
+        .filter((s: string) => s && !s.includes('^'));
       
       if (symbols.length > 50) {
         console.log(`[Screener] Fetched ${symbols.length} ${market} large-cap stocks dynamically`);
@@ -111,12 +95,10 @@ async function fetchLargeCapStocks(market: string, minMarketCap: number = 10_000
     console.error('[Screener] Dynamic fetch failed:', e);
   }
   
-  return []; // Return empty to trigger fallback
+  return [];
 }
 
-// Fallback Indian Large-cap stocks (NIFTY 50 + popular stocks)
 const IN_STOCKS_TO_SCAN = [
-  // NIFTY 50 constituents
   'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
   'HINDUNILVR.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'ITC.NS', 'KOTAKBANK.NS',
   'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
@@ -126,7 +108,6 @@ const IN_STOCKS_TO_SCAN = [
   'ONGC.NS', 'HDFCLIFE.NS', 'DIVISLAB.NS', 'COALINDIA.NS', 'GRASIM.NS',
   'BRITANNIA.NS', 'BPCL.NS', 'DRREDDY.NS', 'CIPLA.NS', 'APOLLOHOSP.NS',
   'EICHERMOT.NS', 'INDUSINDBK.NS', 'SBILIFE.NS', 'TATACONSUM.NS', 'HEROMOTOCO.NS',
-  // Additional popular Indian stocks
   'ADANIENT.NS', 'ADANIGREEN.NS', 'ADANIPOWER.NS', 'ATGL.NS', 'AWL.NS',
   'BAJAJ-AUTO.NS', 'BANKBARODA.NS', 'BEL.NS', 'BERGEPAINT.NS', 'BIOCON.NS',
   'BOSCHLTD.NS', 'CANBK.NS', 'CHOLAFIN.NS', 'COLPAL.NS', 'DLF.NS',
@@ -140,16 +121,13 @@ const IN_STOCKS_TO_SCAN = [
   'ZOMATO.NS', 'ZYDUSLIFE.NS'
 ];
 
-// Get stocks to scan - tries dynamic fetch first, falls back to hardcoded list
 async function getStocksToScan(market: string): Promise<string[]> {
-  // Try dynamic fetch first
   const dynamicStocks = await fetchLargeCapStocks(market);
   
   if (dynamicStocks.length > 50) {
     return dynamicStocks;
   }
   
-  // Fallback to hardcoded lists
   console.log(`[Breakouts] Using fallback stock list for ${market}`);
   return market === 'IN' ? IN_STOCKS_TO_SCAN : US_STOCKS_FALLBACK;
 }
@@ -170,7 +148,6 @@ function httpsRequest(options: https.RequestOptions, timeout = 8000, body?: stri
   });
 }
 
-// Fetch stock data from chart API (no authentication needed)
 async function fetchStockData(symbol: string): Promise<any | null> {
   try {
     const response = await httpsRequest({
@@ -311,7 +288,6 @@ function calculateMACD(prices: number[]): MACDResult | null {
 function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, market: string = 'US'): BreakoutStock[] {
   const breakouts: BreakoutStock[] = [];
   
-  // Parse analyst rating string to numeric score (e.g., "2.0 - Buy" -> 2.0)
   const analystRatingScore = quote.averageAnalystRating 
     ? parseFloat(quote.averageAnalystRating.match(/^([\d.]+)/)?.[1] || '') || null
     : null;
@@ -336,9 +312,8 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     percentFromFiftyTwoWeekLow: quote.fiftyTwoWeekLow ? ((quote.regularMarketPrice - quote.fiftyTwoWeekLow) / quote.fiftyTwoWeekLow) * 100 : undefined,
     rsi: rsi ? Math.round(rsi * 10) / 10 : undefined,
     market: market,
-    // Analyst data
-    averageAnalystRating: quote.averageAnalystRating || undefined,  // e.g., "2.0 - Buy"
-    analystRatingScore: analystRatingScore  // Numeric: 1.0 (Strong Buy) to 5.0 (Sell)
+    averageAnalystRating: quote.averageAnalystRating || undefined,
+    analystRatingScore: analystRatingScore
   };
 
   const price = baseStock.price;
@@ -348,7 +323,6 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
   const pct52Low = baseStock.percentFromFiftyTwoWeekLow;
   const relVol = baseStock.relativeVolume;
 
-  // Moving Average Crossovers - within 5% of 50 MA
   if (pct50MA != null && Math.abs(pct50MA) <= 5) {
     breakouts.push({
       ...baseStock,
@@ -361,7 +335,6 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     });
   }
 
-  // Within 8% of 200 MA
   if (pct200MA != null && Math.abs(pct200MA) <= 8) {
     breakouts.push({
       ...baseStock,
@@ -374,7 +347,6 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     });
   }
 
-  // Golden Cross / Death Cross detection - within 3%
   if (baseStock.fiftyDayMA && baseStock.twoHundredDayMA) {
     const maDiff = ((baseStock.fiftyDayMA - baseStock.twoHundredDayMA) / baseStock.twoHundredDayMA) * 100;
     if (Math.abs(maDiff) <= 3) {
@@ -390,7 +362,6 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     }
   }
 
-  // 52-Week Highs - within 5% of high
   if (pct52High != null && pct52High >= -5) {
     breakouts.push({
       ...baseStock,
@@ -403,7 +374,6 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     });
   }
 
-  // 52-Week Lows - within 10% of low
   if (pct52Low != null && pct52Low <= 10) {
     breakouts.push({
       ...baseStock,
@@ -416,7 +386,6 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     });
   }
 
-  // RSI Signals - expanded thresholds
   if (rsi != null) {
     if (rsi <= 35) {
       breakouts.push({
@@ -441,7 +410,6 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     }
   }
 
-  // Volume Breakouts - 1.5x+ average
   if (relVol >= 1.5) {
     breakouts.push({
       ...baseStock,
@@ -452,7 +420,6 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     });
   }
 
-  // MACD Signals
   if (macd && macd.signalType) {
     const signalType = macd.signalType;
     if (signalType === 'bullish_crossover') {
@@ -490,27 +457,16 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
     }
   }
 
-  // Supplementary: Strong Technicals - include stocks with strong setups
-  // even if they haven't triggered a specific breakout alert above.
-  // This ensures the pick panels can score all technically strong stocks.
   if (breakouts.length === 0) {
     let techScore = 0;
-    // Momentum: well above 50 MA
     if (pct50MA != null && pct50MA > 5) techScore += 2;
-    // Uptrend: above 200 MA
     if (pct200MA != null && pct200MA > 0) techScore += 1;
-    // RSI in bullish zone (50-75)
     if (rsi != null && rsi >= 50 && rsi <= 75) techScore += 1;
-    // Positive day with decent move
     if (baseStock.changePercent >= 1.5) techScore += 1;
-    // Volume above average
     if (relVol >= 1.2) techScore += 1;
-    // Strong analyst rating
     if (analystRatingScore != null && analystRatingScore <= 2.2) techScore += 1;
-    // MACD bullish (from macd data, even if not a crossover)
     if (macd && macd.signalType && (macd.signalType === 'strong_bullish' || macd.signalType === 'bullish_crossover')) techScore += 1;
 
-    // Include if at least 4 out of 8 criteria met
     if (techScore >= 4) {
       breakouts.push({
         ...baseStock,
@@ -525,23 +481,19 @@ function analyzeStock(quote: any, rsi: number | null, macd: MACDResult | null, m
   return breakouts;
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+export async function handleBreakouts(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 's-maxage=180, stale-while-revalidate=300');
 
-  if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'GET') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
 
   try {
-    // Get market from query parameter (default to US)
     const market = (req.query.market as string)?.toUpperCase() === 'IN' ? 'IN' : 'US';
     const stocksToScan = await getStocksToScan(market);
     
     console.log(`[Breakouts] Scanning ${stocksToScan.length} ${market} stocks...`);
 
-    // Fetch all stocks in parallel using chart API (no auth needed)
     const stockPromises = stocksToScan.map(async (symbol) => {
       try {
         const data = await fetchStockData(symbol);
@@ -564,7 +516,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (result.status === 'fulfilled' && result.value.success && result.value.data) {
         scannedCount++;
         const { data, rsi, macd } = result.value;
-        // Convert chart data to quote format for analyzeStock
         const quote = {
           symbol: data.symbol,
           shortName: data.shortName,
@@ -583,7 +534,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Sort by absolute change percent (most active first)
     allBreakouts.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
 
     return res.status(200).json({

@@ -53,7 +53,7 @@ export class StockService {
       .set('symbol', symbol)
       .set('market', market);
     
-    return this.http.get<Stock>('/api/stocks/quote', { params }).pipe(
+    return this.http.get<Stock>('/api/stocks', { params: params.set('action', 'quote') }).pipe(
       tap(stock => {
         this.setCache(this.quoteCache, cacheKey, stock);
         this._loading.set(false);
@@ -96,7 +96,7 @@ export class StockService {
       .set('symbols', uncachedSymbols.join(','))
       .set('market', market);
     
-    return this.http.get<Stock[]>('/api/stocks/quotes', { params }).pipe(
+    return this.http.get<Stock[]>('/api/stocks', { params: params.set('action', 'quote') }).pipe(
       tap(stocks => {
         stocks.forEach(stock => {
           const cacheKey = `${stock.symbol}-${market}`;
@@ -132,7 +132,7 @@ export class StockService {
       .set('q', query)
       .set('market', market);
     
-    return this.http.get<StockSearchResult[]>('/api/stocks/search', { params }).pipe(
+    return this.http.get<StockSearchResult[]>('/api/stocks', { params: params.set('action', 'search') }).pipe(
       tap(results => {
         this.setCache(this.searchCache, cacheKey, results);
       }),
@@ -159,7 +159,7 @@ export class StockService {
       .set('symbols', symbols.join(','))
       .set('market', market);
     
-    return this.http.get<MarketIndex[]>('/api/stocks/indices', { params }).pipe(
+    return this.http.get<MarketIndex[]>('/api/stocks', { params: params.set('action', 'indices') }).pipe(
       tap(indices => {
         this.setCache(this.indexCache, cacheKey, indices);
       }),
@@ -184,7 +184,7 @@ export class StockService {
     
     const params = new HttpParams().set('market', market);
     
-    return this.http.get<StockSearchResult[]>('/api/stocks/list', { params }).pipe(
+    return this.http.get<StockSearchResult[]>('/api/stocks', { params: params.set('action', 'list') }).pipe(
       tap(stocks => {
         // Cache for longer (30 minutes) since this changes infrequently
         this.searchCache.set(cacheKey, {

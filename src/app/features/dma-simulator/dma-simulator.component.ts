@@ -616,7 +616,7 @@ export class DmaSimulatorComponent {
       return;
     }
 
-    this.http.get<{ stocks: any[] }>(`/api/stocks/search?q=${encodeURIComponent(query)}&fuzzy=true`).subscribe({
+    this.http.get<{ stocks: any[] }>(`/api/stocks?action=search&q=${encodeURIComponent(query)}&fuzzy=true`).subscribe({
       next: (res) => {
         if (res.stocks && res.stocks.length > 0) {
           this.searchSuggestions.set(res.stocks.slice(0, 15));
@@ -648,7 +648,7 @@ export class DmaSimulatorComponent {
     this.error.set('');
     this.result.set(null);
 
-    this.http.get<DmaCrossoverResponse>(`/api/stocks/dma-crossovers?symbol=${encodeURIComponent(symbol)}`).subscribe({
+    this.http.get<DmaCrossoverResponse>(`/api/stocks?action=dma-crossovers&symbol=${encodeURIComponent(symbol)}`).subscribe({
       next: (data) => {
         this.result.set(data);
         this.loading.set(false);

@@ -548,7 +548,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
 
   private fetchIndices(market: Market): void {
     this.indicesLoading.set(true);
-    this.http.get<{ indices: MarketIndex[] }>(`/api/market/indices?market=${market}`).subscribe({
+    this.http.get<{ indices: MarketIndex[] }>(`/api/market?action=indices&market=${market}`).subscribe({
       next: (response) => {
         this.indices.set(response.indices || []);
         this.indicesLoading.set(false);
@@ -580,7 +580,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
       return;
     }
     
-    this.http.get<{ stocks: Stock[] }>(`/api/stocks/search?q=${encodeURIComponent(query)}&fuzzy=true`).subscribe({
+    this.http.get<{ stocks: Stock[] }>(`/api/stocks?action=search&q=${encodeURIComponent(query)}&fuzzy=true`).subscribe({
       next: (result) => {
         if (result.stocks && result.stocks.length > 0) {
           this.filteredStocks.set(result.stocks.slice(0, 15));

@@ -657,7 +657,7 @@ export class MarketNewsComponent implements OnInit, OnDestroy {
     try {
       const market = this.marketService.currentMarket();
       const result = await this.http.get<{ news: NewsItem[], categories: Record<string, number> }>(
-        `/api/market/news?market=${market}`
+        `/api/market?action=news&market=${market}`
       ).toPromise();
       
       if (result?.news) {

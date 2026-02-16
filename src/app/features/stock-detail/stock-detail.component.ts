@@ -1135,7 +1135,7 @@ export class StockDetailComponent implements OnInit {
     try {
       // Fetch stock with technicals
       const result = await this.http.get<{ stocks: Stock[] }>(
-        `/api/stocks/search?q=${symbol}&technicals=true`
+        `/api/stocks?action=search&q=${symbol}&technicals=true`
       ).toPromise();
 
       if (result?.stocks && result.stocks.length > 0) {

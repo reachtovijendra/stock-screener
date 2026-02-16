@@ -1,10 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { searchStocks, getQuote, getMarketFromSymbol, Market } from '../_lib/yahoo-client';
+import { searchStocks, getQuote, getMarketFromSymbol, Market } from '../yahoo-client';
 import https from 'https';
 
-/**
- * Make HTTPS request
- */
 function httpsRequest(options: https.RequestOptions): Promise<{ statusCode: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
@@ -28,9 +25,6 @@ function httpsRequest(options: https.RequestOptions): Promise<{ statusCode: numb
   });
 }
 
-/**
- * Fetch historical closing prices from Yahoo Finance chart API
- */
 async function fetchHistoricalPrices(symbol: string): Promise<number[]> {
   try {
     const response = await httpsRequest({
@@ -58,9 +52,6 @@ async function fetchHistoricalPrices(symbol: string): Promise<number[]> {
   }
 }
 
-/**
- * Calculate RSI (Relative Strength Index) - 14 period
- */
 function calculateRSI(closes: number[], period: number = 14): number | null {
   if (closes.length < period + 1) return null;
 
@@ -90,9 +81,6 @@ function calculateRSI(closes: number[], period: number = 14): number | null {
   return Math.round((100 - (100 / (1 + rs))) * 10) / 10;
 }
 
-/**
- * Calculate MACD (Moving Average Convergence Divergence)
- */
 function calculateMACD(closes: number[]): { macd: number | null; signal: number | null; histogram: number | null } {
   if (closes.length < 35) return { macd: null, signal: null, histogram: null };
 
@@ -125,9 +113,6 @@ function calculateMACD(closes: number[]): { macd: number | null; signal: number 
   };
 }
 
-/**
- * Determine MACD signal type
- */
 function getMacdSignalType(macd: number | null, signal: number | null, histogram: number | null): string | null {
   if (macd === null || signal === null || histogram === null) return null;
 
@@ -135,16 +120,12 @@ function getMacdSignalType(macd: number | null, signal: number | null, histogram
   if (macd < 0 && histogram < 0 && macd < signal) return 'strong_bearish';
   if (histogram > 0 && macd > signal) return 'bullish';
   if (histogram < 0 && macd < signal) return 'bearish';
-  // Crossover detection: small histogram means recent cross
   if (Math.abs(histogram) < Math.abs(macd) * 0.1) {
     return histogram > 0 ? 'bullish_crossover' : 'bearish_crossover';
   }
   return histogram > 0 ? 'bullish' : 'bearish';
 }
 
-/**
- * Enrich a stock quote with technical indicators
- */
 async function enrichWithTechnicals(stock: any): Promise<void> {
   try {
     const closes = await fetchHistoricalPrices(stock.symbol);
@@ -172,16 +153,7 @@ async function enrichWithTechnicals(stock: any): Promise<void> {
   }
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // CORS headers
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-  if (req.method === 'OPTIONS') {
-    return res.status(200).end();
-  }
-
+export async function handleSearch(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -200,7 +172,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const stocks: any[] = [];
     const seenSymbols = new Set<string>();
 
-    // Always try exact symbol match first (handles cases like "MU", "HOOD", "TATAELXSI.NS")
     const exactSymbol = query.toUpperCase();
     if (/^[A-Z0-9\-\.&]{1,20}$/.test(exactSymbol)) {
       console.log(`[Search] Trying exact match for: ${exactSymbol}`);
@@ -218,11 +189,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       } catch (err: any) {
         console.log(`[Search] Exact match failed for ${exactSymbol}: ${err.message}`);
-        // Fall through to fuzzy/symbol search
       }
     }
 
-    // If fuzzy search requested, also search by name
     if (isFuzzy) {
       const searchResults = await searchStocks(query, marketType);
       for (const result of searchResults.slice(0, 10)) {
@@ -242,7 +211,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
     } else if (query.includes(',')) {
-      // Multi-symbol exact search
       const symbols = query.toUpperCase().split(',').slice(0, 10);
       for (const sym of symbols) {
         const trimmed = sym.trim();
@@ -263,7 +231,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
     } else if (stocks.length === 0) {
-      // Exact match failed and no fuzzy -- try symbol search as fallback
       const searchResults = await searchStocks(query, marketType);
       for (const result of searchResults.slice(0, 5)) {
         if (seenSymbols.has(result.symbol)) continue;
@@ -283,7 +250,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // Return in { stocks: [...] } format matching mock-server behavior
     return res.status(200).json({ stocks });
   } catch (error: any) {
     console.error('Search API error:', error);

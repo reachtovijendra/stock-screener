@@ -910,7 +910,7 @@ export class ResultsTableComponent {
     if (shouldSearchApi && query.length >= 2) {
       this.searchLoading.set(true);
       // Use fuzzy=true to search by name/description
-      this.http.get<{ stocks: Stock[] }>(`/api/stocks/search?q=${encodeURIComponent(query)}&fuzzy=true`).subscribe({
+      this.http.get<{ stocks: Stock[] }>(`/api/stocks?action=search&q=${encodeURIComponent(query)}&fuzzy=true`).subscribe({
         next: (result) => {
           if (result.stocks && result.stocks.length > 0) {
             // Merge API results with cache results, avoiding duplicates
@@ -932,7 +932,7 @@ export class ResultsTableComponent {
       
       if (!symbolInCache) {
         this.searchLoading.set(true);
-        this.http.get<{ stocks: Stock[] }>(`/api/stocks/search?q=${query.toUpperCase()}`).subscribe({
+        this.http.get<{ stocks: Stock[] }>(`/api/stocks?action=search&q=${query.toUpperCase()}`).subscribe({
           next: (result) => {
             if (result.stocks && result.stocks.length > 0) {
               const existingSymbols = new Set(filtered.map(s => s.symbol));

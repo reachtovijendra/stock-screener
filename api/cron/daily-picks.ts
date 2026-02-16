@@ -14,13 +14,16 @@ import {
   computeTechnicals,
   scoreDayTrade,
 } from '../_lib/day-trade-scorer';
-import { sendEmail } from '../_lib/resend';
+import { sendEmail } from '../_lib/brevo-sender';
 
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
 
-const RECIPIENT = 'reachtovijendra@gmail.com';
+const RECIPIENTS = [
+  'reachtovijendra@gmail.com',
+  'vijendra.tadavarthy@acacceptance.com',
+];
 const US_TOP_PICKS = 7;   // 7 US + 3 India = 10 total
 const IN_TOP_PICKS = 3;
 const TECHNICALS_BATCH_SIZE = 5;
@@ -182,14 +185,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('[DailyPicks] No qualifying picks today. Sending notification email.');
       const noPicksHtml = generateNoPicksHTML(dateStr, spValue, djValue, niftyValue);
       const result = await sendEmail({
-        to: RECIPIENT,
+        to: RECIPIENTS,
         subject: `StockScreen Daily Picks - ${dateStr} (No Strong Signals)`,
         html: noPicksHtml,
       });
       console.log('[DailyPicks] No-picks email sent:', JSON.stringify(result));
     } else {
       const result = await sendEmail({
-        to: RECIPIENT,
+        to: RECIPIENTS,
         subject: `StockScreen Day-Trade Picks - ${dateStr} (${allPicks.length} Picks)`,
         html,
       });

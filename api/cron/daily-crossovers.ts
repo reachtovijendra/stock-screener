@@ -2,14 +2,23 @@
  * Daily DMA Crossover Alert Cron Job
  *
  * Runs at 8 AM EST (1 PM UTC) on weekdays via Vercel Cron.
- * Scans ~325 US + India stocks for golden cross (50 DMA crosses above 200 DMA)
- * and death cross (50 DMA crosses below 200 DMA) events that occurred on the
- * most recent trading day, then emails the results.
+ *
+ * Two-phase approach to scan the full market within the 120s timeout:
+ *   Phase 1 - Use the Yahoo screener API (same as the Screener page) to fetch
+ *             all stocks with a $1B+ US / 1000Cr+ India market cap. This returns
+ *             the current 50 DMA and 200 DMA for each stock.
+ *   Phase 2 - Filter to "candidates" where 50 DMA and 200 DMA are within 2% of
+ *             each other. Only for these (~30-80 stocks), fetch 1-year chart
+ *             data to compute the exact crossover (requires 2 consecutive days
+ *             of SMA values).
+ *
+ * This scans 1,800+ US and 1,000+ India stocks while keeping API calls
+ * manageable.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import https from 'https';
-import { getStocksToScan } from '../_lib/stock-lists';
+import { fetchScreenerStocks } from '../_lib/yahoo-client';
 import { sendEmail } from '../_lib/brevo-sender';
 
 // ---------------------------------------------------------------------------
@@ -20,12 +29,22 @@ const RECIPIENTS = [
   'reachtovijendra@gmail.com',
   'poojitha.challagandla@gmail.com',
 ];
-const BATCH_SIZE = 20;
-const BATCH_DELAY_MS = 100;
+const BATCH_SIZE = 25;
+const BATCH_DELAY_MS = 80;
+const DMA_PROXIMITY_THRESHOLD = 0.02; // 2% — candidates where 50/200 DMA are close
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
+
+interface CrossoverCandidate {
+  symbol: string;
+  name: string;
+  price: number;
+  fiftyDayMA: number;
+  twoHundredDayMA: number;
+  market: string;
+}
 
 interface CrossoverHit {
   symbol: string;
@@ -38,7 +57,7 @@ interface CrossoverHit {
 }
 
 // ---------------------------------------------------------------------------
-// Yahoo Finance helpers
+// Yahoo Finance chart helper
 // ---------------------------------------------------------------------------
 
 function httpsRequest(
@@ -63,7 +82,7 @@ function httpsRequest(
 }
 
 // ---------------------------------------------------------------------------
-// SMA + crossover detection (adapted from stocks-dma-crossovers handler)
+// SMA + crossover detection
 // ---------------------------------------------------------------------------
 
 function rollingSMA(closes: number[], period: number): (number | null)[] {
@@ -82,15 +101,14 @@ function rollingSMA(closes: number[], period: number): (number | null)[] {
  * Fetch 1 year of daily data and check if the most recent trading day
  * has a golden cross or death cross.
  */
-async function checkCrossover(
-  symbol: string,
-  market: string
+async function confirmCrossover(
+  candidate: CrossoverCandidate
 ): Promise<CrossoverHit | null> {
   try {
     const response = await httpsRequest({
       hostname: 'query1.finance.yahoo.com',
       port: 443,
-      path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`,
+      path: `/v8/finance/chart/${encodeURIComponent(candidate.symbol)}?interval=1d&range=1y`,
       method: 'GET',
       headers: {
         'User-Agent':
@@ -111,7 +129,6 @@ async function checkCrossover(
       if (c != null) closes.push(c);
     }
 
-    // Need at least 201 days to compute 200-day SMA for the last 2 days
     if (closes.length < 201) return null;
 
     const sma50 = rollingSMA(closes, 50);
@@ -125,40 +142,37 @@ async function checkCrossover(
     const prev50 = sma50[prevIdx];
     const prev200 = sma200[prevIdx];
 
-    if (
-      curr50 == null ||
-      curr200 == null ||
-      prev50 == null ||
-      prev200 == null
-    ) {
+    if (curr50 == null || curr200 == null || prev50 == null || prev200 == null) {
       return null;
     }
 
+    const meta = result.meta;
+    const name = meta.shortName || meta.symbol || candidate.symbol;
+    const price = Math.round(closes[lastIdx] * 100) / 100;
+
     // Golden cross: 50 SMA was <= 200 SMA yesterday, and > 200 SMA today
     if (prev50 <= prev200 && curr50 > curr200) {
-      const meta = result.meta;
       return {
-        symbol: meta.symbol || symbol,
-        name: meta.shortName || meta.symbol || symbol,
-        price: Math.round(closes[lastIdx] * 100) / 100,
+        symbol: meta.symbol || candidate.symbol,
+        name,
+        price,
         sma50: curr50,
         sma200: curr200,
         type: 'golden_cross',
-        market,
+        market: candidate.market,
       };
     }
 
     // Death cross: 50 SMA was >= 200 SMA yesterday, and < 200 SMA today
     if (prev50 >= prev200 && curr50 < curr200) {
-      const meta = result.meta;
       return {
-        symbol: meta.symbol || symbol,
-        name: meta.shortName || meta.symbol || symbol,
-        price: Math.round(closes[lastIdx] * 100) / 100,
+        symbol: meta.symbol || candidate.symbol,
+        name,
+        price,
         sma50: curr50,
         sma200: curr200,
         type: 'death_cross',
-        market,
+        market: candidate.market,
       };
     }
 
@@ -169,37 +183,69 @@ async function checkCrossover(
 }
 
 // ---------------------------------------------------------------------------
-// Batch scanner
+// Phase 1: Fetch full market via screener, identify candidates
 // ---------------------------------------------------------------------------
 
-async function scanMarket(
-  market: string
-): Promise<{ hits: CrossoverHit[]; scanned: number }> {
-  const symbols = await getStocksToScan(market);
-  const hits: CrossoverHit[] = [];
-  let scanned = 0;
+async function getCandidates(
+  market: 'US' | 'IN'
+): Promise<{ candidates: CrossoverCandidate[]; totalStocks: number }> {
+  const stocks = await fetchScreenerStocks(market);
 
-  for (let i = 0; i < symbols.length; i += BATCH_SIZE) {
-    const batch = symbols.slice(i, i + BATCH_SIZE);
+  const candidates: CrossoverCandidate[] = [];
+
+  for (const stock of stocks) {
+    if (!stock.fiftyDayMA || !stock.twoHundredDayMA) continue;
+    if (stock.fiftyDayMA <= 0 || stock.twoHundredDayMA <= 0) continue;
+
+    // Check if the two DMAs are within the proximity threshold
+    const ratio = stock.fiftyDayMA / stock.twoHundredDayMA;
+    if (Math.abs(ratio - 1) <= DMA_PROXIMITY_THRESHOLD) {
+      candidates.push({
+        symbol: stock.symbol,
+        name: stock.name,
+        price: stock.price,
+        fiftyDayMA: stock.fiftyDayMA,
+        twoHundredDayMA: stock.twoHundredDayMA,
+        market,
+      });
+    }
+  }
+
+  console.log(
+    `[Crossovers] ${market}: ${stocks.length} stocks screened, ${candidates.length} candidates (50/200 DMA within ${DMA_PROXIMITY_THRESHOLD * 100}%)`
+  );
+
+  return { candidates, totalStocks: stocks.length };
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: Confirm crossovers via chart data
+// ---------------------------------------------------------------------------
+
+async function confirmCandidates(
+  candidates: CrossoverCandidate[]
+): Promise<CrossoverHit[]> {
+  const hits: CrossoverHit[] = [];
+
+  for (let i = 0; i < candidates.length; i += BATCH_SIZE) {
+    const batch = candidates.slice(i, i + BATCH_SIZE);
 
     const results = await Promise.allSettled(
-      batch.map((sym) => checkCrossover(sym, market))
+      batch.map((c) => confirmCrossover(c))
     );
 
     for (const r of results) {
-      scanned++;
       if (r.status === 'fulfilled' && r.value) {
         hits.push(r.value);
       }
     }
 
-    // Small delay between batches to avoid rate limiting
-    if (i + BATCH_SIZE < symbols.length) {
+    if (i + BATCH_SIZE < candidates.length) {
       await new Promise((resolve) => setTimeout(resolve, BATCH_DELAY_MS));
     }
   }
 
-  return { hits, scanned };
+  return hits;
 }
 
 // ---------------------------------------------------------------------------
@@ -273,12 +319,10 @@ function generateEmailHTML(
   dateStr: string,
   goldenCrosses: CrossoverHit[],
   deathCrosses: CrossoverHit[],
-  totalScanned: number
+  totalScanned: number,
+  totalCandidates: number
 ): string {
-  const goldenTable = generateCrossoverTable(
-    goldenCrosses,
-    'golden_cross'
-  );
+  const goldenTable = generateCrossoverTable(goldenCrosses, 'golden_cross');
   const deathTable = generateCrossoverTable(deathCrosses, 'death_cross');
 
   const totalHits = goldenCrosses.length + deathCrosses.length;
@@ -301,13 +345,14 @@ function generateEmailHTML(
         <span style="background:#14532d;color:#4ade80;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;">Golden: ${goldenCrosses.length}</span>
         <span style="background:#7f1d1d;color:#f87171;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;">Death: ${deathCrosses.length}</span>
         <span style="background:#1e293b;color:#94a3b8;padding:6px 12px;border-radius:6px;font-size:13px;">Scanned: ${totalScanned} stocks</span>
+        <span style="background:#1e293b;color:#94a3b8;padding:6px 12px;border-radius:6px;font-size:13px;">Candidates: ${totalCandidates}</span>
       </div>
     </div>
 
     ${totalHits === 0 ? `
     <div style="background:#1e293b;border-radius:8px;padding:24px;margin-bottom:20px;text-align:center;border:1px solid #334155;">
       <p style="font-size:16px;color:#fbbf24;margin:0 0 8px 0;font-weight:600;">No DMA Crossovers Detected Today</p>
-      <p style="font-size:13px;color:#94a3b8;margin:0;">None of the ${totalScanned} scanned stocks had a 50/200 DMA crossover on the most recent trading day.</p>
+      <p style="font-size:13px;color:#94a3b8;margin:0;">None of the ${totalScanned} scanned stocks (${totalCandidates} candidates with close DMAs) had a confirmed 50/200 DMA crossover on the most recent trading day.</p>
     </div>
     ` : ''}
 
@@ -364,19 +409,29 @@ export default async function handler(
   const startTime = Date.now();
 
   try {
-    // Scan both markets in parallel
-    const [usResult, inResult] = await Promise.all([
-      scanMarket('US'),
-      scanMarket('IN'),
+    // Phase 1: Fetch full market from Yahoo screener (same as Screener page)
+    console.log('[Crossovers] Phase 1: Fetching full market via screener...');
+    const [usData, inData] = await Promise.all([
+      getCandidates('US'),
+      getCandidates('IN'),
     ]);
 
-    const allHits = [...usResult.hits, ...inResult.hits];
-    const goldenCrosses = allHits.filter((h) => h.type === 'golden_cross');
-    const deathCrosses = allHits.filter((h) => h.type === 'death_cross');
-    const totalScanned = usResult.scanned + inResult.scanned;
+    const allCandidates = [...usData.candidates, ...inData.candidates];
+    const totalScanned = usData.totalStocks + inData.totalStocks;
 
     console.log(
-      `[Crossovers] Scanned ${totalScanned} stocks: ${goldenCrosses.length} golden, ${deathCrosses.length} death crosses`
+      `[Crossovers] Phase 1 complete: ${totalScanned} stocks screened, ${allCandidates.length} candidates to verify`
+    );
+
+    // Phase 2: Confirm crossovers via chart data (only for candidates)
+    console.log('[Crossovers] Phase 2: Confirming crossovers via chart data...');
+    const hits = await confirmCandidates(allCandidates);
+
+    const goldenCrosses = hits.filter((h) => h.type === 'golden_cross');
+    const deathCrosses = hits.filter((h) => h.type === 'death_cross');
+
+    console.log(
+      `[Crossovers] Phase 2 complete: ${goldenCrosses.length} golden, ${deathCrosses.length} death crosses confirmed`
     );
 
     // Generate email
@@ -398,7 +453,8 @@ export default async function handler(
       dateStr,
       goldenCrosses,
       deathCrosses,
-      totalScanned
+      totalScanned,
+      allCandidates.length
     );
 
     // Send email
@@ -412,13 +468,14 @@ export default async function handler(
 
     if (emailResult.success) {
       console.log(
-        `[Crossovers] Email sent successfully (${elapsed}ms). MessageId: ${emailResult.messageId}`
+        `[Crossovers] Email sent (${elapsed}ms). MessageId: ${emailResult.messageId}`
       );
       return res.status(200).json({
         success: true,
         goldenCrosses: goldenCrosses.length,
         deathCrosses: deathCrosses.length,
         totalScanned,
+        candidatesChecked: allCandidates.length,
         elapsedMs: elapsed,
         messageId: emailResult.messageId,
       });
@@ -430,6 +487,7 @@ export default async function handler(
         goldenCrosses: goldenCrosses.length,
         deathCrosses: deathCrosses.length,
         totalScanned,
+        candidatesChecked: allCandidates.length,
         elapsedMs: elapsed,
       });
     }

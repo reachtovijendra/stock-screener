@@ -3,46 +3,77 @@
  *
  * Provides US and India large-cap stock lists used by the breakouts scanner,
  * DMA crossover cron, and other features that need to iterate over the market.
+ *
+ * The static lists cover ~250 US stocks (S&P 500 large/mid-cap) and ~200 India
+ * NSE stocks (NIFTY 200 + popular mid-caps). The dynamic screener supplements
+ * these with any additional symbols it discovers; results are merged and
+ * deduplicated so we always scan the broadest possible universe.
  */
 
 import https from 'https';
 
 // ---------------------------------------------------------------------------
-// US Large-cap stocks (fallback when dynamic screener fetch fails)
+// US Stocks - S&P 500 large/mid-cap coverage (~250 symbols)
 // ---------------------------------------------------------------------------
 
 export const US_STOCKS: string[] = [
-  // Mega cap tech
-  'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'BRK-A',
-  // Healthcare
+  // Mega-cap tech
+  'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
+  // Healthcare & Pharma
   'UNH', 'JNJ', 'LLY', 'PFE', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY',
-  // Financial
-  'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP', 'C', 'USB', 'PNC',
-  // Consumer
-  'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT', 'LOW', 'TJX',
+  'AMGN', 'GILD', 'ISRG', 'VRTX', 'REGN', 'MDT', 'SYK', 'BSX', 'EW', 'ZTS',
+  'CI', 'HUM', 'CVS', 'MCK', 'CAH', 'DXCM', 'IDXX', 'IQV', 'A', 'BDX',
+  'BIIB', 'MRNA', 'GEHC',
+  // Financial services
+  'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP',
+  'C', 'USB', 'PNC', 'TFC', 'COF', 'BK', 'AIG', 'MET', 'PRU', 'AFL',
+  'ICE', 'CME', 'SPGI', 'MCO', 'MSCI', 'FIS', 'FISV', 'GPN', 'AJG', 'MMC',
+  'AON', 'TRV', 'CB', 'ALL', 'PGR',
+  // Consumer staples & discretionary
+  'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT',
+  'LOW', 'TJX', 'CL', 'KMB', 'GIS', 'K', 'HSY', 'SJM', 'MKC', 'CHD',
+  'MNST', 'KDP', 'STZ', 'TAP', 'EL', 'ROST', 'DG', 'DLTR', 'ORLY', 'AZO',
+  'BBY', 'TSCO', 'ULTA', 'LULU', 'DECK', 'GM', 'F', 'APTV', 'LEN', 'DHI',
+  'PHM', 'NVR',
   // Energy
-  'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL', 'DVN', 'FANG',
-  // Tech & Semiconductors
+  'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL',
+  'DVN', 'FANG', 'HES', 'WMB', 'KMI', 'OKE', 'TRGP', 'BKR',
+  // Technology & Semiconductors
   'AVGO', 'CSCO', 'ACN', 'CRM', 'ORCL', 'NFLX', 'AMD', 'INTC', 'QCOM', 'TXN',
   'IBM', 'AMAT', 'LRCX', 'MU', 'ADI', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON',
   'WDC', 'STX', 'NXPI', 'MCHP', 'MPWR', 'SWKS', 'QRVO', 'TER', 'ENTG',
-  // Industrial
-  'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP', 'FDX', 'NSC', 'EMR',
+  'FTNT', 'ANSS', 'KEYS', 'ZBRA', 'TRMB', 'PTC', 'EPAM', 'IT', 'CTSH', 'GDDY',
+  'GEN', 'HPQ', 'HPE', 'DELL', 'SMCI',
+  // Industrials
+  'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP',
+  'FDX', 'NSC', 'EMR', 'ETN', 'ITW', 'ROK', 'PH', 'CMI', 'PCAR', 'GD',
+  'NOC', 'TDG', 'HWM', 'WM', 'RSG', 'VRSK', 'CTAS', 'PAYX', 'FAST', 'GWW',
+  'SWK', 'IR', 'DOV', 'AME', 'OTIS', 'CARR', 'XYL', 'WAB', 'CSX', 'CP',
   // Telecom & Media
   'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'CHTR', 'WBD', 'PARA', 'FOX', 'NWSA',
+  'EA', 'TTWO', 'RBLX', 'MTCH', 'LYV', 'OMC', 'IPG',
   // Utilities & REITs
-  'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'SPG',
-  // Other popular
+  'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'ED', 'WEC', 'ES',
+  'AWK', 'ATO', 'CMS', 'DTE', 'FE', 'PPL', 'PEG', 'XEL', 'CEG', 'VST',
+  'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'SPG', 'O', 'WELL', 'DLR', 'AVB',
+  'EQR', 'VTR', 'ARE', 'MAA', 'UDR', 'ESS', 'INVH', 'SUI',
+  // Growth / high-profile
   'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID',
-  'NOW', 'INTU', 'ADBE', 'PANW', 'CRWD', 'ZS', 'DDOG', 'NET', 'MDB', 'TEAM'
+  'NOW', 'INTU', 'ADBE', 'PANW', 'CRWD', 'ZS', 'DDOG', 'NET', 'MDB', 'TEAM',
+  'WDAY', 'VEEV', 'HUBS', 'OKTA', 'BILL', 'TTD', 'DASH', 'PINS', 'SNAP', 'ROKU',
+  'SOFI', 'HOOD', 'AFRM', 'U', 'PATH', 'DKNG', 'CPNG', 'SE', 'GRAB', 'NU',
+  // Popular ETFs (useful for crossover signals)
+  'SPY', 'QQQ', 'IWM', 'DIA', 'TQQQ', 'SQQQ', 'ARKK', 'XLF', 'XLE', 'XLK',
+  'XLV', 'XLI', 'XLP', 'XLU', 'SOXX', 'SMH', 'GLD', 'SLV', 'TLT', 'HYG',
+  'VTI', 'VOO', 'VEA', 'VWO', 'EEM', 'EFA',
 ];
 
 // ---------------------------------------------------------------------------
-// India Large-cap stocks (NIFTY 50 + popular NSE stocks)
+// India NSE Stocks - NIFTY 200 + popular mid-caps (~200 symbols)
 // ---------------------------------------------------------------------------
 
 export const IN_STOCKS: string[] = [
-  // NIFTY 50 constituents
+  // NIFTY 50
   'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
   'HINDUNILVR.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'ITC.NS', 'KOTAKBANK.NS',
   'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
@@ -52,7 +83,7 @@ export const IN_STOCKS: string[] = [
   'ONGC.NS', 'HDFCLIFE.NS', 'DIVISLAB.NS', 'COALINDIA.NS', 'GRASIM.NS',
   'BRITANNIA.NS', 'BPCL.NS', 'DRREDDY.NS', 'CIPLA.NS', 'APOLLOHOSP.NS',
   'EICHERMOT.NS', 'INDUSINDBK.NS', 'SBILIFE.NS', 'TATACONSUM.NS', 'HEROMOTOCO.NS',
-  // Additional popular Indian stocks
+  // NIFTY Next 50 / NIFTY 100
   'ADANIENT.NS', 'ADANIGREEN.NS', 'ADANIPOWER.NS', 'ATGL.NS', 'AWL.NS',
   'BAJAJ-AUTO.NS', 'BANKBARODA.NS', 'BEL.NS', 'BERGEPAINT.NS', 'BIOCON.NS',
   'BOSCHLTD.NS', 'CANBK.NS', 'CHOLAFIN.NS', 'COLPAL.NS', 'DLF.NS',
@@ -63,7 +94,28 @@ export const IN_STOCKS: string[] = [
   'PEL.NS', 'PETRONET.NS', 'PIDILITIND.NS', 'PNB.NS', 'POLYCAB.NS',
   'RECLTD.NS', 'SBICARD.NS', 'SHREECEM.NS', 'SIEMENS.NS', 'SRF.NS',
   'TATAPOWER.NS', 'TATAELXSI.NS', 'TORNTPHARM.NS', 'TRENT.NS', 'VEDL.NS',
-  'ZOMATO.NS', 'ZYDUSLIFE.NS'
+  'ZOMATO.NS', 'ZYDUSLIFE.NS',
+  // NIFTY 200 / Mid-cap additions
+  'ABB.NS', 'ACC.NS', 'ALKEM.NS', 'AMBUJACEM.NS', 'AUROPHARMA.NS',
+  'BANDHANBNK.NS', 'BATAINDIA.NS', 'BHEL.NS', 'CANFINHOME.NS', 'CGPOWER.NS',
+  'CHAMBLFERT.NS', 'CONCOR.NS', 'COROMANDEL.NS', 'CROMPTON.NS', 'CUB.NS',
+  'CUMMINSIND.NS', 'DEEPAKNTR.NS', 'DELHIVERY.NS', 'DIXON.NS', 'ESCORTS.NS',
+  'EXIDEIND.NS', 'FEDERALBNK.NS', 'FORTIS.NS', 'GLENMARK.NS', 'GMRINFRA.NS',
+  'GNFC.NS', 'GODREJPROP.NS', 'GSPL.NS', 'HAL.NS', 'HDFCAMC.NS',
+  'HONAUT.NS', 'IDFCFIRSTB.NS', 'IEX.NS', 'INDHOTEL.NS', 'INDUSTOWER.NS',
+  'IRFC.NS', 'JKCEMENT.NS', 'JSWENERGY.NS', 'KAJARIACER.NS', 'KEI.NS',
+  'LAURUSLABS.NS', 'LICHSGFIN.NS', 'LTIM.NS', 'LTTS.NS', 'MANAPPURAM.NS',
+  'MAXHEALTH.NS', 'MFSL.NS', 'MOTHERSON.NS', 'MPHASIS.NS', 'MRF.NS',
+  'NATIONALUM.NS', 'NIACL.NS', 'NMDC.NS', 'OBEROIRLTY.NS', 'OFSS.NS',
+  'PAGEIND.NS', 'PERSISTENT.NS', 'PHOENIXLTD.NS', 'PIIND.NS', 'PRESTIGE.NS',
+  'PVRINOX.NS', 'RAJESHEXPO.NS', 'RAMCOCEM.NS', 'RBLBANK.NS', 'SAIL.NS',
+  'SOLARINDS.NS', 'SONACOMS.NS', 'STARHEALTH.NS', 'SUNDARMFIN.NS', 'SUPREMEIND.NS',
+  'SYNGENE.NS', 'TATACHEM.NS', 'TATACOMM.NS', 'TATATECH.NS', 'TIINDIA.NS',
+  'TORNTPOWER.NS', 'TVSMOTOR.NS', 'UBL.NS', 'UNIONBANK.NS', 'UPL.NS',
+  'VBL.NS', 'VOLTAS.NS', 'WHIRLPOOL.NS', 'YESBANK.NS', 'ZEEL.NS',
+  // Popular PSU & defence
+  'COCHINSHIP.NS', 'GRSE.NS', 'HUDCO.NS', 'MAZAGON.NS',
+  'NHPC.NS', 'PFC.NS', 'RVNL.NS', 'SJVN.NS',
 ];
 
 // ---------------------------------------------------------------------------
@@ -97,7 +149,7 @@ function httpsRequest(
 
 /**
  * Dynamically fetch large-cap stock symbols from the Yahoo Finance screener.
- * Returns an empty array on failure so callers can fall back to the static lists.
+ * Returns an empty array on failure so callers can merge with the static lists.
  */
 export async function fetchLargeCapStocks(
   market: string,
@@ -147,9 +199,9 @@ export async function fetchLargeCapStocks(
         .map((q: any) => q.symbol)
         .filter((s: string) => s && !s.includes('^'));
 
-      if (symbols.length > 50) {
+      if (symbols.length > 0) {
         console.log(
-          `[StockLists] Fetched ${symbols.length} ${market} large-cap stocks dynamically`
+          `[StockLists] Fetched ${symbols.length} ${market} stocks dynamically`
         );
         return symbols;
       }
@@ -162,16 +214,29 @@ export async function fetchLargeCapStocks(
 }
 
 /**
- * Get the list of stock symbols to scan for a given market.
- * Tries the dynamic screener first, falls back to the static list.
+ * Get the deduplicated list of stock symbols to scan for a given market.
+ * Merges the static fallback list with any dynamically fetched symbols
+ * so we always scan the broadest possible universe.
  */
 export async function getStocksToScan(market: string): Promise<string[]> {
+  const staticList = market === 'IN' ? IN_STOCKS : US_STOCKS;
   const dynamicStocks = await fetchLargeCapStocks(market);
 
-  if (dynamicStocks.length > 50) {
-    return dynamicStocks;
+  // Merge and deduplicate
+  const seen = new Set<string>();
+  const merged: string[] = [];
+
+  for (const sym of [...staticList, ...dynamicStocks]) {
+    const key = sym.toUpperCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(sym);
+    }
   }
 
-  console.log(`[StockLists] Using fallback stock list for ${market}`);
-  return market === 'IN' ? IN_STOCKS : US_STOCKS;
+  console.log(
+    `[StockLists] ${market} scan list: ${staticList.length} static + ${dynamicStocks.length} dynamic = ${merged.length} unique symbols`
+  );
+
+  return merged;
 }

@@ -22,7 +22,7 @@ import { sendEmail } from '../_lib/brevo-sender';
 
 const RECIPIENTS = [
   'reachtovijendra@gmail.com',
-  'vijendra.tadavarthy@acacceptance.com',
+  'poojitha.challagandla@gmail.com',
 ];
 const US_TOP_PICKS = 7;   // 7 US + 3 India = 10 total
 const IN_TOP_PICKS = 3;

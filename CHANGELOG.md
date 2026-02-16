@@ -7,7 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Daily DMA crossover email alert sent at 8 AM EST on weekdays via new `api/cron/daily-crossovers.ts` Vercel Cron job; scans ~325 US and India large-cap stocks for golden cross (50 DMA crosses above 200 DMA) and death cross (50 DMA crosses below 200 DMA) events on the most recent trading day
+- Dark-themed HTML email with separate tables for golden crosses (bullish) and death crosses (bearish), showing symbol, name, price, 50 DMA, 200 DMA, and market for each crossover
+- New shared `api/_lib/stock-lists.ts` module exporting `US_STOCKS`, `IN_STOCKS`, `fetchLargeCapStocks()`, and `getStocksToScan()` for reuse across breakouts scanner and crossover cron
+- Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
+
 ### Changed
+- Refactored `api/_lib/handlers/market-breakouts.ts` to import stock lists from the shared `stock-lists.ts` module instead of defining them inline
 - Consolidated 12 Vercel serverless functions into 4 using a router pattern to stay within the Hobby plan limit and free up 8 slots for future features
 - `api/stocks.ts` router now dispatches to 7 handler functions (quote, search, screen, list, indices, technicals, dma-crossovers) based on `?action=` query parameter
 - `api/market.ts` router now dispatches to 3 handler functions (indices, news, breakouts) based on `?action=` query parameter

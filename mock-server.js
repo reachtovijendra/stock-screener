@@ -1675,11 +1675,12 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const path = url.pathname;
+  const action = url.searchParams.get('action');
 
-  console.log(`[${new Date().toISOString()}] ${req.method} ${path}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${path}${action ? '?action=' + action : ''}`);
 
   try {
-    if (path === '/api/stocks/screen' && req.method === 'POST') {
+    if (path === '/api/stocks' && action === 'screen' && req.method === 'POST') {
       let body = '';
       req.on('data', chunk => { body += chunk; });
       await new Promise(resolve => req.on('end', resolve));
@@ -1740,7 +1741,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (path === '/api/stocks/quote' && req.method === 'GET') {
+    if (path === '/api/stocks' && action === 'quote' && req.method === 'GET') {
       const symbol = url.searchParams.get('symbol');
       if (!symbol) {
         res.writeHead(400);
@@ -1804,7 +1805,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Market indices endpoint
-    if (path === '/api/market/indices' && req.method === 'GET') {
+    if (path === '/api/market' && action === 'indices' && req.method === 'GET') {
       const market = url.searchParams.get('market') || 'US';
       
       // Define indices for each market
@@ -1867,7 +1868,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Search for symbols directly (for autocomplete when stock not in cache)
-    if (path === '/api/stocks/search' && req.method === 'GET') {
+    if (path === '/api/stocks' && action === 'search' && req.method === 'GET') {
       const query = url.searchParams.get('q');
       const includeTechnicals = url.searchParams.get('technicals') === 'true';
       const fuzzy = url.searchParams.get('fuzzy') === 'true';
@@ -1971,7 +1972,7 @@ const server = http.createServer(async (req, res) => {
 
     // Bulk technicals calculation - processes many symbols in parallel
     // DMA Crossovers endpoint
-    if (path === '/api/stocks/dma-crossovers' && req.method === 'GET') {
+    if (path === '/api/stocks' && action === 'dma-crossovers' && req.method === 'GET') {
       const symbol = url.searchParams.get('symbol');
       if (!symbol) {
         res.writeHead(400);
@@ -2102,7 +2103,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
-    if (path === '/api/stocks/technicals' && req.method === 'POST') {
+    if (path === '/api/stocks' && action === 'technicals' && req.method === 'POST') {
       let body = '';
       req.on('data', chunk => { body += chunk; });
       await new Promise(resolve => req.on('end', resolve));
@@ -2186,7 +2187,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Market-wide news endpoint (aggregates news from large-cap stocks + general market news)
-    if (path === '/api/market/news' && req.method === 'GET') {
+    if (path === '/api/market' && action === 'news' && req.method === 'GET') {
       // US stocks
       const US_LARGE_CAP_STOCKS = [
         'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
@@ -2379,38 +2380,63 @@ const server = http.createServer(async (req, res) => {
     }
 
     // Technical Breakouts endpoint
-    if (path === '/api/market/breakouts' && req.method === 'GET') {
-      // US stocks - expanded list including storage/semiconductors
+    if (path === '/api/market' && action === 'breakouts' && req.method === 'GET') {
+      // US stocks - S&P 500 large/mid-cap coverage (~250 symbols) - matches Vercel API
       const US_STOCKS_TO_SCAN = [
-        // Mega cap tech
-        'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B', 'BRK-A',
-        // Healthcare
+        // Mega-cap tech
+        'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK-B',
+        // Healthcare & Pharma
         'UNH', 'JNJ', 'LLY', 'PFE', 'MRK', 'ABBV', 'TMO', 'ABT', 'DHR', 'BMY',
-        // Financial
-        'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP', 'C', 'USB', 'PNC',
-        // Consumer
-        'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT', 'LOW', 'TJX',
+        'AMGN', 'GILD', 'ISRG', 'VRTX', 'REGN', 'MDT', 'SYK', 'BSX', 'EW', 'ZTS',
+        'CI', 'HUM', 'CVS', 'MCK', 'CAH', 'DXCM', 'IDXX', 'IQV', 'A', 'BDX',
+        'BIIB', 'MRNA', 'GEHC',
+        // Financial services
+        'V', 'JPM', 'MA', 'BAC', 'WFC', 'GS', 'MS', 'BLK', 'SCHW', 'AXP',
+        'C', 'USB', 'PNC', 'TFC', 'COF', 'BK', 'AIG', 'MET', 'PRU', 'AFL',
+        'ICE', 'CME', 'SPGI', 'MCO', 'MSCI', 'FIS', 'FISV', 'GPN', 'AJG', 'MMC',
+        'AON', 'TRV', 'CB', 'ALL', 'PGR',
+        // Consumer staples & discretionary
+        'WMT', 'PG', 'HD', 'KO', 'PEP', 'COST', 'MCD', 'NKE', 'SBUX', 'TGT',
+        'LOW', 'TJX', 'CL', 'KMB', 'GIS', 'K', 'HSY', 'SJM', 'MKC', 'CHD',
+        'MNST', 'KDP', 'STZ', 'TAP', 'EL', 'ROST', 'DG', 'DLTR', 'ORLY', 'AZO',
+        'BBY', 'TSCO', 'ULTA', 'LULU', 'DECK', 'GM', 'F', 'APTV', 'LEN', 'DHI',
+        'PHM', 'NVR',
         // Energy
-        'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL', 'DVN', 'FANG',
-        // Tech & Semiconductors (expanded)
+        'XOM', 'CVX', 'COP', 'SLB', 'EOG', 'MPC', 'PSX', 'VLO', 'OXY', 'HAL',
+        'DVN', 'FANG', 'HES', 'WMB', 'KMI', 'OKE', 'TRGP', 'BKR',
+        // Technology & Semiconductors
         'AVGO', 'CSCO', 'ACN', 'CRM', 'ORCL', 'NFLX', 'AMD', 'INTC', 'QCOM', 'TXN',
         'IBM', 'AMAT', 'LRCX', 'MU', 'ADI', 'KLAC', 'SNPS', 'CDNS', 'MRVL', 'ON',
-        'WDC', 'STX', 'SNDK', 'NXPI', 'MCHP', 'MPWR', 'SWKS', 'QRVO', 'TER', 'ENTG',
-        // Industrial
-        'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP', 'FDX', 'NSC', 'EMR',
+        'WDC', 'STX', 'NXPI', 'MCHP', 'MPWR', 'SWKS', 'QRVO', 'TER', 'ENTG',
+        'FTNT', 'ANSS', 'KEYS', 'ZBRA', 'TRMB', 'PTC', 'EPAM', 'IT', 'CTSH', 'GDDY',
+        'GEN', 'HPQ', 'HPE', 'DELL', 'SMCI',
+        // Industrials
+        'CAT', 'DE', 'BA', 'HON', 'UPS', 'RTX', 'LMT', 'GE', 'MMM', 'UNP',
+        'FDX', 'NSC', 'EMR', 'ETN', 'ITW', 'ROK', 'PH', 'CMI', 'PCAR', 'GD',
+        'NOC', 'TDG', 'HWM', 'WM', 'RSG', 'VRSK', 'CTAS', 'PAYX', 'FAST', 'GWW',
+        'SWK', 'IR', 'DOV', 'AME', 'OTIS', 'CARR', 'XYL', 'WAB', 'CSX', 'CP',
         // Telecom & Media
         'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'CHTR', 'WBD', 'PARA', 'FOX', 'NWSA',
+        'EA', 'TTWO', 'RBLX', 'MTCH', 'LYV', 'OMC', 'IPG',
         // Utilities & REITs
-        'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'SPG',
-        // Software & Cloud
+        'NEE', 'DUK', 'SO', 'AEP', 'D', 'EXC', 'SRE', 'ED', 'WEC', 'ES',
+        'AWK', 'ATO', 'CMS', 'DTE', 'FE', 'PPL', 'PEG', 'XEL', 'CEG', 'VST',
+        'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'SPG', 'O', 'WELL', 'DLR', 'AVB',
+        'EQR', 'VTR', 'ARE', 'MAA', 'UDR', 'ESS', 'INVH', 'SUI',
+        // Growth / high-profile
+        'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID',
         'NOW', 'INTU', 'ADBE', 'PANW', 'CRWD', 'ZS', 'DDOG', 'NET', 'MDB', 'TEAM',
-        // Other popular
-        'PYPL', 'SQ', 'SHOP', 'UBER', 'ABNB', 'COIN', 'SNOW', 'PLTR', 'RIVN', 'LCID'
+        'WDAY', 'VEEV', 'HUBS', 'OKTA', 'BILL', 'TTD', 'DASH', 'PINS', 'SNAP', 'ROKU',
+        'SOFI', 'HOOD', 'AFRM', 'U', 'PATH', 'DKNG', 'CPNG', 'SE', 'GRAB', 'NU',
+        // Popular ETFs (useful for crossover signals)
+        'SPY', 'QQQ', 'IWM', 'DIA', 'TQQQ', 'SQQQ', 'ARKK', 'XLF', 'XLE', 'XLK',
+        'XLV', 'XLI', 'XLP', 'XLU', 'SOXX', 'SMH', 'GLD', 'SLV', 'TLT', 'HYG',
+        'VTI', 'VOO', 'VEA', 'VWO', 'EEM', 'EFA'
       ];
 
-      // Indian stocks (NIFTY 50 + popular stocks)
+      // Indian stocks - NIFTY 200 + popular mid-caps (~200 symbols) - matches Vercel API
       const IN_STOCKS_TO_SCAN = [
-        // NIFTY 50 constituents
+        // NIFTY 50
         'RELIANCE.NS', 'TCS.NS', 'HDFCBANK.NS', 'INFY.NS', 'ICICIBANK.NS',
         'HINDUNILVR.NS', 'SBIN.NS', 'BHARTIARTL.NS', 'ITC.NS', 'KOTAKBANK.NS',
         'LT.NS', 'AXISBANK.NS', 'BAJFINANCE.NS', 'ASIANPAINT.NS', 'MARUTI.NS',
@@ -2420,8 +2446,8 @@ const server = http.createServer(async (req, res) => {
         'ONGC.NS', 'HDFCLIFE.NS', 'DIVISLAB.NS', 'COALINDIA.NS', 'GRASIM.NS',
         'BRITANNIA.NS', 'BPCL.NS', 'DRREDDY.NS', 'CIPLA.NS', 'APOLLOHOSP.NS',
         'EICHERMOT.NS', 'INDUSINDBK.NS', 'SBILIFE.NS', 'TATACONSUM.NS', 'HEROMOTOCO.NS',
-        // Additional popular Indian stocks
-        'ADANIENT.NS', 'ADANIGREEN.NS', 'ADANIPOWER.NS', 'ATGL.NS',
+        // NIFTY Next 50 / NIFTY 100
+        'ADANIENT.NS', 'ADANIGREEN.NS', 'ADANIPOWER.NS', 'ATGL.NS', 'AWL.NS',
         'BAJAJ-AUTO.NS', 'BANKBARODA.NS', 'BEL.NS', 'BERGEPAINT.NS', 'BIOCON.NS',
         'BOSCHLTD.NS', 'CANBK.NS', 'CHOLAFIN.NS', 'COLPAL.NS', 'DLF.NS',
         'DABUR.NS', 'GAIL.NS', 'GODREJCP.NS', 'HAVELLS.NS', 'HINDALCO.NS',
@@ -2431,7 +2457,28 @@ const server = http.createServer(async (req, res) => {
         'PEL.NS', 'PETRONET.NS', 'PIDILITIND.NS', 'PNB.NS', 'POLYCAB.NS',
         'RECLTD.NS', 'SBICARD.NS', 'SHREECEM.NS', 'SIEMENS.NS', 'SRF.NS',
         'TATAPOWER.NS', 'TATAELXSI.NS', 'TORNTPHARM.NS', 'TRENT.NS', 'VEDL.NS',
-        'ZOMATO.NS', 'ZYDUSLIFE.NS'
+        'ZOMATO.NS', 'ZYDUSLIFE.NS',
+        // NIFTY 200 / Mid-cap additions
+        'ABB.NS', 'ACC.NS', 'ALKEM.NS', 'AMBUJACEM.NS', 'AUROPHARMA.NS',
+        'BANDHANBNK.NS', 'BATAINDIA.NS', 'BHEL.NS', 'CANFINHOME.NS', 'CGPOWER.NS',
+        'CHAMBLFERT.NS', 'CONCOR.NS', 'COROMANDEL.NS', 'CROMPTON.NS', 'CUB.NS',
+        'CUMMINSIND.NS', 'DEEPAKNTR.NS', 'DELHIVERY.NS', 'DIXON.NS', 'ESCORTS.NS',
+        'EXIDEIND.NS', 'FEDERALBNK.NS', 'FORTIS.NS', 'GLENMARK.NS', 'GMRINFRA.NS',
+        'GNFC.NS', 'GODREJPROP.NS', 'GSPL.NS', 'HAL.NS', 'HDFCAMC.NS',
+        'HONAUT.NS', 'IDFCFIRSTB.NS', 'IEX.NS', 'INDHOTEL.NS', 'INDUSTOWER.NS',
+        'IRFC.NS', 'JKCEMENT.NS', 'JSWENERGY.NS', 'KAJARIACER.NS', 'KEI.NS',
+        'LAURUSLABS.NS', 'LICHSGFIN.NS', 'LTIM.NS', 'LTTS.NS', 'MANAPPURAM.NS',
+        'MAXHEALTH.NS', 'MFSL.NS', 'MOTHERSON.NS', 'MPHASIS.NS', 'MRF.NS',
+        'NATIONALUM.NS', 'NIACL.NS', 'NMDC.NS', 'OBEROIRLTY.NS', 'OFSS.NS',
+        'PAGEIND.NS', 'PERSISTENT.NS', 'PHOENIXLTD.NS', 'PIIND.NS', 'PRESTIGE.NS',
+        'PVRINOX.NS', 'RAJESHEXPO.NS', 'RAMCOCEM.NS', 'RBLBANK.NS', 'SAIL.NS',
+        'SOLARINDS.NS', 'SONACOMS.NS', 'STARHEALTH.NS', 'SUNDARMFIN.NS', 'SUPREMEIND.NS',
+        'SYNGENE.NS', 'TATACHEM.NS', 'TATACOMM.NS', 'TATATECH.NS', 'TIINDIA.NS',
+        'TORNTPOWER.NS', 'TVSMOTOR.NS', 'UBL.NS', 'UNIONBANK.NS', 'UPL.NS',
+        'VBL.NS', 'VOLTAS.NS', 'WHIRLPOOL.NS', 'YESBANK.NS', 'ZEEL.NS',
+        // Popular PSU & defence
+        'COCHINSHIP.NS', 'GRSE.NS', 'HUDCO.NS', 'MAZAGON.NS',
+        'NHPC.NS', 'PFC.NS', 'RVNL.NS', 'SJVN.NS'
       ];
 
       // Get market from query parameter

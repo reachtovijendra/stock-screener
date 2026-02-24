@@ -8,6 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- New luxury-themed Market News V2 page accessible at `/v2/news` with editorial card grid layout, category filter chips, and animated news cards
+- New luxury-themed Breakouts V2 page accessible at `/v2/breakouts` with Top Picks section, signal filtering (bullish/bearish), and refined breakout cards
+- New luxury-themed DMA Simulator V2 page accessible at `/v2/dma-simulator` with elegant timeline visualization, state banners, and quick search chips
+- New luxury-themed Stock Detail V2 page accessible at `/v2/stock/:symbol` with premium dashboard layout, gauge-based technical analysis, and news feed with type filters
+- All V2 pages share the consistent luxury theme with gold accents, Fraunces/Plus Jakarta Sans typography, glass morphism effects, and micro-animations
+- New luxury-themed Screener V2 page accessible at `/v2/screener` with "Refined Terminal" aesthetic (Bloomberg meets high-end fintech)
+- V2 theme system with CSS custom properties scoped to `.theme-v2` class, featuring deep charcoal backgrounds, gold/amber accents, and refined typography
+- Editorial typography pairing: Fraunces (display/headers) and Plus Jakarta Sans (body text) via Google Fonts
+- Glass morphism filter panel with inline expansion, elegant category chips, and gold accent highlights
+- Editorial-style results table with 52-week range visualization bars, RSI progress indicators, and sector badges
+- Animated page header with staggered entrance animations and real-time stats display
+- Micro-interactions including hover effects, focus rings, skeleton loading states, and smooth transitions
+- Client-side pagination with elegant numbered navigation and page size selector
+- Quick technical filters (RSI oversold/overbought, MACD bullish/bearish) in stats bar
+- Grain texture overlay and footer accent line for refined visual polish
 - Daily DMA crossover email alert sent at 8 AM EST on weekdays via new `api/cron/daily-crossovers.ts` Vercel Cron job; scans ~325 US and India large-cap stocks for golden cross (50 DMA crosses above 200 DMA) and death cross (50 DMA crosses below 200 DMA) events on the most recent trading day
 - Dark-themed HTML email with separate tables for golden crosses (bullish) and death crosses (bearish), showing symbol, name, price, 50 DMA, 200 DMA, and market for each crossover
 - New shared `api/_lib/stock-lists.ts` module exporting `US_STOCKS`, `IN_STOCKS`, `fetchLargeCapStocks()`, and `getStocksToScan()` for reuse across breakouts scanner and crossover cron

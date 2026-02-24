@@ -3,7 +3,7 @@ import { RouterOutlet, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 
 import { HeaderComponent } from './layout/header/header.component';
-import { ThemeService } from './core/services';
+import { ThemeService, VersionService } from './core/services';
 
 @Component({
   selector: 'app-root',
@@ -15,22 +15,32 @@ import { ThemeService } from './core/services';
       <div class="content-wrapper">
         <!-- Left Nav Sidebar -->
         <nav class="nav-sidebar">
-          <a class="nav-item" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" title="Screener">
+          <a class="nav-item" [routerLink]="versionService.getScreenerRoute()" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" title="Screener">
             <i class="pi pi-table"></i>
             <span class="nav-label">Screener</span>
           </a>
-          <a class="nav-item" routerLink="/breakouts" routerLinkActive="active" title="Breakouts">
+          <a class="nav-item" [routerLink]="versionService.getBreakoutsRoute()" routerLinkActive="active" title="Breakouts">
             <i class="pi pi-chart-line"></i>
             <span class="nav-label">Breakouts</span>
           </a>
-          <a class="nav-item" routerLink="/news" routerLinkActive="active" title="News">
+          <a class="nav-item" [routerLink]="versionService.getNewsRoute()" routerLinkActive="active" title="News">
             <i class="pi pi-bolt"></i>
             <span class="nav-label">News</span>
           </a>
-          <a class="nav-item" routerLink="/dma-simulator" routerLinkActive="active" title="DMA Simulator">
+          <a class="nav-item" [routerLink]="versionService.getDmaRoute()" routerLinkActive="active" title="DMA Simulator">
             <i class="pi pi-chart-bar"></i>
             <span class="nav-label">DMA</span>
           </a>
+          
+          <!-- Spacer -->
+          <div class="nav-spacer"></div>
+          
+          <!-- Version Toggle -->
+          <div class="version-toggle" (click)="versionService.toggleVersion()" [title]="'Switch to ' + (versionService.isV2() ? 'V1' : 'V2')">
+            <div class="version-switch" [class.v2]="versionService.isV2()">
+              <span class="version-label">{{ versionService.isV2() ? 'V2' : 'V1' }}</span>
+            </div>
+          </div>
         </nav>
 
         <!-- Page Content -->
@@ -110,6 +120,60 @@ import { ThemeService } from './core/services';
       letter-spacing: 0.01em;
     }
 
+    .nav-spacer {
+      flex: 1;
+    }
+
+    .version-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 52px;
+      height: 36px;
+      margin-bottom: 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .version-switch {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 24px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #64748b, #475569);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      transition: all 0.3s ease;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+    }
+
+    .version-switch.v2 {
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-color: rgba(139, 92, 246, 0.3);
+      box-shadow: 0 2px 8px rgba(99, 102, 241, 0.4);
+    }
+
+    .version-label {
+      font-size: 0.65rem;
+      font-weight: 700;
+      color: white;
+      letter-spacing: 0.05em;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+    }
+
+    .version-toggle:hover .version-switch {
+      transform: scale(1.05);
+    }
+
+    .version-toggle:hover .version-switch:not(.v2) {
+      background: linear-gradient(135deg, #475569, #334155);
+    }
+
+    .version-toggle:hover .version-switch.v2 {
+      background: linear-gradient(135deg, #818cf8, #a78bfa);
+    }
+
     .page-content {
       flex: 1;
       min-width: 0;
@@ -130,11 +194,26 @@ import { ThemeService } from './core/services';
       .nav-label {
         display: none;
       }
+
+      .version-toggle {
+        width: 40px;
+        height: 30px;
+      }
+
+      .version-switch {
+        width: 32px;
+        height: 20px;
+      }
+
+      .version-label {
+        font-size: 0.55rem;
+      }
     }
   `]
 })
 export class AppComponent implements OnInit {
   private themeService = inject(ThemeService);
+  versionService = inject(VersionService);
 
   ngOnInit(): void {
     // Theme service initializes itself in constructor

@@ -9,7 +9,7 @@ import { AutoCompleteModule, AutoCompleteCompleteEvent } from 'primeng/autocompl
 import { FormsModule } from '@angular/forms';
 import { filter } from 'rxjs/operators';
 
-import { MarketService, ThemeService } from '../../core/services';
+import { MarketService, ThemeService, VersionService } from '../../core/services';
 import { Market, MARKETS, Stock } from '../../core/models';
 
 interface MarketIndex {
@@ -569,8 +569,10 @@ export class HeaderComponent implements OnInit, OnDestroy {
     return Math.max(0, Math.min(100, position));
   }
 
+  private versionService = inject(VersionService);
+
   goHome(): void {
-    this.router.navigate(['/']);
+    this.router.navigate([this.versionService.getScreenerRoute()]);
   }
 
   searchStocks(event: AutoCompleteCompleteEvent): void {
@@ -603,7 +605,7 @@ export class HeaderComponent implements OnInit, OnDestroy {
   navigateToStock(symbol: string): void {
     this.searchQuery = '';
     this.filteredStocks.set([]);
-    this.router.navigate(['/stock', symbol]);
+    this.router.navigate([this.versionService.getStockRoute(symbol)]);
   }
 
   formatPrice(price: number, market?: string): string {

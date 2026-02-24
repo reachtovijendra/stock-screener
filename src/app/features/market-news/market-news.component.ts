@@ -168,7 +168,7 @@ interface NewsCategory {
                 </div>
                 <span class="card-time">{{ item.timeAgo }}</span>
               </div>
-              <h3 class="card-title">{{ item.title }}</h3>
+              <h3 class="card-title">{{ decodeHtml(item.title) }}</h3>
               <div class="card-footer">
                 <span class="card-source">
                   <i class="pi pi-globe"></i>
@@ -711,7 +711,7 @@ export class MarketNewsComponent implements OnInit, OnDestroy {
   goToStock(symbol: string, event: Event): void {
     event.preventDefault();
     event.stopPropagation();
-    this.router.navigate(['/stock', symbol]);
+    window.open(`/stock/${symbol}`, '_blank');
   }
 
   getTypeBadgeLabel(type: string): string {
@@ -740,5 +740,17 @@ export class MarketNewsComponent implements OnInit, OnDestroy {
     
     const diffDays = Math.floor(diffHours / 24);
     return `${diffDays}d ago`;
+  }
+
+  decodeHtml(text: string): string {
+    if (!text) return '';
+    return text
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&apos;/g, "'")
+      .replace(/&nbsp;/g, ' ');
   }
 }

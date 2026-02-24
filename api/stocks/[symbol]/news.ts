@@ -12,27 +12,55 @@ interface NewsItem {
 
 /**
  * Classify news article type based on keywords
+ * Returns snake_case types to match frontend filter expectations
  */
 function classifyArticleType(title: string, description: string): string {
   const text = `${title} ${description}`.toLowerCase();
   
-  if (text.includes('price target') || text.includes('pt ') || text.includes('target price') || text.includes('analyst') || text.includes('rating') || text.includes('upgrade') || text.includes('downgrade')) {
-    return 'Price Target';
+  if (text.includes('price target') || text.includes('pt ') || text.includes('target price') || 
+      text.includes('raises target') || text.includes('lowers target') || text.includes('maintains target') ||
+      text.includes('sets target') || text.includes('boosts target') || text.includes('cuts target') ||
+      text.includes('target raised') || text.includes('target lowered') || text.includes('target cut') ||
+      text.includes('new target') || text.includes('price objective')) {
+    return 'price_target';
   }
-  if (text.includes('earnings') || text.includes('eps') || text.includes('revenue') || text.includes('quarterly') || text.includes('q1') || text.includes('q2') || text.includes('q3') || text.includes('q4')) {
-    return 'Earnings';
+  if (text.includes('upgrade') || text.includes('downgrade') || text.includes('rating') || 
+      text.includes('analyst') || text.includes('outperform') || text.includes('underperform') ||
+      text.includes('buy rating') || text.includes('sell rating') || text.includes('hold rating') ||
+      text.includes('overweight') || text.includes('underweight') || text.includes('neutral rating') ||
+      text.includes('equal-weight') || text.includes('market perform') || text.includes('sector perform') ||
+      text.includes('initiated') || text.includes('reiterate') ||
+      text.includes('maintains buy') || text.includes('maintains sell') ||
+      text.includes('raises to buy') || text.includes('cuts to sell')) {
+    return 'upgrade_downgrade';
   }
-  if (text.includes('insider') || text.includes('ceo') || text.includes('cfo') || text.includes('buys') || text.includes('sells') || text.includes('acquires') || text.includes('stake')) {
-    return 'Insider Trading';
+  if (text.includes('earnings') || text.includes('eps') || text.includes('revenue') || 
+      text.includes('quarterly') || text.includes('q1') || text.includes('q2') || 
+      text.includes('q3') || text.includes('q4') || text.includes('beat') || 
+      text.includes('miss') || text.includes('guidance') || text.includes('forecast') ||
+      text.includes('profit') || text.includes('loss') || text.includes('outlook') ||
+      text.includes('fiscal year') || text.includes('annual report') || text.includes('quarterly report') ||
+      text.includes('earnings call')) {
+    return 'earnings';
   }
-  if (text.includes('dividend') || text.includes('payout')) {
-    return 'Dividend';
+  if (text.includes('insider') || text.includes('ceo buy') || text.includes('cfo buy') ||
+      text.includes('director buy') || text.includes('sells shares') || text.includes('buys shares') ||
+      text.includes('stock purchase') || text.includes('form 4') || text.includes('sec filing') ||
+      text.includes('bought shares') || text.includes('sold shares') || text.includes('insider buying') ||
+      text.includes('insider selling') || text.includes('ceo buys') || text.includes('ceo sells') ||
+      text.includes('director buys') || text.includes('director sells') ||
+      text.includes('executive') || text.includes('stock sale')) {
+    return 'insider';
   }
-  if (text.includes('merger') || text.includes('acquisition') || text.includes('m&a')) {
-    return 'M&A';
+  if (text.includes('dividend') || text.includes('payout') || text.includes('yield') ||
+      text.includes('distribution') || text.includes('ex-div') || text.includes('ex-dividend') ||
+      text.includes('dividend increase') || text.includes('dividend cut') ||
+      text.includes('special dividend') || text.includes('dividend declared') ||
+      text.includes('quarterly dividend')) {
+    return 'dividend';
   }
   
-  return 'General';
+  return 'general';
 }
 
 /**
@@ -187,7 +215,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     // Sort by date first (newest first), then by priority for same-day articles
-    const priorityOrder = ['Price Target', 'Earnings', 'Insider Trading', 'Dividend', 'M&A', 'General'];
+    const priorityOrder = ['price_target', 'upgrade_downgrade', 'insider', 'earnings', 'dividend', 'general'];
     recentNews.sort((a, b) => {
       const dateA = new Date(a.pubDate).getTime();
       const dateB = new Date(b.pubDate).getTime();

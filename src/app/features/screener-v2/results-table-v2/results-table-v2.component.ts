@@ -709,6 +709,10 @@ import { Stock } from '../../../core/models/stock.model';
     th.col-price, th.col-change, th.col-cap, th.col-pe, th.col-rsi, th.col-macd,
     td.col-price, td.col-change, td.col-cap, td.col-pe, td.col-rsi, td.col-macd {
       text-align: right;
+      
+      .th-content {
+        justify-content: flex-end;
+      }
     }
 
     .price-value {

@@ -106,34 +106,27 @@ import { ScreenerService, MarketService, StockService } from '../../core/service
 
       <!-- Main Content -->
       <main class="cyber-main">
-        <!-- Filter Panel -->
-        <app-filter-panel-v2 (screenRun)="onScreenRun()"></app-filter-panel-v2>
+        <!-- Filter Panel (Fixed) -->
+        <div class="fixed-section">
+          <app-filter-panel-v2 (screenRun)="onScreenRun()"></app-filter-panel-v2>
+        </div>
 
-        <!-- Results Table -->
-        <app-results-table-v2></app-results-table-v2>
+        <!-- Results Table (Scrollable) -->
+        <div class="scrollable-section">
+          <app-results-table-v2></app-results-table-v2>
+        </div>
       </main>
-      
-      <!-- Footer with system info -->
-      <footer class="cyber-footer">
-        <div class="footer-left">
-          <span class="footer-text">◈ NEURAL_LINK_ACTIVE</span>
-        </div>
-        <div class="footer-center">
-          <div class="footer-line"></div>
-        </div>
-        <div class="footer-right">
-          <span class="footer-text">v2.0.CYBER</span>
-        </div>
-      </footer>
     </div>
   `,
   styles: [`
     .screener-cyber {
-      min-height: 100vh;
+      height: 100vh;
       background: var(--cyber-bg);
       font-family: var(--cyber-font-mono);
       position: relative;
       overflow: hidden;
+      display: flex;
+      flex-direction: column;
     }
 
     /* Animated Background */
@@ -252,7 +245,8 @@ import { ScreenerService, MarketService, StockService } from '../../core/service
     .cyber-header {
       position: relative;
       z-index: 2;
-      padding: 2rem 2.5rem 1.5rem;
+      padding: 1rem 2.5rem;
+      flex-shrink: 0;
     }
 
     .header-content {
@@ -491,55 +485,56 @@ import { ScreenerService, MarketService, StockService } from '../../core/service
     .cyber-main {
       position: relative;
       z-index: 2;
-      max-width: 1800px;
-      margin: 0 auto;
-      padding: 1.5rem 2.5rem 3rem;
-    }
-
-    /* Footer */
-    .cyber-footer {
-      position: fixed;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      display: flex;
-      align-items: center;
-      padding: 0.75rem 2rem;
-      background: linear-gradient(180deg, transparent, var(--cyber-bg));
-      z-index: 10;
-    }
-
-    .footer-left,
-    .footer-right {
-      flex: 0 0 auto;
-    }
-
-    .footer-center {
       flex: 1;
-      padding: 0 2rem;
+      display: flex;
+      flex-direction: column;
+      max-width: 1800px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 0 2.5rem;
+      min-height: 0;
+      overflow: hidden;
     }
 
-    .footer-line {
-      height: 1px;
-      background: linear-gradient(90deg, transparent, var(--cyber-cyan), transparent);
-      opacity: 0.5;
+    .fixed-section {
+      flex-shrink: 0;
+      padding-bottom: 1rem;
     }
 
-    .footer-text {
-      font-size: 0.7rem;
-      letter-spacing: 0.1em;
-      color: var(--cyber-cyan);
-      opacity: 0.6;
+    .scrollable-section {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      padding-bottom: 1rem;
+      
+      /* Custom scrollbar styling */
+      &::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      &::-webkit-scrollbar-track {
+        background: var(--cyber-bg-elevated);
+        border: 1px solid var(--cyber-border);
+      }
+      
+      &::-webkit-scrollbar-thumb {
+        background: var(--cyber-cyan-dim);
+        border: 1px solid var(--cyber-cyan);
+        
+        &:hover {
+          background: var(--cyber-cyan);
+        }
+      }
     }
 
     /* Responsive */
     @media (max-width: 1200px) {
-      .cyber-header { padding: 1.5rem; }
-      .cyber-main { padding: 1rem 1.5rem 3rem; }
+      .cyber-header { padding: 1rem 1.5rem; }
+      .cyber-main { padding: 0 1.5rem; }
       
       .header-content {
         flex-direction: column;
-        gap: 1.5rem;
+        gap: 1rem;
       }
 
       .stats-panel {
@@ -552,8 +547,11 @@ import { ScreenerService, MarketService, StockService } from '../../core/service
     }
 
     @media (max-width: 768px) {
+      .cyber-header { padding: 0.75rem 1rem; }
+      .cyber-main { padding: 0 1rem; }
+      
       .cyber-title {
-        font-size: 2rem;
+        font-size: 1.75rem;
       }
 
       .stats-panel {

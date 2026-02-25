@@ -210,6 +210,14 @@ import { Stock } from '../../../core/models/stock.model';
                       }
                     </span>
                   </th>
+                  <th class="col-industry" (click)="sortBy('industry')">
+                    <span class="th-content">
+                      <span>INDUSTRY</span>
+                      @if (currentSort().field === 'industry') {
+                        <span class="sort-indicator">{{ currentSort().direction === 'asc' ? '↑' : '↓' }}</span>
+                      }
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -279,6 +287,9 @@ import { Stock } from '../../../core/models/stock.model';
                     </td>
                     <td class="col-sector">
                       <span class="sector-value" [title]="stock.sector">{{ formatSector(stock.sector) }}</span>
+                    </td>
+                    <td class="col-industry">
+                      <span class="industry-value" [title]="stock.industry">{{ formatIndustry(stock.industry) }}</span>
                     </td>
                   </tr>
                 }
@@ -712,7 +723,11 @@ import { Stock } from '../../../core/models/stock.model';
     }
     
     .col-sector {
-      width: 80px;
+      width: 70px;
+    }
+    
+    .col-industry {
+      width: 90px;
     }
 
     .symbol-cell {
@@ -755,7 +770,8 @@ import { Stock } from '../../../core/models/stock.model';
       color: var(--cyber-text-dim);
     }
     
-    .sector-value {
+    .sector-value,
+    .industry-value {
       font-size: 0.6rem;
       color: var(--cyber-text-dim);
       text-transform: uppercase;
@@ -1150,5 +1166,11 @@ export class ResultsTableV2Component {
       'Energy': 'Energy'
     };
     return abbrev[sector] || sector.slice(0, 8);
+  }
+
+  formatIndustry(industry: string | null | undefined): string {
+    if (!industry || industry === 'Unknown') return '—';
+    // Truncate long industry names
+    return industry.length > 12 ? industry.slice(0, 10) + '..' : industry;
   }
 }

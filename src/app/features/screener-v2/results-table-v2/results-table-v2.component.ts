@@ -202,6 +202,14 @@ import { Stock } from '../../../core/models/stock.model';
                   <th class="col-macd">
                     <span class="th-content">MACD</span>
                   </th>
+                  <th class="col-sector" (click)="sortBy('sector')">
+                    <span class="th-content">
+                      <span>SECTOR</span>
+                      @if (currentSort().field === 'sector') {
+                        <span class="sort-indicator">{{ currentSort().direction === 'asc' ? '↑' : '↓' }}</span>
+                      }
+                    </span>
+                  </th>
                 </tr>
               </thead>
               <tbody>
@@ -268,6 +276,9 @@ import { Stock } from '../../../core/models/stock.model';
                       } @else {
                         <span class="na">—</span>
                       }
+                    </td>
+                    <td class="col-sector">
+                      <span class="sector-value" [title]="stock.sector">{{ formatSector(stock.sector) }}</span>
                     </td>
                   </tr>
                 }
@@ -699,6 +710,10 @@ import { Stock } from '../../../core/models/stock.model';
     .col-macd {
       width: 60px;
     }
+    
+    .col-sector {
+      width: 80px;
+    }
 
     .symbol-cell {
       display: flex;
@@ -738,6 +753,13 @@ import { Stock } from '../../../core/models/stock.model';
     
     .vol-value {
       color: var(--cyber-text-dim);
+    }
+    
+    .sector-value {
+      font-size: 0.6rem;
+      color: var(--cyber-text-dim);
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
     }
 
     .price-value {
@@ -1109,5 +1131,24 @@ export class ResultsTableV2Component {
       return (volume / 1000).toFixed(0) + 'K';
     }
     return volume.toString();
+  }
+
+  formatSector(sector: string | null | undefined): string {
+    if (!sector || sector === 'Unknown') return '—';
+    // Abbreviate common sectors
+    const abbrev: Record<string, string> = {
+      'Technology': 'Tech',
+      'Healthcare': 'Health',
+      'Financial Services': 'Finance',
+      'Consumer Cyclical': 'Cons Cyc',
+      'Consumer Defensive': 'Cons Def',
+      'Communication Services': 'Comm',
+      'Industrials': 'Indust',
+      'Basic Materials': 'Materials',
+      'Real Estate': 'RE',
+      'Utilities': 'Util',
+      'Energy': 'Energy'
+    };
+    return abbrev[sector] || sector.slice(0, 8);
   }
 }

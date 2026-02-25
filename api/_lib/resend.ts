@@ -6,7 +6,7 @@
 import https from 'https';
 
 interface SendEmailOptions {
-  to: string;
+  to: string | string[];
   subject: string;
   html: string;
   from?: string;
@@ -31,7 +31,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<ResendRespon
 
   const payload = JSON.stringify({
     from: options.from || 'StockScreen <onboarding@resend.dev>',
-    to: [options.to],
+    to: Array.isArray(options.to) ? options.to : [options.to],
     subject: options.subject,
     html: options.html,
   });

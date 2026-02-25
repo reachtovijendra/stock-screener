@@ -930,20 +930,19 @@ export class ResultsTableV2Component {
   calculatingTechnicals = signal(false);
   technicalProgress = signal('');
 
+  // Use the service's getResultsSummary which calculates from all cached stocks, not just paginated results
   summary = computed(() => {
-    const stocks = this.screenerService.results();
-    if (stocks.length === 0) {
+    const serviceSummary = this.screenerService.getResultsSummary();
+    if (!serviceSummary) {
       return { totalMarketCap: 0, avgPE: null, gainers: 0, losers: 0, unchanged: 0 };
     }
-
-    const totalMarketCap = stocks.reduce((sum, s) => sum + (s.marketCap || 0), 0);
-    const peValues = stocks.filter(s => s.peRatio && s.peRatio > 0).map(s => s.peRatio!);
-    const avgPE = peValues.length > 0 ? peValues.reduce((a, b) => a + b, 0) / peValues.length : null;
-    const gainers = stocks.filter(s => s.changePercent > 0).length;
-    const losers = stocks.filter(s => s.changePercent < 0).length;
-    const unchanged = stocks.filter(s => s.changePercent === 0).length;
-
-    return { totalMarketCap, avgPE, gainers, losers, unchanged };
+    return {
+      totalMarketCap: serviceSummary.totalMarketCap,
+      avgPE: serviceSummary.avgPE,
+      gainers: serviceSummary.gainers,
+      losers: serviceSummary.losers,
+      unchanged: serviceSummary.unchanged
+    };
   });
 
   totalPages = computed(() => {

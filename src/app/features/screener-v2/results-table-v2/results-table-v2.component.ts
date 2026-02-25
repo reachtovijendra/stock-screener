@@ -622,9 +622,10 @@ import { Stock } from '../../../core/models/stock.model';
     }
 
     .th-content {
-      display: inline-flex;
+      display: flex;
       align-items: center;
       gap: 0.35rem;
+      width: 100%;
     }
 
     .sort-indicator {
@@ -706,13 +707,17 @@ import { Stock } from '../../../core/models/stock.model';
     }
 
     /* Right-align numeric columns */
-    th.col-price, th.col-change, th.col-cap, th.col-pe, th.col-rsi, th.col-macd,
     td.col-price, td.col-change, td.col-cap, td.col-pe, td.col-rsi, td.col-macd {
       text-align: right;
-      
-      .th-content {
-        justify-content: flex-end;
-      }
+    }
+    
+    th.col-price .th-content,
+    th.col-change .th-content,
+    th.col-cap .th-content,
+    th.col-pe .th-content,
+    th.col-rsi .th-content,
+    th.col-macd .th-content {
+      justify-content: flex-end;
     }
 
     .price-value {

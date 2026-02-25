@@ -183,6 +183,14 @@ import { Stock } from '../../../core/models/stock.model';
                   <th class="col-52w">
                     <span class="th-content">52W_RANGE</span>
                   </th>
+                  <th class="col-vol" (click)="sortBy('volume')">
+                    <span class="th-content">
+                      <span>VOL</span>
+                      @if (currentSort().field === 'volume') {
+                        <span class="sort-indicator">{{ currentSort().direction === 'asc' ? '↑' : '↓' }}</span>
+                      }
+                    </span>
+                  </th>
                   <th class="col-rsi" (click)="sortBy('rsi')">
                     <span class="th-content">
                       <span>RSI</span>
@@ -234,6 +242,9 @@ import { Stock } from '../../../core/models/stock.model';
                           <span>{{ marketService.formatCurrency(stock.fiftyTwoWeekHigh) }}</span>
                         </div>
                       </div>
+                    </td>
+                    <td class="col-vol">
+                      <span class="vol-value">{{ formatVolume(stock.volume) }}</span>
                     </td>
                     <td class="col-rsi">
                       @if (stock.rsi != null) {
@@ -654,35 +665,39 @@ import { Stock } from '../../../core/models/stock.model';
 
     /* Column Widths - Fixed Layout */
     .col-symbol {
-      width: 140px;
+      width: 120px;
     }
     
     .col-price {
-      width: 80px;
-    }
-    
-    .col-change {
-      width: 75px;
-    }
-    
-    .col-cap {
       width: 70px;
     }
     
+    .col-change {
+      width: 70px;
+    }
+    
+    .col-cap {
+      width: 65px;
+    }
+    
     .col-pe {
-      width: 55px;
+      width: 50px;
     }
     
     .col-52w {
-      width: 130px;
+      width: 110px;
+    }
+    
+    .col-vol {
+      width: 60px;
     }
     
     .col-rsi {
-      width: 65px;
+      width: 55px;
     }
     
     .col-macd {
-      width: 65px;
+      width: 60px;
     }
 
     .symbol-cell {
@@ -707,7 +722,7 @@ import { Stock } from '../../../core/models/stock.model';
     }
 
     /* Right-align numeric columns */
-    td.col-price, td.col-change, td.col-cap, td.col-pe, td.col-rsi, td.col-macd {
+    td.col-price, td.col-change, td.col-cap, td.col-pe, td.col-vol, td.col-rsi, td.col-macd {
       text-align: right;
     }
     
@@ -715,9 +730,14 @@ import { Stock } from '../../../core/models/stock.model';
     th.col-change .th-content,
     th.col-cap .th-content,
     th.col-pe .th-content,
+    th.col-vol .th-content,
     th.col-rsi .th-content,
     th.col-macd .th-content {
       justify-content: flex-end;
+    }
+    
+    .vol-value {
+      color: var(--cyber-text-dim);
     }
 
     .price-value {
@@ -1077,5 +1097,17 @@ export class ResultsTableV2Component {
     if (!current || !low || !high || high === low) return 50;
     const position = ((current - low) / (high - low)) * 100;
     return Math.max(0, Math.min(100, position));
+  }
+
+  formatVolume(volume: number | null | undefined): string {
+    if (volume == null) return '—';
+    if (volume >= 1000000000) {
+      return (volume / 1000000000).toFixed(1) + 'B';
+    } else if (volume >= 1000000) {
+      return (volume / 1000000).toFixed(1) + 'M';
+    } else if (volume >= 1000) {
+      return (volume / 1000).toFixed(0) + 'K';
+    }
+    return volume.toString();
   }
 }

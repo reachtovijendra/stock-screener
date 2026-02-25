@@ -921,8 +921,9 @@ export class ResultsTableV2Component {
 
   Math = Math;
 
-  currentPage = signal(1);
-  pageSize = signal(50);
+  // Derive current page and page size from service's pagination state
+  currentPage = computed(() => this.screenerService.pagination().page + 1); // Service uses 0-based, UI uses 1-based
+  pageSize = computed(() => this.screenerService.pagination().pageSize);
   currentSort = signal<{ field: keyof Stock; direction: 'asc' | 'desc' }>({ field: 'marketCap', direction: 'desc' });
 
   rsiFilter = signal<'oversold' | 'overbought' | null>(null);
@@ -972,12 +973,8 @@ export class ResultsTableV2Component {
     return pages;
   });
 
-  paginatedResults = computed(() => {
-    const allResults = this.screenerService.results();
-    const start = (this.currentPage() - 1) * this.pageSize();
-    const end = start + this.pageSize();
-    return allResults.slice(start, end);
-  });
+  // Results are already paginated by the service, use directly
+  paginatedResults = computed(() => this.screenerService.results());
 
   toggleRsiFilter(filter: 'oversold' | 'overbought'): void {
     if (this.rsiFilter() === filter) {
@@ -1022,15 +1019,12 @@ export class ResultsTableV2Component {
 
   goToPage(page: number): void {
     if (page >= 1 && page <= this.totalPages()) {
-      this.currentPage.set(page);
-      this.screenerService.setPagination(page - 1);
+      this.screenerService.setPagination(page - 1); // Service uses 0-based page index
     }
   }
 
   setPageSize(size: number): void {
-    this.pageSize.set(size);
-    this.currentPage.set(1);
-    this.screenerService.setPagination(0, size);
+    this.screenerService.setPagination(0, size); // Reset to first page when changing page size
   }
 
   goToStock(symbol: string): void {

@@ -210,7 +210,7 @@ import { Stock } from '../../../core/models/stock.model';
                     <td class="col-symbol">
                       <div class="symbol-cell">
                         <span class="ticker">{{ stock.symbol }}</span>
-                        <span class="name">{{ stock.name | slice:0:24 }}{{ stock.name.length > 24 ? '...' : '' }}</span>
+                        <span class="name" [title]="stock.name">{{ stock.name | slice:0:12 }}{{ stock.name.length > 12 ? '..' : '' }}</span>
                       </div>
                     </td>
                     <td class="col-price">
@@ -665,7 +665,7 @@ import { Stock } from '../../../core/models/stock.model';
 
     /* Column Widths - Fixed Layout */
     .col-symbol {
-      width: 120px;
+      width: 90px;
     }
     
     .col-price {

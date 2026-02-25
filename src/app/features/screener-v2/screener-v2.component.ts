@@ -24,7 +24,9 @@ import { ScreenerService, MarketService, StockService } from '../../core/service
       <!-- Animated background effects -->
       <div class="cyber-bg">
         <div class="grid-lines"></div>
-        <div class="scan-line"></div>
+        @if (screenerService.loading()) {
+          <div class="scan-line"></div>
+        }
         <div class="data-rain">
           @for (col of dataRainCols; track col) {
             <div class="rain-column" [style.left.%]="col * 3" [style.animation-delay]="(col * 0.1) + 's'">
@@ -62,7 +64,11 @@ import { ScreenerService, MarketService, StockService } from '../../core/service
               <span class="market-value">{{ marketService.currentMarket() === 'US' ? 'NYSE/NASDAQ' : 'NSE/BSE' }}</span>
               <span class="bracket">]</span>
               <span class="separator">|</span>
-              <span class="status">SCANNING...</span>
+              @if (screenerService.loading()) {
+                <span class="status scanning">SCANNING...</span>
+              } @else {
+                <span class="status ready">READY</span>
+              }
             </div>
           </div>
           
@@ -373,8 +379,16 @@ import { ScreenerService, MarketService, StockService } from '../../core/service
     }
 
     .status {
-      color: var(--cyber-positive);
-      animation: radar-blink 1s infinite;
+      font-weight: 600;
+      
+      &.scanning {
+        color: var(--cyber-yellow);
+        animation: radar-blink 1s infinite;
+      }
+      
+      &.ready {
+        color: var(--cyber-positive);
+      }
     }
 
     /* Stats Panel */

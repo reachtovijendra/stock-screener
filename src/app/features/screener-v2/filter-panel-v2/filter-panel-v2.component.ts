@@ -53,24 +53,48 @@ interface FilterOption<T> {
         </div>
       </div>
 
-      <!-- Filter Categories as Terminal Buttons -->
-      <div class="filter-categories">
-        @for (category of filterCategories; track category.id; let i = $index) {
+      <!-- Filter Categories and Actions Row -->
+      <div class="filter-row">
+        <div class="filter-categories">
+          @for (category of filterCategories; track category.id; let i = $index) {
+            <button 
+              class="cyber-chip"
+              [class.active]="expandedCategory() === category.id"
+              [class.has-value]="category.hasValue()"
+              (click)="toggleCategory(category.id)"
+              [style.animation-delay]="(i * 0.05) + 's'">
+              <span class="chip-bracket">[</span>
+              <span class="chip-code">{{ category.code }}</span>
+              <span class="chip-bracket">]</span>
+              <span class="chip-label">{{ category.label }}</span>
+              @if (category.hasValue()) {
+                <span class="chip-active-indicator"></span>
+              }
+            </button>
+          }
+        </div>
+        
+        <div class="action-buttons">
+          @if (screenerService.activeFilterCount() > 0) {
+            <button class="reset-btn" (click)="resetFilters()">
+              <span class="btn-icon">↺</span>
+              <span>RESET</span>
+            </button>
+          }
           <button 
-            class="cyber-chip"
-            [class.active]="expandedCategory() === category.id"
-            [class.has-value]="category.hasValue()"
-            (click)="toggleCategory(category.id)"
-            [style.animation-delay]="(i * 0.05) + 's'">
-            <span class="chip-bracket">[</span>
-            <span class="chip-code">{{ category.code }}</span>
-            <span class="chip-bracket">]</span>
-            <span class="chip-label">{{ category.label }}</span>
-            @if (category.hasValue()) {
-              <span class="chip-active-indicator"></span>
+            class="execute-btn" 
+            [class.loading]="screenerService.loading()" 
+            [disabled]="screenerService.loading()" 
+            (click)="runScreen()">
+            @if (screenerService.loading()) {
+              <span class="loading-spinner"></span>
+              <span>SCANNING...</span>
+            } @else {
+              <span class="btn-icon">▶</span>
+              <span>EXECUTE_SCREEN</span>
             }
           </button>
-        }
+        </div>
       </div>
 
       <!-- Expanded Filter Panel with Terminal Style -->
@@ -389,31 +413,6 @@ interface FilterOption<T> {
         </div>
       }
 
-      <!-- Action Bar -->
-      <div class="action-bar">
-        <div class="action-left">
-          @if (screenerService.activeFilterCount() > 0) {
-            <button class="reset-btn" (click)="resetFilters()">
-              <span class="btn-icon">↺</span>
-              <span>RESET_ALL</span>
-            </button>
-          }
-        </div>
-        
-        <button 
-          class="execute-btn" 
-          [class.loading]="screenerService.loading()" 
-          [disabled]="screenerService.loading()" 
-          (click)="runScreen()">
-          @if (screenerService.loading()) {
-            <span class="loading-spinner"></span>
-            <span>SCANNING...</span>
-          } @else {
-            <span class="btn-icon">▶</span>
-            <span>EXECUTE_SCREEN</span>
-          }
-        </button>
-      </div>
     </div>
   `,
   styles: [`
@@ -488,13 +487,28 @@ interface FilterOption<T> {
       }
     }
 
-    /* Filter Categories */
+    /* Filter Row - Categories + Actions */
+    .filter-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 1rem;
+      gap: 1rem;
+      border-bottom: 1px solid var(--cyber-border);
+    }
+
     .filter-categories {
       display: flex;
       flex-wrap: wrap;
       gap: 0.5rem;
-      padding: 1rem;
-      border-bottom: 1px solid var(--cyber-border);
+      flex: 1;
+    }
+    
+    .action-buttons {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-shrink: 0;
     }
 
     .cyber-chip {
@@ -1058,26 +1072,17 @@ interface FilterOption<T> {
       }
     }
 
-    /* Action Bar */
-    .action-bar {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 0.75rem 1rem;
-      background: rgba(0, 255, 242, 0.02);
-      border-top: 1px solid var(--cyber-border);
-    }
-
+    /* Action Buttons */
     .reset-btn {
       display: inline-flex;
       align-items: center;
       gap: 0.35rem;
-      padding: 0.4rem 0.75rem;
+      padding: 0.4rem 0.6rem;
       border: 1px solid var(--cyber-border);
       background: transparent;
       color: var(--cyber-text-dim);
       font-family: var(--cyber-font-mono);
-      font-size: 0.7rem;
+      font-size: 0.65rem;
       cursor: pointer;
       transition: all 0.2s ease;
 
@@ -1091,12 +1096,12 @@ interface FilterOption<T> {
       display: inline-flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.6rem 1.5rem;
+      padding: 0.5rem 1rem;
       border: 2px solid var(--cyber-cyan);
       background: var(--cyber-cyan-dim);
       color: var(--cyber-cyan);
       font-family: var(--cyber-font-display);
-      font-size: 0.85rem;
+      font-size: 0.75rem;
       font-weight: 600;
       letter-spacing: 0.1em;
       cursor: pointer;
@@ -1117,8 +1122,8 @@ interface FilterOption<T> {
     }
 
     .loading-spinner {
-      width: 14px;
-      height: 14px;
+      width: 12px;
+      height: 12px;
       border: 2px solid transparent;
       border-top-color: currentColor;
       border-radius: 50%;
@@ -1134,8 +1139,14 @@ interface FilterOption<T> {
 
     /* Responsive */
     @media (max-width: 768px) {
-      .filter-categories {
-        padding: 0.75rem;
+      .filter-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.75rem;
+      }
+
+      .action-buttons {
+        justify-content: flex-end;
       }
 
       .expansion-content {
@@ -1177,16 +1188,6 @@ interface FilterOption<T> {
         flex-direction: column;
         align-items: flex-start;
         gap: 0.5rem;
-      }
-
-      .action-bar {
-        flex-direction: column;
-        gap: 0.75rem;
-      }
-
-      .execute-btn {
-        width: 100%;
-        justify-content: center;
       }
     }
   `]

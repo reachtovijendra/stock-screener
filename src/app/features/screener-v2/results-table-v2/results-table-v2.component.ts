@@ -597,6 +597,7 @@ import { Stock } from '../../../core/models/stock.model';
       width: 100%;
       border-collapse: collapse;
       font-family: var(--cyber-font-mono);
+      table-layout: fixed;
     }
 
     .cyber-table thead {
@@ -604,12 +605,12 @@ import { Stock } from '../../../core/models/stock.model';
     }
 
     .cyber-table th {
-      padding: 0.75rem 1rem;
+      padding: 0.5rem 0.75rem;
       text-align: left;
       font-size: 0.65rem;
       font-weight: 600;
       color: var(--cyber-cyan);
-      letter-spacing: 0.1em;
+      letter-spacing: 0.05em;
       border-bottom: 1px solid var(--cyber-border);
       cursor: pointer;
       transition: all 0.2s ease;
@@ -623,7 +624,7 @@ import { Stock } from '../../../core/models/stock.model';
     .th-content {
       display: inline-flex;
       align-items: center;
-      gap: 0.5rem;
+      gap: 0.35rem;
     }
 
     .sort-indicator {
@@ -644,35 +645,69 @@ import { Stock } from '../../../core/models/stock.model';
     }
 
     .cyber-table td {
-      padding: 0.6rem 1rem;
-      font-size: 0.8rem;
+      padding: 0.4rem 0.75rem;
+      font-size: 0.75rem;
       color: var(--cyber-text);
       vertical-align: middle;
     }
 
-    /* Column Styles */
+    /* Column Widths - Fixed Layout */
     .col-symbol {
-      min-width: 160px;
+      width: 140px;
+    }
+    
+    .col-price {
+      width: 80px;
+    }
+    
+    .col-change {
+      width: 75px;
+    }
+    
+    .col-cap {
+      width: 70px;
+    }
+    
+    .col-pe {
+      width: 55px;
+    }
+    
+    .col-52w {
+      width: 130px;
+    }
+    
+    .col-rsi {
+      width: 65px;
+    }
+    
+    .col-macd {
+      width: 65px;
     }
 
     .symbol-cell {
       display: flex;
       flex-direction: column;
-      gap: 0.15rem;
+      gap: 0.1rem;
+      overflow: hidden;
     }
 
     .ticker {
       font-weight: 700;
       color: var(--cyber-cyan);
-      font-size: 0.9rem;
+      font-size: 0.8rem;
     }
 
     .name {
-      font-size: 0.65rem;
+      font-size: 0.6rem;
       color: var(--cyber-text-dim);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
-    .col-price, .col-change, .col-cap, .col-pe, .col-rsi, .col-macd {
+    /* Right-align numeric columns */
+    th.col-price, th.col-change, th.col-cap, th.col-pe, th.col-rsi, th.col-macd,
+    td.col-price, td.col-change, td.col-cap, td.col-pe, td.col-rsi, td.col-macd {
       text-align: right;
     }
 
@@ -683,7 +718,8 @@ import { Stock } from '../../../core/models/stock.model';
 
     .change-value {
       font-weight: 600;
-      padding: 0.2rem 0.4rem;
+      padding: 0.15rem 0.3rem;
+      font-size: 0.7rem;
 
       &.positive {
         color: var(--cyber-positive);
@@ -709,18 +745,14 @@ import { Stock } from '../../../core/models/stock.model';
     }
 
     /* 52W Range */
-    .col-52w {
-      min-width: 140px;
-    }
-
     .range-cell {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: 0.15rem;
     }
 
     .range-bar {
-      height: 4px;
+      height: 3px;
       background: var(--cyber-border);
       position: relative;
     }
@@ -739,17 +771,17 @@ import { Stock } from '../../../core/models/stock.model';
     .range-marker {
       position: absolute;
       top: 50%;
-      width: 8px;
-      height: 8px;
+      width: 6px;
+      height: 6px;
       background: var(--cyber-cyan);
       transform: translate(-50%, -50%);
-      box-shadow: 0 0 8px var(--cyber-cyan);
+      box-shadow: 0 0 6px var(--cyber-cyan);
     }
 
     .range-values {
       display: flex;
       justify-content: space-between;
-      font-size: 0.55rem;
+      font-size: 0.5rem;
       color: var(--cyber-text-dim);
     }
 
@@ -758,20 +790,20 @@ import { Stock } from '../../../core/models/stock.model';
       display: flex;
       flex-direction: column;
       align-items: flex-end;
-      gap: 0.2rem;
+      gap: 0.15rem;
     }
 
     .rsi-value {
       font-weight: 600;
-      font-size: 0.85rem;
+      font-size: 0.75rem;
 
       &.oversold { color: var(--cyber-positive); }
       &.overbought { color: var(--cyber-negative); }
     }
 
     .rsi-bar {
-      width: 40px;
-      height: 3px;
+      width: 35px;
+      height: 2px;
       background: var(--cyber-border);
     }
 
@@ -786,6 +818,7 @@ import { Stock } from '../../../core/models/stock.model';
     /* MACD */
     .macd-value {
       font-weight: 600;
+      font-size: 0.7rem;
 
       &.positive { color: var(--cyber-positive); }
       &.negative { color: var(--cyber-negative); }

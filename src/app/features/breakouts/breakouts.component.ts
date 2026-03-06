@@ -195,12 +195,12 @@ interface AlertCategory {
                         <span class="pick-symbol">{{ pick.stock.symbol }}</span>
                         <span class="pick-name">{{ pick.stock.name }}</span>
                       </div>
-                      <div class="pick-score">
+                      <div class="pick-score clickable" (click)="openScoreBreakdown($event, pick, 'topPicks')" pTooltip="View score breakdown" tooltipPosition="top">
                         <span class="score-value">{{ pick.score }}</span>
                         <span class="score-label">Score</span>
                       </div>
                     </div>
-                    
+
                     <div class="pick-price-row">
                       <div class="price-info">
                         <span class="pick-price">{{ marketService.formatCurrency(pick.stock.price, pick.stock.market || 'US') }}</span>
@@ -347,12 +347,12 @@ interface AlertCategory {
                         <span class="dt-symbol">{{ pick.stock.symbol }}</span>
                         <span class="dt-name">{{ pick.stock.name }}</span>
                       </div>
-                      <div class="dt-score">
+                      <div class="dt-score clickable" (click)="openScoreBreakdown($event, pick, 'dayTrade')" pTooltip="View score breakdown" tooltipPosition="top">
                         <span class="score-value">{{ pick.score }}</span>
                         <span class="score-label">Score</span>
                       </div>
                     </div>
-                    
+
                     <div class="dt-price-row">
                       <div class="price-info">
                         <span class="dt-price">{{ marketService.formatCurrency(pick.stock.price, pick.stock.market || 'US') }}</span>
@@ -469,7 +469,7 @@ interface AlertCategory {
                         <span class="mom-symbol">{{ pick.stock.symbol }}</span>
                         <span class="mom-name">{{ pick.stock.name }}</span>
                       </div>
-                      <div class="mom-score">
+                      <div class="mom-score clickable" (click)="openScoreBreakdown($event, pick, 'momentum')" pTooltip="View score breakdown" tooltipPosition="top">
                         <span class="score-value">{{ pick.score }}</span>
                         <span class="score-label">Score</span>
                       </div>
@@ -1010,6 +1010,102 @@ interface AlertCategory {
           }
         </div>
       </p-dialog>
+
+      <!-- Score Breakdown Dialog -->
+      <p-dialog
+        [(visible)]="showScoreBreakdownDialog"
+        [modal]="true"
+        [style]="{ width: '480px', maxHeight: '85vh' }"
+        [draggable]="false"
+        [resizable]="false"
+        [showHeader]="false"
+        styleClass="sbd-dialog">
+        @if (selectedScoreBreakdown) {
+          <div class="sbd">
+            <!-- Hero section with score ring -->
+            <div class="sbd-hero" [class]="'sbd-hero--' + selectedScoreBreakdown.pickType">
+              <button class="sbd-close" (click)="showScoreBreakdownDialog.set(false)">
+                <i class="pi pi-times"></i>
+              </button>
+              <div class="sbd-ring" [class]="'sbd-ring--' + getScoreClass(selectedScoreBreakdown.score)">
+                <svg viewBox="0 0 80 80" class="sbd-ring-svg">
+                  <circle cx="40" cy="40" r="35" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="5"/>
+                  <circle cx="40" cy="40" r="35" fill="none" stroke-width="5" stroke-linecap="round"
+                    [attr.stroke-dasharray]="2 * 3.14159 * 35"
+                    [attr.stroke-dashoffset]="2 * 3.14159 * 35 * (1 - selectedScoreBreakdown.score / 100)"
+                    class="sbd-ring-progress"
+                    transform="rotate(-90 40 40)"/>
+                </svg>
+                <span class="sbd-ring-value">{{ selectedScoreBreakdown.score }}</span>
+              </div>
+              <div class="sbd-hero-info">
+                <span class="sbd-symbol">{{ selectedScoreBreakdown.symbol }}</span>
+                <span class="sbd-name">{{ selectedScoreBreakdown.name }}</span>
+                <span class="sbd-type-badge">{{ getPickTypeLabel(selectedScoreBreakdown.pickType) }}</span>
+              </div>
+            </div>
+
+            <!-- Breakdown items -->
+            <div class="sbd-section">
+              <div class="sbd-section-title">
+                <i class="pi pi-chart-bar"></i>
+                <span>Point Breakdown</span>
+              </div>
+              <div class="sbd-items">
+                @for (item of selectedScoreBreakdown.breakdown; track item.label) {
+                  <div class="sbd-item" [class.sbd-item--neg]="item.points < 0">
+                    <div class="sbd-item-top">
+                      <span class="sbd-item-label">{{ item.label }}</span>
+                      <span class="sbd-item-pts" [class.sbd-item-pts--pos]="item.points >= 0" [class.sbd-item-pts--neg]="item.points < 0">
+                        {{ item.points >= 0 ? '+' : '' }}{{ item.points }}
+                      </span>
+                    </div>
+                    <div class="sbd-item-bottom">
+                      <span class="sbd-item-val">{{ item.value }}</span>
+                      <div class="sbd-item-bar">
+                        <div class="sbd-item-bar-fill"
+                             [class.sbd-item-bar-fill--pos]="item.points >= 0"
+                             [class.sbd-item-bar-fill--neg]="item.points < 0"
+                             [style.width.%]="(item.points >= 0 ? item.points : -item.points) * 12 > 100 ? 100 : (item.points >= 0 ? item.points : -item.points) * 12">
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                }
+
+                <!-- Total row with normalization explanation -->
+                <div class="sbd-total">
+                  <div class="sbd-total-row">
+                    <span class="sbd-total-label">Raw Total</span>
+                    <span class="sbd-total-value">{{ selectedScoreBreakdown.rawScore }} / {{ selectedScoreBreakdown.maxScore }} pts</span>
+                  </div>
+                  <div class="sbd-total-calc">
+                    <span class="sbd-calc-formula">{{ selectedScoreBreakdown.rawScore }} ÷ {{ selectedScoreBreakdown.maxScore }} × 100</span>
+                    <span class="sbd-calc-equals">=</span>
+                    <span class="sbd-calc-result" [class]="'sbd-calc-result--' + getScoreClass(selectedScoreBreakdown.score)">{{ selectedScoreBreakdown.score }}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Signals -->
+            <div class="sbd-section">
+              <div class="sbd-section-title">
+                <i class="pi pi-bolt"></i>
+                <span>Signals</span>
+              </div>
+              <div class="sbd-signals">
+                @for (signal of selectedScoreBreakdown.signals; track signal) {
+                  <span class="sbd-signal" [class]="'sbd-signal--' + selectedScoreBreakdown.pickType">{{ signal }}</span>
+                }
+                @if (selectedScoreBreakdown.signals.length === 0) {
+                  <span class="sbd-no-signals">No qualifying signals</span>
+                }
+              </div>
+            </div>
+          </div>
+        }
+      </p-dialog>
     </div>
   `,
   styles: [`
@@ -1454,6 +1550,335 @@ interface AlertCategory {
       font-size: 0.6rem;
       color: var(--text-color-secondary);
       text-transform: uppercase;
+    }
+
+    /* Clickable score badge */
+    .pick-score.clickable,
+    .dt-score.clickable,
+    .mom-score.clickable {
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .pick-score.clickable:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
+    }
+
+    .dt-score.clickable:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 12px rgba(249, 115, 22, 0.4);
+    }
+
+    .mom-score.clickable:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 12px rgba(139, 92, 246, 0.4);
+    }
+
+    /* ===== Score Breakdown Dialog ===== */
+    :host ::ng-deep .sbd-dialog .p-dialog {
+      border-radius: 16px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 25px 60px rgba(0, 0, 0, 0.5);
+    }
+    :host ::ng-deep .sbd-dialog .p-dialog-content {
+      padding: 0 !important;
+      background: var(--surface-ground);
+    }
+
+    .sbd {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Hero / header area */
+    .sbd-hero {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+      padding: 1.5rem 1.75rem;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(16, 185, 129, 0.06) 100%);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .sbd-hero--dayTrade {
+      background: linear-gradient(135deg, rgba(249, 115, 22, 0.12) 0%, rgba(239, 68, 68, 0.06) 100%);
+    }
+    .sbd-hero--momentum {
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.12) 0%, rgba(99, 102, 241, 0.06) 100%);
+    }
+
+    .sbd-close {
+      position: absolute;
+      top: 0.75rem;
+      right: 0.75rem;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: var(--text-color-secondary);
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      font-size: 0.8rem;
+    }
+    .sbd-close:hover {
+      background: rgba(255, 255, 255, 0.12);
+      color: var(--text-color);
+    }
+
+    /* Score ring */
+    .sbd-ring {
+      position: relative;
+      width: 80px;
+      height: 80px;
+      flex-shrink: 0;
+    }
+    .sbd-ring-svg {
+      width: 100%;
+      height: 100%;
+    }
+    .sbd-ring-progress {
+      transition: stroke-dashoffset 0.6s ease;
+    }
+    .sbd-ring--excellent .sbd-ring-progress { stroke: #22c55e; filter: drop-shadow(0 0 6px rgba(34, 197, 94, 0.5)); }
+    .sbd-ring--good .sbd-ring-progress { stroke: #84cc16; filter: drop-shadow(0 0 6px rgba(132, 204, 22, 0.5)); }
+    .sbd-ring--fair .sbd-ring-progress { stroke: #fbbf24; filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.5)); }
+    .sbd-ring--poor .sbd-ring-progress { stroke: #ef4444; filter: drop-shadow(0 0 6px rgba(239, 68, 68, 0.5)); }
+
+    .sbd-ring-value {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      font-weight: 800;
+      color: var(--text-color);
+    }
+
+    .sbd-hero-info {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      min-width: 0;
+    }
+    .sbd-symbol {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--text-color);
+      letter-spacing: 0.02em;
+    }
+    .sbd-name {
+      font-size: 0.85rem;
+      color: var(--text-color-secondary);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .sbd-type-badge {
+      display: inline-flex;
+      align-self: flex-start;
+      font-size: 0.65rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      background: rgba(34, 197, 94, 0.15);
+      color: #22c55e;
+      margin-top: 0.15rem;
+    }
+    .sbd-hero--dayTrade .sbd-type-badge {
+      background: rgba(249, 115, 22, 0.15);
+      color: #f97316;
+    }
+    .sbd-hero--momentum .sbd-type-badge {
+      background: rgba(139, 92, 246, 0.15);
+      color: #a855f7;
+    }
+
+    /* Sections */
+    .sbd-section {
+      padding: 1.25rem 1.75rem;
+    }
+    .sbd-section + .sbd-section {
+      padding-top: 0;
+    }
+    .sbd-section-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-color-secondary);
+      margin-bottom: 0.75rem;
+    }
+    .sbd-section-title i {
+      font-size: 0.85rem;
+    }
+
+    /* Breakdown items */
+    .sbd-items {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+    .sbd-item {
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      transition: background 0.15s ease;
+    }
+    .sbd-item:hover {
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .sbd-item--neg {
+      border-color: rgba(239, 68, 68, 0.1);
+    }
+    .sbd-item-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.3rem;
+    }
+    .sbd-item-label {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--text-color);
+    }
+    .sbd-item-pts {
+      font-size: 0.85rem;
+      font-weight: 700;
+      min-width: 36px;
+      text-align: right;
+    }
+    .sbd-item-pts--pos { color: #22c55e; }
+    .sbd-item-pts--neg { color: #ef4444; }
+
+    .sbd-item-bottom {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    .sbd-item-val {
+      font-size: 0.75rem;
+      color: var(--text-color-secondary);
+      min-width: 60px;
+    }
+    .sbd-item-bar {
+      flex: 1;
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255, 255, 255, 0.06);
+      overflow: hidden;
+    }
+    .sbd-item-bar-fill {
+      height: 100%;
+      border-radius: 2px;
+      transition: width 0.4s ease;
+    }
+    .sbd-item-bar-fill--pos {
+      background: linear-gradient(90deg, #22c55e, #4ade80);
+    }
+    .sbd-item-bar-fill--neg {
+      background: linear-gradient(90deg, #ef4444, #f87171);
+    }
+
+    /* Total row */
+    .sbd-total {
+      margin-top: 0.5rem;
+      padding: 0.75rem;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px dashed rgba(255, 255, 255, 0.1);
+    }
+    .sbd-total-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.5rem;
+    }
+    .sbd-total-label {
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-color-secondary);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .sbd-total-value {
+      font-size: 0.9rem;
+      font-weight: 700;
+      color: var(--text-color);
+    }
+    .sbd-total-calc {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding-top: 0.5rem;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .sbd-calc-formula {
+      font-size: 0.8rem;
+      color: var(--text-color-secondary);
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .sbd-calc-equals {
+      font-size: 0.85rem;
+      color: var(--text-color-secondary);
+      font-weight: 600;
+    }
+    .sbd-calc-result {
+      font-size: 1.1rem;
+      font-weight: 800;
+      padding: 0.15rem 0.5rem;
+      border-radius: 6px;
+    }
+    .sbd-calc-result--excellent { color: #22c55e; background: rgba(34, 197, 94, 0.15); }
+    .sbd-calc-result--good { color: #84cc16; background: rgba(132, 204, 22, 0.15); }
+    .sbd-calc-result--fair { color: #fbbf24; background: rgba(251, 191, 36, 0.15); }
+    .sbd-calc-result--poor { color: #ef4444; background: rgba(239, 68, 68, 0.15); }
+
+    /* Signals */
+    .sbd-signals {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      padding-bottom: 0.5rem;
+    }
+    .sbd-signal {
+      font-size: 0.7rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 0.3rem 0.65rem;
+      border-radius: 6px;
+      background: rgba(34, 197, 94, 0.1);
+      color: #4ade80;
+      border: 1px solid rgba(34, 197, 94, 0.2);
+    }
+    .sbd-signal--dayTrade {
+      background: rgba(249, 115, 22, 0.1);
+      color: #fb923c;
+      border-color: rgba(249, 115, 22, 0.2);
+    }
+    .sbd-signal--momentum {
+      background: rgba(139, 92, 246, 0.1);
+      color: #c084fc;
+      border-color: rgba(139, 92, 246, 0.2);
+    }
+    .sbd-no-signals {
+      font-size: 0.82rem;
+      color: var(--text-color-secondary);
+      font-style: italic;
     }
 
     .pick-price-row {
@@ -2728,6 +3153,8 @@ export class BreakoutsComponent implements OnInit {
   collapsedCategories = signal<string[]>(['ma_crossover', '52w_highs', '52w_lows', 'rsi_signals', 'macd_signals', 'volume_breakout']);
   topPicksCollapsed = signal(true);
   showScoringDialog = false;
+  showScoreBreakdownDialog = signal(false);
+  selectedScoreBreakdown: { symbol: string; name: string; score: number; rawScore: number; maxScore: number; signals: string[]; breakdown: { label: string; value: string; points: number }[]; pickType: string } | null = null;
   selectedSignal = signal<'all' | 'bullish' | 'bearish' | 'neutral'>('all');
 
   // Computed
@@ -2782,7 +3209,7 @@ export class BreakoutsComponent implements OnInit {
     pct50MA: number | null; pct200MA: number | null; pct52High: number | null;
     rsi: number | null; changePercent: number; relVolume: number | null;
     alertTypes: Set<string>; alertCategories: Set<string>;
-  }): { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[] } {
+  }): { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[]; rawScore: number; maxScore: number } {
     const { pct50MA, pct200MA, pct52High, rsi, changePercent, relVolume, alertTypes, alertCategories } = data;
     let rawScore = 0;
     const signals: string[] = [];
@@ -2816,14 +3243,14 @@ export class BreakoutsComponent implements OnInit {
 
     const MAX = 24;
     const score = Math.max(0, Math.min(100, Math.round((rawScore / MAX) * 100)));
-    return { score, signals, breakdown };
+    return { score, signals, breakdown, rawScore, maxScore: MAX };
   }
 
   private scoreDayTrade(data: {
     pct50MA: number | null; pct200MA: number | null; pct52High: number | null;
     rsi: number | null; changePercent: number; relVolume: number | null;
     alertTypes: Set<string>;
-  }): { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[] } {
+  }): { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[]; rawScore: number; maxScore: number } {
     const { pct50MA, pct200MA, pct52High, rsi, changePercent, relVolume, alertTypes } = data;
     let rawScore = 0;
     const signals: string[] = [];
@@ -2868,14 +3295,14 @@ export class BreakoutsComponent implements OnInit {
 
     const MAX = 26;
     const score = Math.max(0, Math.min(100, Math.round((rawScore / MAX) * 100)));
-    return { score, signals, breakdown };
+    return { score, signals, breakdown, rawScore, maxScore: MAX };
   }
 
   private scoreMomentum(data: {
     pct50MA: number | null; pct200MA: number | null; pct52High: number | null;
     rsi: number | null; changePercent: number; relVolume: number | null;
     alertTypes: Set<string>;
-  }): { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[] } {
+  }): { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[]; rawScore: number; maxScore: number } {
     const { pct50MA, pct200MA, pct52High, rsi, changePercent, relVolume, alertTypes } = data;
     let rawScore = 0;
     const signals: string[] = [];
@@ -2913,7 +3340,7 @@ export class BreakoutsComponent implements OnInit {
 
     const MAX = 24;
     const score = Math.max(0, Math.min(100, Math.round((rawScore / MAX) * 100)));
-    return { score, signals, breakdown };
+    return { score, signals, breakdown, rawScore, maxScore: MAX };
   }
 
   // Helper: deduplicate Indian dual-listed stocks (.NS / .BO) keeping the higher-volume listing
@@ -2948,9 +3375,9 @@ export class BreakoutsComponent implements OnInit {
           changePercent: s.changePercent, relVolume: s.relativeVolume,
           alertTypes, alertCategories
         });
-        return { stock: s as any, score: result.score, signals: result.signals };
+        return { stock: s as any, score: result.score, signals: result.signals, breakdown: result.breakdown, rawScore: result.rawScore, maxScore: result.maxScore };
       });
-    
+
     const ranked = stockScores
       .filter(s => {
         const validSignals = s.signals.filter(sig => !['Overbought', 'Death Cross', 'Bearish MACD', 'Too Extended', 'Below 200 MA', 'Weak Rating'].includes(sig));
@@ -2995,9 +3422,9 @@ export class BreakoutsComponent implements OnInit {
           changePercent: s.changePercent, relVolume: s.relativeVolume,
           alertTypes
         });
-        return { stock: s as any, score: result.score, signals: result.signals };
+        return { stock: s as any, score: result.score, signals: result.signals, breakdown: result.breakdown, rawScore: result.rawScore, maxScore: result.maxScore };
       });
-    
+
     const ranked = stockScores
       .filter(s => {
         const validSignals = s.signals.filter(sig => !['Extreme RSI', 'Negative Day', 'Low Volume', 'Bearish MACD'].includes(sig));
@@ -3046,9 +3473,9 @@ export class BreakoutsComponent implements OnInit {
           changePercent: s.changePercent, relVolume: s.relativeVolume,
           alertTypes
         });
-        return { stock: s as any, score: result.score, signals: result.signals };
+        return { stock: s as any, score: result.score, signals: result.signals, breakdown: result.breakdown, rawScore: result.rawScore, maxScore: result.maxScore };
       });
-    
+
     const ranked = stockScores
       .filter(s => {
         const validSignals = s.signals.filter(sig => !['Down Today', 'Overbought', 'Below 50 MA'].includes(sig));
@@ -3134,6 +3561,30 @@ export class BreakoutsComponent implements OnInit {
     return 'poor';
   }
 
+  openScoreBreakdown(event: Event, pick: any, pickType: string): void {
+    event.stopPropagation();
+    this.selectedScoreBreakdown = {
+      symbol: pick.stock.symbol,
+      name: pick.stock.name,
+      score: pick.score,
+      rawScore: pick.rawScore,
+      maxScore: pick.maxScore,
+      signals: pick.signals,
+      breakdown: [...pick.breakdown].sort((a: any, b: any) => b.points - a.points),
+      pickType
+    };
+    this.showScoreBreakdownDialog.set(true);
+  }
+
+  getPickTypeLabel(pickType: string): string {
+    switch (pickType) {
+      case 'topPicks': return 'Top Picks';
+      case 'dayTrade': return 'Day Trade';
+      case 'momentum': return 'Momentum';
+      default: return '';
+    }
+  }
+
   onScoreSearchComplete(event: AutoCompleteCompleteEvent): void {
     const query = event.query.toLowerCase().trim();
     if (query.length < 1) {
@@ -3188,7 +3639,7 @@ export class BreakoutsComponent implements OnInit {
 
     // Call the SAME shared scoring method as the panel
     const scoringData = { pct50MA, pct200MA, pct52High, rsi, changePercent, relVolume, alertTypes, alertCategories };
-    let result: { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[] };
+    let result: { score: number; signals: string[]; breakdown: { label: string; value: string; points: number }[]; rawScore: number; maxScore: number };
 
     if (this.scoreSearchType === 'topPicks') {
       result = this.scoreTopPicks(scoringData);

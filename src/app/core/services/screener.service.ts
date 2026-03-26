@@ -34,8 +34,9 @@ export class ScreenerService {
   // Cache for all stocks from last API call (for client-side pagination)
   private _cachedStocks = signal<Stock[]>([]);
   
-  // Filtered stocks (subset of cached when technical filters active)
+  // Filtered stocks (subset of cached when screener or technical filters active)
   private _filteredStocks = signal<Stock[]>([]);
+  private _hasClientFilters = false;
   
   private _totalCount = signal<number>(0);
   public totalCount = this._totalCount.asReadonly();
@@ -152,10 +153,14 @@ export class ScreenerService {
       ...current,
       ...partialFilters
     }));
-    
+
     if (runScreen) {
       this.resetPagination();
       this.runScreen();
+    } else if (this._cachedStocks().length > 0) {
+      // Apply filters client-side on cached data for instant feedback
+      this.resetPagination();
+      this.applyScreenerFiltersClientSide();
     }
   }
 
@@ -168,6 +173,8 @@ export class ScreenerService {
     this.resetPagination();
     this._results.set([]);
     this._cachedStocks.set([]);
+    this._filteredStocks.set([]);
+    this._hasClientFilters = false;
     this._totalCount.set(0);
   }
 
@@ -228,10 +235,10 @@ export class ScreenerService {
   private paginateFromCache(): void {
     // Start with base data source
     let source: Stock[];
-    
-    // Use filtered stocks if technical filters are active
+
+    // Use filtered stocks if screener or technical filters are active
     const hasTechFilters = this._rsiFilter() || this._macdFilter();
-    if (hasTechFilters && this._filteredStocks().length > 0) {
+    if (this._hasClientFilters || hasTechFilters) {
       source = this._filteredStocks();
     } else {
       source = this._cachedStocks();
@@ -248,6 +255,83 @@ export class ScreenerService {
     this.paginateFromSource(source);
   }
   
+  /**
+   * Apply screener filters client-side on cached stocks for instant filtering
+   */
+  private applyScreenerFiltersClientSide(): void {
+    const allStocks = this._cachedStocks();
+    if (allStocks.length === 0) return;
+
+    const f = this._filters();
+    const filtered = allStocks.filter(stock => {
+      // Market cap
+      if (f.marketCap.mode === 'categories' && f.marketCap.categories.length > 0) {
+        if (!f.marketCap.categories.includes(stock.marketCapCategory)) return false;
+      } else if (f.marketCap.mode === 'custom') {
+        if (!this.passesRange(stock.marketCap, f.marketCap.customRange)) return false;
+      }
+
+      // Price
+      if (!this.passesRange(stock.price, f.price)) return false;
+
+      // 52-week
+      if (f.fiftyTwoWeek.nearHigh && stock.percentFromFiftyTwoWeekHigh < -5) return false;
+      if (f.fiftyTwoWeek.nearLow && stock.percentFromFiftyTwoWeekLow > 10) return false;
+      if (!this.passesRange(stock.percentFromFiftyTwoWeekHigh, f.fiftyTwoWeek.percentFromHigh)) return false;
+
+      // Valuation
+      if (!this.passesRange(stock.peRatio, f.peRatio)) return false;
+      if (!this.passesRange(stock.forwardPeRatio, f.forwardPeRatio)) return false;
+      if (!this.passesRange(stock.pbRatio, f.pbRatio)) return false;
+      if (!this.passesRange(stock.dividendYield, f.dividendYield)) return false;
+
+      // Growth
+      if (!this.passesRange(stock.earningsGrowth, f.earningsGrowth)) return false;
+      if (!this.passesRange(stock.revenueGrowth, f.revenueGrowth)) return false;
+
+      // Volume
+      if (!this.passesRange(stock.avgVolume, f.avgVolume)) return false;
+      if (!this.passesRange(stock.relativeVolume, f.relativeVolume)) return false;
+
+      // Moving averages
+      const ma = f.movingAverages;
+      if (ma.aboveFiftyDayMA !== null && stock.percentFromFiftyDayMA !== null) {
+        if (ma.aboveFiftyDayMA !== (stock.percentFromFiftyDayMA > 0)) return false;
+      }
+      if (ma.aboveTwoHundredDayMA !== null && stock.percentFromTwoHundredDayMA !== null) {
+        if (ma.aboveTwoHundredDayMA !== (stock.percentFromTwoHundredDayMA > 0)) return false;
+      }
+      if (ma.goldenCross) {
+        if (stock.fiftyDayMA == null || stock.twoHundredDayMA == null || stock.fiftyDayMA <= stock.twoHundredDayMA || stock.price < stock.fiftyDayMA) return false;
+      }
+      if (ma.deathCross) {
+        if (stock.fiftyDayMA == null || stock.twoHundredDayMA == null || stock.fiftyDayMA >= stock.twoHundredDayMA) return false;
+      }
+
+      // Sectors
+      if (f.sectors.length > 0 && !(f.sectors as string[]).includes(stock.sector)) return false;
+
+      // Exchanges
+      if (f.exchanges.length > 0 && !(f.exchanges as string[]).includes(stock.exchange)) return false;
+
+      return true;
+    });
+
+    this._hasClientFilters = true;
+    this._filteredStocks.set(filtered);
+    this._totalCount.set(filtered.length);
+    this._pagination.update(p => ({ ...p, page: 0, totalRecords: filtered.length }));
+    this.paginateFromCache();
+  }
+
+  private passesRange(value: number | null | undefined, range: { min?: number; max?: number }): boolean {
+    if (range.min === undefined && range.max === undefined) return true;
+    if (value === null || value === undefined) return false;
+    if (range.min !== undefined && value < range.min) return false;
+    if (range.max !== undefined && value > range.max) return false;
+    return true;
+  }
+
   /**
    * Paginate from a specific source array
    */
@@ -313,6 +397,7 @@ export class ScreenerService {
     // Clear cache and reset all filter states
     this._cachedStocks.set([]);
     this._filteredStocks.set([]);
+    this._hasClientFilters = false;
     this._technicalsCalculated = false;
     this._rsiFilter.set(null);
     this._macdFilter.set(null);
@@ -604,6 +689,7 @@ export class ScreenerService {
     this._rsiFilter.set(null);
     this._macdFilter.set(null);
     this._filteredStocks.set([]);
+    this._hasClientFilters = false;
     
     // Reset to show all cached stocks
     this._totalCount.set(this._cachedStocks().length);
@@ -627,6 +713,7 @@ export class ScreenerService {
     // If no filters, clear filtered stocks and show all cached
     if (!hasFilters) {
       this._filteredStocks.set([]);
+      this._hasClientFilters = false;
       this._totalCount.set(this._cachedStocks().length);
       this._pagination.update(p => ({
         ...p,

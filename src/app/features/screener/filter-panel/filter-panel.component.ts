@@ -92,29 +92,9 @@ interface FilterOption<T> {
               </div>
             } @else {
               <div class="range-inputs">
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="mcap-min"
-                    [(ngModel)]="filters.marketCap.customRange.min"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="mcap-min">Min ($B)</label>
-                </span>
-                <span class="range-separator">-</span>
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="mcap-max"
-                    [(ngModel)]="filters.marketCap.customRange.max"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="mcap-max">Max ($B)</label>
-                </span>
+                <input type="number" class="range-input" [(ngModel)]="filters.marketCap.customRange.min" (blur)="onFilterChange()" placeholder="Min ($B)">
+                <span class="range-separator">—</span>
+                <input type="number" class="range-input" [(ngModel)]="filters.marketCap.customRange.max" (blur)="onFilterChange()" placeholder="Max ($B)">
               </div>
             }
           </div>
@@ -152,33 +132,9 @@ interface FilterOption<T> {
             <div class="range-filter-row">
               <span class="range-filter-label">% From High</span>
               <div class="range-inputs">
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="week52-min"
-                    [(ngModel)]="filters.fiftyTwoWeek.percentFromHigh.min"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    suffix="%"
-                    [maxFractionDigits]="1"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="week52-min">Min</label>
-                </span>
-                <span class="range-separator">-</span>
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="week52-max"
-                    [(ngModel)]="filters.fiftyTwoWeek.percentFromHigh.max"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    suffix="%"
-                    [maxFractionDigits]="1"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="week52-max">Max</label>
-                </span>
+                <input type="number" class="range-input" [(ngModel)]="filters.fiftyTwoWeek.percentFromHigh.min" (blur)="onFilterChange()" placeholder="Min %" step="0.1">
+                <span class="range-separator">—</span>
+                <input type="number" class="range-input" [(ngModel)]="filters.fiftyTwoWeek.percentFromHigh.max" (blur)="onFilterChange()" placeholder="Max %" step="0.1">
               </div>
             </div>
           </div>
@@ -190,129 +146,39 @@ interface FilterOption<T> {
           <span>Valuation</span>
           <i class="pi pi-chevron-down arrow"></i>
         </button>
-        <p-overlayPanel #opValuation [style]="{'width': '360px'}" appendTo="body">
+        <p-overlayPanel #opValuation [style]="{'width': '320px'}" appendTo="body">
           <div class="overlay-content">
             <div class="overlay-title">Valuation</div>
             <div class="range-filter-row">
               <span class="range-filter-label">P/E Ratio</span>
               <div class="range-inputs">
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="pe-min"
-                    [(ngModel)]="filters.peRatio.min"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    [maxFractionDigits]="1"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="pe-min">Min</label>
-                </span>
-                <span class="range-separator">-</span>
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="pe-max"
-                    [(ngModel)]="filters.peRatio.max"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    [maxFractionDigits]="1"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="pe-max">Max</label>
-                </span>
+                <input type="number" class="range-input" [(ngModel)]="filters.peRatio.min" (blur)="onFilterChange()" placeholder="Min" step="0.1">
+                <span class="range-separator">—</span>
+                <input type="number" class="range-input" [(ngModel)]="filters.peRatio.max" (blur)="onFilterChange()" placeholder="Max" step="0.1">
               </div>
             </div>
             <div class="range-filter-row">
               <span class="range-filter-label">Forward P/E</span>
               <div class="range-inputs">
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="fpe-min"
-                    [(ngModel)]="filters.forwardPeRatio.min"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    [maxFractionDigits]="1"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="fpe-min">Min</label>
-                </span>
-                <span class="range-separator">-</span>
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="fpe-max"
-                    [(ngModel)]="filters.forwardPeRatio.max"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    [maxFractionDigits]="1"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="fpe-max">Max</label>
-                </span>
+                <input type="number" class="range-input" [(ngModel)]="filters.forwardPeRatio.min" (blur)="onFilterChange()" placeholder="Min" step="0.1">
+                <span class="range-separator">—</span>
+                <input type="number" class="range-input" [(ngModel)]="filters.forwardPeRatio.max" (blur)="onFilterChange()" placeholder="Max" step="0.1">
               </div>
             </div>
             <div class="range-filter-row">
               <span class="range-filter-label">P/B Ratio</span>
               <div class="range-inputs">
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="pb-min"
-                    [(ngModel)]="filters.pbRatio.min"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    [maxFractionDigits]="1"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="pb-min">Min</label>
-                </span>
-                <span class="range-separator">-</span>
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="pb-max"
-                    [(ngModel)]="filters.pbRatio.max"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    [maxFractionDigits]="1"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="pb-max">Max</label>
-                </span>
+                <input type="number" class="range-input" [(ngModel)]="filters.pbRatio.min" (blur)="onFilterChange()" placeholder="Min" step="0.1">
+                <span class="range-separator">—</span>
+                <input type="number" class="range-input" [(ngModel)]="filters.pbRatio.max" (blur)="onFilterChange()" placeholder="Max" step="0.1">
               </div>
             </div>
             <div class="range-filter-row">
               <span class="range-filter-label">Dividend Yield</span>
               <div class="range-inputs">
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="div-min"
-                    [(ngModel)]="filters.dividendYield.min"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    suffix="%"
-                    [maxFractionDigits]="2"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="div-min">Min</label>
-                </span>
-                <span class="range-separator">-</span>
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="div-max"
-                    [(ngModel)]="filters.dividendYield.max"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    suffix="%"
-                    [maxFractionDigits]="2"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="div-max">Max</label>
-                </span>
+                <input type="number" class="range-input" [(ngModel)]="filters.dividendYield.min" (blur)="onFilterChange()" placeholder="Min %" step="0.01">
+                <span class="range-separator">—</span>
+                <input type="number" class="range-input" [(ngModel)]="filters.dividendYield.max" (blur)="onFilterChange()" placeholder="Max %" step="0.01">
               </div>
             </div>
           </div>
@@ -378,67 +244,23 @@ interface FilterOption<T> {
           <span>Volume</span>
           <i class="pi pi-chevron-down arrow"></i>
         </button>
-        <p-overlayPanel #opVolume [style]="{'width': '360px'}" appendTo="body">
+        <p-overlayPanel #opVolume [style]="{'width': '320px'}" appendTo="body">
           <div class="overlay-content">
             <div class="overlay-title">Volume</div>
             <div class="range-filter-row">
               <span class="range-filter-label">Avg Daily Volume</span>
               <div class="range-inputs">
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="vol-min"
-                    [(ngModel)]="filters.avgVolume.min"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="vol-min">Min</label>
-                </span>
-                <span class="range-separator">-</span>
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="vol-max"
-                    [(ngModel)]="filters.avgVolume.max"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="vol-max">Max</label>
-                </span>
+                <input type="number" class="range-input" [(ngModel)]="filters.avgVolume.min" (blur)="onFilterChange()" placeholder="Min">
+                <span class="range-separator">—</span>
+                <input type="number" class="range-input" [(ngModel)]="filters.avgVolume.max" (blur)="onFilterChange()" placeholder="Max">
               </div>
             </div>
             <div class="range-filter-row">
               <span class="range-filter-label">Relative Volume</span>
               <div class="range-inputs">
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="rvol-min"
-                    [(ngModel)]="filters.relativeVolume.min"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    [minFractionDigits]="1"
-                    [maxFractionDigits]="2"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="rvol-min">Min</label>
-                </span>
-                <span class="range-separator">-</span>
-                <span class="p-float-label">
-                  <p-inputNumber 
-                    inputId="rvol-max"
-                    [(ngModel)]="filters.relativeVolume.max"
-                    (onBlur)="onFilterChange()"
-                    [showButtons]="false"
-                    mode="decimal"
-                    [minFractionDigits]="1"
-                    [maxFractionDigits]="2"
-                    styleClass="range-input">
-                  </p-inputNumber>
-                  <label for="rvol-max">Max</label>
-                </span>
+                <input type="number" class="range-input" [(ngModel)]="filters.relativeVolume.min" (blur)="onFilterChange()" placeholder="Min" step="0.1">
+                <span class="range-separator">—</span>
+                <input type="number" class="range-input" [(ngModel)]="filters.relativeVolume.max" (blur)="onFilterChange()" placeholder="Max" step="0.1">
               </div>
             </div>
           </div>
@@ -729,21 +551,49 @@ interface FilterOption<T> {
     .range-inputs {
       display: flex;
       align-items: center;
-      gap: 0.625rem;
+      gap: 0.4rem;
+    }
 
-      .p-float-label {
-        flex: 1;
-        min-width: 0;
+    .range-input {
+      flex: 1;
+      min-width: 0;
+      width: 0;
+      padding: 0.45rem 0.55rem;
+      font-size: 0.82rem;
+      border-radius: 6px;
+      border: 1px solid var(--surface-border);
+      background: var(--surface-ground);
+      color: var(--text-color);
+      outline: none;
+      transition: border-color 0.15s ease;
+      -moz-appearance: textfield;
+
+      &::-webkit-outer-spin-button,
+      &::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+
+      &::placeholder {
+        color: var(--text-color-secondary);
+        opacity: 0.5;
+        font-size: 0.78rem;
+      }
+
+      &:hover {
+        border-color: var(--primary-color);
+      }
+
+      &:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb, 99, 102, 241), 0.15);
       }
     }
 
     .range-separator {
       color: var(--text-color-secondary);
-      font-size: 0.9rem;
-      font-weight: 600;
+      font-size: 0.75rem;
       flex-shrink: 0;
-      width: 20px;
-      text-align: center;
     }
 
     .ma-filter-row {
@@ -769,51 +619,6 @@ interface FilterOption<T> {
     }
 
     :host ::ng-deep {
-      .range-input {
-        width: 100%;
-
-        input.p-inputnumber-input {
-          width: 100%;
-          font-size: 0.85rem;
-          padding: 0.65rem 0.75rem;
-          border-radius: 8px;
-          background: var(--surface-ground);
-          border: 1px solid var(--surface-border);
-          color: var(--text-color);
-          transition: border-color 0.2s ease, box-shadow 0.2s ease;
-
-          &:hover {
-            border-color: var(--primary-color);
-          }
-
-          &:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px rgba(var(--primary-color-rgb, 99, 102, 241), 0.15);
-            outline: none;
-          }
-        }
-      }
-
-      .p-float-label {
-        label {
-          font-size: 0.8rem;
-          color: var(--text-color-secondary);
-          left: 0.75rem;
-          transition: all 0.2s ease;
-        }
-
-        input:focus ~ label,
-        input.p-filled ~ label,
-        .p-inputwrapper-focus ~ label,
-        .p-inputwrapper-filled ~ label {
-          top: -0.5rem;
-          font-size: 0.7rem;
-          background: var(--surface-overlay);
-          padding: 0 0.25rem;
-          color: var(--primary-color);
-        }
-      }
-
       p-selectbutton.ma-toggle {
         .p-selectbutton {
           display: inline-flex !important;

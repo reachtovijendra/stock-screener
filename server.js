@@ -5,7 +5,6 @@
 
 const express = require('express');
 const cors = require('cors');
-const yahooFinance = require('yahoo-finance2').default;
 
 const app = express();
 const PORT = 3000;
@@ -14,13 +13,13 @@ const PORT = 3000;
 app.use(cors());
 app.use(express.json());
 
-// Configure yahoo-finance2
-yahooFinance.setGlobalConfig({
-  queue: {
-    concurrency: 2,
-    timeout: 60000
-  }
-});
+// yahoo-finance2 v2.14 is ESM-only and exports a class constructor
+let yahooFinance;
+async function initYahooFinance() {
+  const mod = await import('yahoo-finance2');
+  const YahooFinance = mod.default;
+  yahooFinance = new YahooFinance();
+}
 
 // Cache
 const quoteCache = new Map();
@@ -205,26 +204,23 @@ app.get('/api/stocks/search', async (req, res) => {
       return res.status(400).json({ error: 'Search query is required' });
     }
 
-    const results = await yahooFinance.search(q, {
-      newsCount: 0,
-      quotesCount: 20
-    });
+    const results = await yahooFinance.autoc(q, { region: marketType === 'IN' ? 'IN' : 'US' });
 
-    const filtered = (results.quotes || [])
+    const filtered = (results.Result || [])
       .filter(quote => {
         if (marketType === 'IN') {
-          return quote.exchange === 'NSI' || quote.exchange === 'BSE' ||
+          return quote.exchDisp === 'NSI' || quote.exchDisp === 'BSE' ||
                  quote.symbol?.endsWith('.NS') || quote.symbol?.endsWith('.BO');
         } else {
           return !quote.symbol?.includes('.') ||
-                 ['NYSE', 'NASDAQ', 'AMEX', 'NYQ', 'NMS', 'NGM'].includes(quote.exchange);
+                 ['NYSE', 'NASDAQ', 'AMEX', 'NYQ', 'NMS', 'NGM'].includes(quote.exchDisp);
         }
       })
       .map(q => ({
         symbol: q.symbol,
-        name: q.shortname || q.longname || q.symbol,
-        exchange: q.exchange,
-        type: q.quoteType?.toLowerCase() || 'equity',
+        name: q.name || q.symbol,
+        exchange: q.exchDisp || q.exch,
+        type: q.typeDisp?.toLowerCase() || 'equity',
         market: getMarketFromSymbol(q.symbol)
       }));
 
@@ -392,12 +388,17 @@ app.get('/api/stocks/list', (req, res) => {
 });
 
 // Start server
-app.listen(PORT, () => {
-  console.log(`\n🚀 Stock Screener API running at http://localhost:${PORT}`);
-  console.log(`\nAvailable endpoints:`);
-  console.log(`  GET  /api/stocks/quote?symbol=AAPL&market=US`);
-  console.log(`  GET  /api/stocks/search?q=apple&market=US`);
-  console.log(`  POST /api/stocks/screen`);
-  console.log(`  GET  /api/stocks/list?market=US`);
-  console.log(`\nPress Ctrl+C to stop\n`);
+initYahooFinance().then(() => {
+  app.listen(PORT, () => {
+    console.log(`\n🚀 Stock Screener API running at http://localhost:${PORT}`);
+    console.log(`\nAvailable endpoints:`);
+    console.log(`  GET  /api/stocks/quote?symbol=AAPL&market=US`);
+    console.log(`  GET  /api/stocks/search?q=apple&market=US`);
+    console.log(`  POST /api/stocks/screen`);
+    console.log(`  GET  /api/stocks/list?market=US`);
+    console.log(`\nPress Ctrl+C to stop\n`);
+  });
+}).catch(err => {
+  console.error('Failed to initialize:', err);
+  process.exit(1);
 });

@@ -151,7 +151,7 @@ interface AlertCategory {
           <div class="top-picks-header" (click)="toggleTopPicks()">
             <div class="top-picks-title">
               <i class="pi pi-star-fill" style="color: #fbbf24;"></i>
-              <h2>Top Picks - Buy Today</h2>
+              <h2>Value Picks</h2>
               <span class="top-picks-count">{{ topPicks().length }}</span>
               <button 
                 class="info-btn" 
@@ -677,7 +677,7 @@ interface AlertCategory {
 
       <!-- Scoring Criteria Dialog -->
       <p-dialog 
-        header="Top Picks Scoring Criteria" 
+        header="Value Picks Scoring Criteria"
         [(visible)]="showScoringDialog" 
         [modal]="true" 
         [style]="{ width: '600px' }"
@@ -3547,7 +3547,7 @@ export class BreakoutsComponent implements OnInit {
 
   getScoreSearchTitle(): string {
     switch (this.scoreSearchType) {
-      case 'topPicks': return 'Top Picks';
+      case 'topPicks': return 'Value Picks';
       case 'dayTrade': return 'Day Trade';
       case 'momentum': return 'Momentum';
       default: return '';
@@ -3578,7 +3578,7 @@ export class BreakoutsComponent implements OnInit {
 
   getPickTypeLabel(pickType: string): string {
     switch (pickType) {
-      case 'topPicks': return 'Top Picks';
+      case 'topPicks': return 'Value Picks';
       case 'dayTrade': return 'Day Trade';
       case 'momentum': return 'Momentum';
       default: return '';

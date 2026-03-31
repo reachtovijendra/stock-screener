@@ -1,20 +1,11 @@
 /**
- * Daily Pre-Market Watchlist Cron Job
+ * US Pre-Market Watchlist Cron Job
  *
- * Runs at 8 AM EST (1 PM UTC) on weekdays via Vercel Cron — before US
- * market open so picks are actionable.
+ * Runs at 8 AM EST (1 PM UTC) on weekdays — before US market open at 9:30 AM.
+ * US pre-market is active from 4 AM EST, so gap%, pre-market price and
+ * pre-market volume data is available from Yahoo Finance.
  *
- * Scoring uses pre-market data from Yahoo Finance:
- *   - Gap % (pre-market price vs previous close)
- *   - Pre-market volume vs average daily volume
- *   - Relative volume (RVOL)
- *   - Trend strength (50/200 DMA positioning)
- *   - Liquidity (average volume > 5M)
- *
- * Stocks are classified into:
- *   - High Priority (score >= 70)
- *   - Medium Priority (score 50-69)
- *   - Low Priority (score < 50) — excluded from email
+ * India has a separate cron (daily-picks-india) at 8:30 AM IST.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
@@ -191,32 +182,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  console.log('[DailyPicks] Starting pre-market watchlist generation...');
+  console.log('[USPicks] Starting US pre-market watchlist...');
   const startTime = Date.now();
 
   try {
-    // --- 1. Fetch stock quotes ---
-    console.log('[DailyPicks] Fetching US stock quotes...');
+    // --- 1. Fetch US stock quotes ---
+    console.log('[USPicks] Fetching US stock quotes...');
     const usSymbols = getIndexSymbols('US');
     const usQuotes = await getQuotes(usSymbols, 'US');
-    console.log(`[DailyPicks] Got ${usQuotes.length} US quotes`);
-
-    console.log('[DailyPicks] Fetching IN stock quotes...');
-    const inSymbols = getIndexSymbols('IN');
-    const inQuotes = await getQuotes(inSymbols, 'IN');
-    console.log(`[DailyPicks] Got ${inQuotes.length} IN quotes`);
+    console.log(`[USPicks] Got ${usQuotes.length} US quotes`);
 
     // --- 2. Pre-filter on price/market cap ---
     const usFiltered = usQuotes.filter(
       (q) => q.price > 5 && q.marketCap > 1_000_000_000
     );
-    const inFiltered = inQuotes.filter(
-      (q) => q.price > 50
-    );
-    console.log(`[DailyPicks] Pre-filtered: ${usFiltered.length} US, ${inFiltered.length} IN`);
+    console.log(`[USPicks] Pre-filtered: ${usFiltered.length} stocks`);
 
-    // --- 3. Score all stocks ---
-    const allScored = [...usFiltered, ...inFiltered].map(scorePreMarket);
+    // --- 3. Score ---
+    const allScored = usFiltered.map(scorePreMarket);
     allScored.sort((a, b) => b.score - a.score);
 
     const qualified = allScored.filter(s => s.score >= MIN_SCORE);
@@ -225,23 +208,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const highPriority = picks.filter(s => s.priority === 'High');
     const mediumPriority = picks.filter(s => s.priority === 'Medium');
 
-    console.log(`[DailyPicks] Scored: ${allScored.length} total, ${qualified.length} qualified (${highPriority.length} high, ${mediumPriority.length} medium)`);
+    console.log(`[USPicks] ${qualified.length} qualified (${highPriority.length} high, ${mediumPriority.length} medium)`);
 
-    // --- 4. Fetch market indices for header ---
-    let spValue = '', djValue = '', niftyValue = '';
+    // --- 4. Fetch US market indices for header ---
+    let spValue = '', djValue = '';
     try {
-      const [usIndices, inIndices] = await Promise.all([
-        getMarketIndices('US'),
-        getMarketIndices('IN'),
-      ]);
+      const usIndices = await getMarketIndices('US');
       const sp = usIndices.find((i) => i.symbol === '^GSPC');
       const dj = usIndices.find((i) => i.symbol === '^DJI');
-      const nf = inIndices.find((i) => i.symbol === '^NSEI');
       if (sp) spValue = `S&P 500: ${sp.price.toLocaleString()} (${sp.changePercent >= 0 ? '+' : ''}${sp.changePercent.toFixed(2)}%)`;
       if (dj) djValue = `Dow Jones: ${dj.price.toLocaleString()} (${dj.changePercent >= 0 ? '+' : ''}${dj.changePercent.toFixed(2)}%)`;
-      if (nf) niftyValue = `NIFTY 50: ${nf.price.toLocaleString()} (${nf.changePercent >= 0 ? '+' : ''}${nf.changePercent.toFixed(2)}%)`;
     } catch (err) {
-      console.log('[DailyPicks] Failed to fetch indices, continuing without...');
+      console.log('[USPicks] Failed to fetch indices, continuing without...');
     }
 
     // --- 5. Generate and send email ---
@@ -254,18 +232,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const html = picks.length > 0
-      ? generateEmailHTML({ dateStr, spValue, djValue, niftyValue, highPriority, mediumPriority })
-      : generateNoPicksHTML(dateStr, spValue, djValue, niftyValue);
+      ? generateEmailHTML({ dateStr, spValue, djValue, highPriority, mediumPriority })
+      : generateNoPicksHTML(dateStr, spValue, djValue);
 
     const subject = picks.length > 0
-      ? `Pre-Market Watchlist - ${dateStr} (${highPriority.length} High, ${mediumPriority.length} Medium)`
-      : `Pre-Market Watchlist - ${dateStr} (No Strong Signals)`;
+      ? `🇺🇸 US Pre-Market Watchlist - ${dateStr} (${highPriority.length} High, ${mediumPriority.length} Medium)`
+      : `🇺🇸 US Pre-Market Watchlist - ${dateStr} (No Strong Signals)`;
 
     const result = await sendEmail({ to: RECIPIENTS, subject, html });
-    console.log('[DailyPicks] Email sent:', JSON.stringify(result));
+    console.log('[USPicks] Email sent:', JSON.stringify(result));
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-    console.log(`[DailyPicks] Completed in ${elapsed}s`);
+    console.log(`[USPicks] Completed in ${elapsed}s`);
 
     return res.status(200).json({
       success: true,
@@ -288,30 +266,28 @@ function generateEmailHTML(data: {
   dateStr: string;
   spValue: string;
   djValue: string;
-  niftyValue: string;
   highPriority: PreMarketScore[];
   mediumPriority: PreMarketScore[];
 }): string {
-  const { dateStr, spValue, djValue, niftyValue, highPriority, mediumPriority } = data;
+  const { dateStr, spValue, djValue, highPriority, mediumPriority } = data;
 
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Pre-Market Watchlist</title>
+  <title>US Pre-Market Watchlist</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0f172a;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
   <div style="max-width:720px;margin:0 auto;padding:20px;">
 
     <!-- Header -->
     <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px;margin-bottom:20px;border:1px solid #475569;">
-      <h1 style="margin:0 0 4px 0;font-size:22px;color:#f8fafc;">Pre-Market Watchlist</h1>
+      <h1 style="margin:0 0 4px 0;font-size:22px;color:#f8fafc;">🇺🇸 US Pre-Market Watchlist</h1>
       <p style="margin:0 0 16px 0;font-size:14px;color:#94a3b8;">${dateStr}</p>
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         ${spValue ? `<span style="background:#1e3a5f;color:#60a5fa;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;">${spValue}</span>` : ''}
         ${djValue ? `<span style="background:#1e3a5f;color:#60a5fa;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;">${djValue}</span>` : ''}
-        ${niftyValue ? `<span style="background:#1e3a2f;color:#4ade80;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;">${niftyValue}</span>` : ''}
       </div>
     </div>
 
@@ -428,18 +404,17 @@ function generatePicksTable(picks: PreMarketScore[]): string {
   </table>`;
 }
 
-function generateNoPicksHTML(dateStr: string, spValue: string, djValue: string, niftyValue: string): string {
+function generateNoPicksHTML(dateStr: string, spValue: string, djValue: string): string {
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background-color:#0f172a;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:20px;">
     <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px;border:1px solid #475569;">
-      <h1 style="margin:0 0 8px 0;font-size:22px;color:#f8fafc;">Pre-Market Watchlist</h1>
+      <h1 style="margin:0 0 8px 0;font-size:22px;color:#f8fafc;">🇺🇸 US Pre-Market Watchlist</h1>
       <p style="margin:0 0 16px 0;font-size:14px;color:#94a3b8;">${dateStr}</p>
       ${spValue ? `<p style="font-size:13px;color:#60a5fa;margin:4px 0;">${spValue}</p>` : ''}
       ${djValue ? `<p style="font-size:13px;color:#60a5fa;margin:4px 0;">${djValue}</p>` : ''}
-      ${niftyValue ? `<p style="font-size:13px;color:#4ade80;margin:4px 0;">${niftyValue}</p>` : ''}
     </div>
     <div style="background:#1e293b;border-radius:8px;padding:24px;margin-top:16px;text-align:center;border:1px solid #334155;">
       <p style="font-size:16px;color:#fbbf24;margin:0 0 8px 0;font-weight:600;">No Strong Pre-Market Signals Today</p>

@@ -1,9 +1,10 @@
 /**
  * Daily Day-Trade Picks Cron Job
  *
- * Runs at 4 PM EST (9 PM UTC) on weekdays via Vercel Cron — after both
- * US and India markets have closed, so full-day volume and price data
- * is available for scoring.
+ * Runs at 8 AM EST (1 PM UTC) on weekdays via Vercel Cron — before US
+ * market open so picks are actionable. At this time US stocks show
+ * previous day's close data (price, change, volume) which is used
+ * for scoring. India market data is from same-day close (3:30 PM IST).
  * Fetches ~250 US + ~50 India stocks, scores them for day-trade potential,
  * and emails the top 10 picks with buy/sell prices to the configured recipient.
  */
@@ -61,21 +62,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const inQuotes = await getQuotes(inSymbols, 'IN');
     console.log(`[DailyPicks] Got ${inQuotes.length} IN quotes`);
 
-    // --- 2. Pre-filter: stocks with meaningful volume and market cap ---
-    // Note: no changePercent > 0 requirement — the scoring algorithm handles
-    // directionality, and we don't want to exclude all stocks on down days.
+    // --- 2. Pre-filter: stocks with meaningful price and market cap ---
+    // At 8 AM EST, US market hasn't opened yet — Yahoo returns previous
+    // day's close data. We skip volume/change filters for US since pre-market
+    // volume is near zero. The scoring algorithm handles quality ranking.
     const usFiltered = usQuotes.filter(
-      (q) => q.relativeVolume >= 0.3 && q.price > 5 && q.marketCap > 1_000_000_000
+      (q) => q.price > 5 && q.marketCap > 1_000_000_000
     );
+    // India market closed at 3:30 PM IST, full day data is available
     const inFiltered = inQuotes.filter(
-      (q) => q.relativeVolume >= 0.3 && q.price > 50
+      (q) => q.price > 50
     );
 
     console.log(`[DailyPicks] Pre-filtered: ${usFiltered.length} US, ${inFiltered.length} IN`);
 
-    // Sort by absolute changePercent * relativeVolume to prioritize the most active movers
-    usFiltered.sort((a, b) => (Math.abs(b.changePercent) * b.relativeVolume) - (Math.abs(a.changePercent) * a.relativeVolume));
-    inFiltered.sort((a, b) => (Math.abs(b.changePercent) * b.relativeVolume) - (Math.abs(a.changePercent) * a.relativeVolume));
+    // Sort by absolute changePercent to prioritize biggest movers from previous session
+    usFiltered.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+    inFiltered.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
 
     // Take top 40 US and top 20 IN for technicals (limit API calls)
     const usCandidates = usFiltered.slice(0, 40);

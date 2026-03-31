@@ -14,7 +14,7 @@
   "crons": [
     {
       "path": "/api/cron/daily-picks",
-      "schedule": "0 21 * * 1-5"
+      "schedule": "0 13 * * 1-5"
     },
     {
       "path": "/api/cron/daily-crossovers",

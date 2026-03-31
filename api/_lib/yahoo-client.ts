@@ -947,6 +947,10 @@ async function fetchScreenerRange(
         twoHundredDayMA,
         percentFromFiftyDayMA: fiftyDayMA && fiftyDayMA > 0 ? ((price - fiftyDayMA) / fiftyDayMA) * 100 : null,
         percentFromTwoHundredDayMA: twoHundredDayMA && twoHundredDayMA > 0 ? ((price - twoHundredDayMA) / twoHundredDayMA) * 100 : null,
+        preMarketPrice: q.preMarketPrice || null,
+        preMarketChange: q.preMarketChange || null,
+        preMarketChangePercent: q.preMarketChangePercent || null,
+        preMarketVolume: q.preMarketVolume || null,
         lastUpdated: new Date()
       });
     }

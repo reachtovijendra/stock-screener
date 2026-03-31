@@ -1,22 +1,24 @@
 /**
- * Daily Day-Trade Picks Cron Job
+ * Daily Pre-Market Watchlist Cron Job
  *
  * Runs at 8 AM EST (1 PM UTC) on weekdays via Vercel Cron — before US
- * market open so picks are actionable. At this time US stocks show
- * previous day's close data (price, change, volume) which is used
- * for scoring. India market data is from same-day close (3:30 PM IST).
- * Fetches ~250 US + ~50 India stocks, scores them for day-trade potential,
- * and emails the top 10 picks with buy/sell prices to the configured recipient.
+ * market open so picks are actionable.
+ *
+ * Scoring uses pre-market data from Yahoo Finance:
+ *   - Gap % (pre-market price vs previous close)
+ *   - Pre-market volume vs average daily volume
+ *   - Relative volume (RVOL)
+ *   - Trend strength (50/200 DMA positioning)
+ *   - Liquidity (average volume > 5M)
+ *
+ * Stocks are classified into:
+ *   - High Priority (score >= 70)
+ *   - Medium Priority (score 50-69)
+ *   - Low Priority (score < 50) — excluded from email
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getQuotes, getIndexSymbols, getMarketIndices, Market } from '../_lib/yahoo-client';
-import {
-  StockData,
-  DayTradeScore,
-  computeTechnicals,
-  scoreDayTrade,
-} from '../_lib/day-trade-scorer';
+import { getQuotes, getIndexSymbols, getMarketIndices, Market, StockQuote } from '../_lib/yahoo-client';
 import { sendEmail } from '../_lib/brevo-sender';
 
 // ---------------------------------------------------------------------------
@@ -27,31 +29,173 @@ const RECIPIENTS = [
   'reachtovijendra@gmail.com',
   'poojitha.challagandla@gmail.com',
 ];
-const US_TOP_PICKS = 7;   // 7 US + 3 India = 10 total
-const IN_TOP_PICKS = 3;
-const TECHNICALS_BATCH_SIZE = 5;
-const TECHNICALS_BATCH_DELAY_MS = 200;
-const MIN_SCORE = 20;      // Minimum score to be considered
+const MAX_PICKS = 15;
+const MIN_SCORE = 50; // Only include Medium and High priority
+
+// ---------------------------------------------------------------------------
+// Pre-Market Scoring
+// ---------------------------------------------------------------------------
+
+interface PreMarketScore {
+  symbol: string;
+  name: string;
+  price: number;
+  previousClose: number;
+  preMarketPrice: number | null;
+  gapPercent: number;
+  preMarketVolume: number | null;
+  avgVolume: number;
+  preMarketVolumePercent: number | null;
+  relativeVolume: number;
+  fiftyDayMA: number | null;
+  twoHundredDayMA: number | null;
+  score: number;
+  priority: 'High' | 'Medium' | 'Low';
+  signals: string[];
+  market: string;
+  sector: string;
+  marketCap: number;
+  beta: number | null;
+}
+
+function scorePreMarket(q: StockQuote): PreMarketScore {
+  let score = 0;
+  const signals: string[] = [];
+
+  // Calculate gap % from pre-market price vs previous close
+  const previousClose = q.price; // regularMarketPrice = previous close before market open
+  const preMarketPrice = q.preMarketPrice;
+  const preMarketVol = q.preMarketVolume;
+
+  let gapPercent = 0;
+  if (preMarketPrice && previousClose > 0) {
+    gapPercent = ((preMarketPrice - previousClose) / previousClose) * 100;
+  }
+
+  // --- Gap Score ---
+  const absGap = Math.abs(gapPercent);
+  if (absGap > 5) {
+    score += 20;
+    signals.push(`Gap ${gapPercent > 0 ? '+' : ''}${gapPercent.toFixed(1)}% (strong)`);
+  } else if (absGap >= 3) {
+    score += 10;
+    signals.push(`Gap ${gapPercent > 0 ? '+' : ''}${gapPercent.toFixed(1)}%`);
+  } else if (absGap >= 1) {
+    score += 5;
+    signals.push(`Gap ${gapPercent > 0 ? '+' : ''}${gapPercent.toFixed(1)}%`);
+  }
+
+  // --- Relative Volume Score (from previous session) ---
+  const rvol = q.relativeVolume;
+  if (rvol > 3) {
+    score += 25;
+    signals.push(`RVOL ${rvol.toFixed(1)}x (spike)`);
+  } else if (rvol >= 2) {
+    score += 15;
+    signals.push(`RVOL ${rvol.toFixed(1)}x (elevated)`);
+  } else if (rvol >= 1.5) {
+    score += 8;
+    signals.push(`RVOL ${rvol.toFixed(1)}x`);
+  }
+
+  // --- Pre-Market Volume Score ---
+  let preMarketVolumePercent: number | null = null;
+  if (preMarketVol && q.avgVolume > 0) {
+    preMarketVolumePercent = (preMarketVol / q.avgVolume) * 100;
+    if (preMarketVolumePercent > 30) {
+      score += 15;
+      signals.push(`Pre-mkt vol ${preMarketVolumePercent.toFixed(0)}% of avg (heavy)`);
+    } else if (preMarketVolumePercent > 15) {
+      score += 8;
+      signals.push(`Pre-mkt vol ${preMarketVolumePercent.toFixed(0)}% of avg`);
+    } else if (preMarketVolumePercent > 5) {
+      score += 3;
+    }
+  }
+
+  // --- Trend Strength (DMA positioning) ---
+  if (q.fiftyDayMA && q.twoHundredDayMA) {
+    const effectivePrice = preMarketPrice || previousClose;
+    if (q.fiftyDayMA > q.twoHundredDayMA && effectivePrice > q.fiftyDayMA) {
+      score += 10;
+      signals.push('Above 50 & 200 DMA (bullish trend)');
+    } else if (q.fiftyDayMA > q.twoHundredDayMA) {
+      score += 5;
+      signals.push('Golden cross active');
+    } else if (q.fiftyDayMA < q.twoHundredDayMA && effectivePrice < q.fiftyDayMA) {
+      score += 5;
+      signals.push('Below both DMAs (bearish, short candidate)');
+    }
+  }
+
+  // --- Liquidity Score ---
+  if (q.avgVolume > 5_000_000) {
+    score += 10;
+    signals.push(`Avg vol ${(q.avgVolume / 1_000_000).toFixed(1)}M (liquid)`);
+  } else if (q.avgVolume > 2_000_000) {
+    score += 5;
+    signals.push(`Avg vol ${(q.avgVolume / 1_000_000).toFixed(1)}M`);
+  }
+
+  // --- 52-Week Proximity ---
+  if (q.percentFromFiftyTwoWeekHigh > -3) {
+    score += 5;
+    signals.push('Near 52W high (breakout watch)');
+  } else if (q.percentFromFiftyTwoWeekLow < 10) {
+    score += 3;
+    signals.push('Near 52W low (bounce watch)');
+  }
+
+  // Determine priority
+  let priority: 'High' | 'Medium' | 'Low';
+  if (score >= 70) {
+    priority = 'High';
+  } else if (score >= 50) {
+    priority = 'Medium';
+  } else {
+    priority = 'Low';
+  }
+
+  return {
+    symbol: q.symbol,
+    name: q.name,
+    price: previousClose,
+    previousClose,
+    preMarketPrice,
+    gapPercent,
+    preMarketVolume: preMarketVol,
+    avgVolume: q.avgVolume,
+    preMarketVolumePercent,
+    relativeVolume: rvol,
+    fiftyDayMA: q.fiftyDayMA,
+    twoHundredDayMA: q.twoHundredDayMA,
+    score,
+    priority,
+    signals,
+    market: q.market,
+    sector: q.sector,
+    marketCap: q.marketCap,
+    beta: q.beta,
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Handler
 // ---------------------------------------------------------------------------
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
-  // Verify this is a legitimate cron invocation from Vercel
-  // In production, Vercel sends the CRON_SECRET header automatically
   const authHeader = req.headers['authorization'];
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    console.log('[DailyPicks] Unauthorized request - missing or invalid CRON_SECRET');
+    console.log('[DailyPicks] Unauthorized request');
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  console.log('[DailyPicks] Starting daily day-trade picks generation...');
+  console.log('[DailyPicks] Starting pre-market watchlist generation...');
   const startTime = Date.now();
 
   try {
-    // --- 1. Fetch stock quotes for both markets ---
+    // --- 1. Fetch stock quotes ---
     console.log('[DailyPicks] Fetching US stock quotes...');
     const usSymbols = getIndexSymbols('US');
     const usQuotes = await getQuotes(usSymbols, 'US');
@@ -62,97 +206,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const inQuotes = await getQuotes(inSymbols, 'IN');
     console.log(`[DailyPicks] Got ${inQuotes.length} IN quotes`);
 
-    // --- 2. Pre-filter: stocks with meaningful price and market cap ---
-    // At 8 AM EST, US market hasn't opened yet — Yahoo returns previous
-    // day's close data. We skip volume/change filters for US since pre-market
-    // volume is near zero. The scoring algorithm handles quality ranking.
+    // --- 2. Pre-filter on price/market cap ---
     const usFiltered = usQuotes.filter(
       (q) => q.price > 5 && q.marketCap > 1_000_000_000
     );
-    // India market closed at 3:30 PM IST, full day data is available
     const inFiltered = inQuotes.filter(
       (q) => q.price > 50
     );
-
     console.log(`[DailyPicks] Pre-filtered: ${usFiltered.length} US, ${inFiltered.length} IN`);
 
-    // Sort by absolute changePercent to prioritize biggest movers from previous session
-    usFiltered.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
-    inFiltered.sort((a, b) => Math.abs(b.changePercent) - Math.abs(a.changePercent));
+    // --- 3. Score all stocks ---
+    const allScored = [...usFiltered, ...inFiltered].map(scorePreMarket);
+    allScored.sort((a, b) => b.score - a.score);
 
-    // Take top 40 US and top 20 IN for technicals (limit API calls)
-    const usCandidates = usFiltered.slice(0, 40);
-    const inCandidates = inFiltered.slice(0, 20);
+    const qualified = allScored.filter(s => s.score >= MIN_SCORE);
+    const picks = qualified.slice(0, MAX_PICKS);
 
-    // --- 3. Compute technicals in batches ---
-    console.log(`[DailyPicks] Computing technicals for ${usCandidates.length + inCandidates.length} stocks...`);
+    const highPriority = picks.filter(s => s.priority === 'High');
+    const mediumPriority = picks.filter(s => s.priority === 'Medium');
 
-    const allCandidates = [...usCandidates, ...inCandidates];
-    const scored: DayTradeScore[] = [];
+    console.log(`[DailyPicks] Scored: ${allScored.length} total, ${qualified.length} qualified (${highPriority.length} high, ${mediumPriority.length} medium)`);
 
-    for (let i = 0; i < allCandidates.length; i += TECHNICALS_BATCH_SIZE) {
-      const batch = allCandidates.slice(i, i + TECHNICALS_BATCH_SIZE);
-      const results = await Promise.all(
-        batch.map(async (quote) => {
-          try {
-            const tech = await computeTechnicals(quote.symbol);
-            const stockData: StockData = {
-              symbol: quote.symbol,
-              name: quote.name,
-              price: quote.price,
-              change: quote.change,
-              changePercent: quote.changePercent,
-              market: quote.market as 'US' | 'IN',
-              exchange: quote.exchange,
-              currency: quote.currency,
-              marketCap: quote.marketCap,
-              volume: quote.volume,
-              avgVolume: quote.avgVolume,
-              relativeVolume: quote.relativeVolume,
-              fiftyTwoWeekHigh: quote.fiftyTwoWeekHigh,
-              fiftyTwoWeekLow: quote.fiftyTwoWeekLow,
-              percentFromFiftyTwoWeekHigh: quote.percentFromFiftyTwoWeekHigh,
-              fiftyDayMA: quote.fiftyDayMA,
-              twoHundredDayMA: quote.twoHundredDayMA,
-              percentFromFiftyDayMA: quote.percentFromFiftyDayMA,
-              percentFromTwoHundredDayMA: quote.percentFromTwoHundredDayMA,
-              beta: quote.beta,
-              sector: quote.sector,
-              industry: quote.industry,
-            };
-            return scoreDayTrade(stockData, tech);
-          } catch (err: any) {
-            console.error(`[DailyPicks] Error scoring ${quote.symbol}: ${err.message}`);
-            return null;
-          }
-        })
-      );
-
-      for (const r of results) {
-        if (r && r.score >= MIN_SCORE) {
-          scored.push(r);
-        }
-      }
-
-      // Delay between batches to respect rate limits
-      if (i + TECHNICALS_BATCH_SIZE < allCandidates.length) {
-        await new Promise((resolve) => setTimeout(resolve, TECHNICALS_BATCH_DELAY_MS));
-      }
-    }
-
-    console.log(`[DailyPicks] Scored ${scored.length} stocks above minimum threshold`);
-
-    // --- 4. Select top picks per market ---
-    const usScored = scored.filter((s) => s.market === 'US').sort((a, b) => b.score - a.score);
-    const inScored = scored.filter((s) => s.market === 'IN').sort((a, b) => b.score - a.score);
-
-    const usPicks = usScored.slice(0, US_TOP_PICKS);
-    const inPicks = inScored.slice(0, IN_TOP_PICKS);
-    const allPicks = [...usPicks, ...inPicks];
-
-    console.log(`[DailyPicks] Selected ${usPicks.length} US + ${inPicks.length} IN = ${allPicks.length} total picks`);
-
-    // --- 5. Fetch market indices for the email header ---
+    // --- 4. Fetch market indices for header ---
     let spValue = '', djValue = '', niftyValue = '';
     try {
       const [usIndices, inIndices] = await Promise.all([
@@ -169,7 +244,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.log('[DailyPicks] Failed to fetch indices, continuing without...');
     }
 
-    // --- 6. Generate HTML email ---
+    // --- 5. Generate and send email ---
     const dateStr = new Date().toLocaleDateString('en-US', {
       weekday: 'long',
       year: 'numeric',
@@ -178,50 +253,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       timeZone: 'America/New_York',
     });
 
-    const html = generateEmailHTML({
-      dateStr,
-      spValue,
-      djValue,
-      niftyValue,
-      usPicks,
-      inPicks,
-    });
+    const html = picks.length > 0
+      ? generateEmailHTML({ dateStr, spValue, djValue, niftyValue, highPriority, mediumPriority })
+      : generateNoPicksHTML(dateStr, spValue, djValue, niftyValue);
 
-    // --- 7. Send email ---
-    if (allPicks.length === 0) {
-      console.log('[DailyPicks] No qualifying picks today. Sending notification email.');
-      const noPicksHtml = generateNoPicksHTML(dateStr, spValue, djValue, niftyValue);
-      const result = await sendEmail({
-        to: RECIPIENTS,
-        subject: `StockScreen Daily Picks - ${dateStr} (No Strong Signals)`,
-        html: noPicksHtml,
-      });
-      console.log('[DailyPicks] No-picks email sent:', JSON.stringify(result));
-    } else {
-      const result = await sendEmail({
-        to: RECIPIENTS,
-        subject: `StockScreen Day-Trade Picks - ${dateStr} (${allPicks.length} Picks)`,
-        html,
-      });
-      console.log('[DailyPicks] Email sent:', JSON.stringify(result));
-    }
+    const subject = picks.length > 0
+      ? `Pre-Market Watchlist - ${dateStr} (${highPriority.length} High, ${mediumPriority.length} Medium)`
+      : `Pre-Market Watchlist - ${dateStr} (No Strong Signals)`;
+
+    const result = await sendEmail({ to: RECIPIENTS, subject, html });
+    console.log('[DailyPicks] Email sent:', JSON.stringify(result));
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[DailyPicks] Completed in ${elapsed}s`);
 
     return res.status(200).json({
       success: true,
-      picks: allPicks.length,
-      us: usPicks.length,
-      india: inPicks.length,
+      picks: picks.length,
+      high: highPriority.length,
+      medium: mediumPriority.length,
       elapsed: `${elapsed}s`,
     });
   } catch (error: any) {
     console.error('[DailyPicks] Fatal error:', error);
-    return res.status(500).json({
-      error: 'Failed to generate daily picks',
-      message: error.message,
-    });
+    return res.status(500).json({ error: 'Failed to generate watchlist', message: error.message });
   }
 }
 
@@ -234,24 +289,24 @@ function generateEmailHTML(data: {
   spValue: string;
   djValue: string;
   niftyValue: string;
-  usPicks: DayTradeScore[];
-  inPicks: DayTradeScore[];
+  highPriority: PreMarketScore[];
+  mediumPriority: PreMarketScore[];
 }): string {
-  const { dateStr, spValue, djValue, niftyValue, usPicks, inPicks } = data;
+  const { dateStr, spValue, djValue, niftyValue, highPriority, mediumPriority } = data;
 
   return `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>StockScreen Daily Day-Trade Picks</title>
+  <title>Pre-Market Watchlist</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0f172a;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-  <div style="max-width:700px;margin:0 auto;padding:20px;">
+  <div style="max-width:720px;margin:0 auto;padding:20px;">
 
     <!-- Header -->
     <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px;margin-bottom:20px;border:1px solid #475569;">
-      <h1 style="margin:0 0 8px 0;font-size:22px;color:#f8fafc;">StockScreen Day-Trade Picks</h1>
+      <h1 style="margin:0 0 4px 0;font-size:22px;color:#f8fafc;">Pre-Market Watchlist</h1>
       <p style="margin:0 0 16px 0;font-size:14px;color:#94a3b8;">${dateStr}</p>
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         ${spValue ? `<span style="background:#1e3a5f;color:#60a5fa;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;">${spValue}</span>` : ''}
@@ -260,34 +315,56 @@ function generateEmailHTML(data: {
       </div>
     </div>
 
-    <!-- US Market Picks -->
-    ${usPicks.length > 0 ? `
-    <div style="margin-bottom:24px;">
-      <h2 style="font-size:18px;color:#f8fafc;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid #334155;">
-        US Market Picks (${usPicks.length})
-      </h2>
-      ${generatePicksTable(usPicks, '$')}
+    <!-- Summary -->
+    <div style="display:flex;gap:12px;margin-bottom:20px;">
+      <div style="flex:1;background:#14532d;border-radius:8px;padding:16px;text-align:center;border:1px solid #22c55e33;">
+        <div style="font-size:28px;font-weight:800;color:#4ade80;">${highPriority.length}</div>
+        <div style="font-size:12px;color:#86efac;font-weight:600;">HIGH PRIORITY</div>
+      </div>
+      <div style="flex:1;background:#78350f;border-radius:8px;padding:16px;text-align:center;border:1px solid #f59e0b33;">
+        <div style="font-size:28px;font-weight:800;color:#fbbf24;">${mediumPriority.length}</div>
+        <div style="font-size:12px;color:#fcd34d;font-weight:600;">WATCH CLOSELY</div>
+      </div>
     </div>
-    ` : ''}
 
-    <!-- India Market Picks -->
-    ${inPicks.length > 0 ? `
+    <!-- High Priority -->
+    ${highPriority.length > 0 ? `
     <div style="margin-bottom:24px;">
-      <h2 style="font-size:18px;color:#f8fafc;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid #334155;">
-        India Market Picks (${inPicks.length})
+      <h2 style="font-size:16px;color:#4ade80;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid #334155;">
+        🔥 High Priority Trades (Score ≥ 70)
       </h2>
-      ${generatePicksTable(inPicks, '₹')}
+      ${generatePicksTable(highPriority)}
+    </div>` : ''}
+
+    <!-- Medium Priority -->
+    ${mediumPriority.length > 0 ? `
+    <div style="margin-bottom:24px;">
+      <h2 style="font-size:16px;color:#fbbf24;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid #334155;">
+        👀 Watch Closely (Score 50–69)
+      </h2>
+      ${generatePicksTable(mediumPriority)}
+    </div>` : ''}
+
+    <!-- Scoring Legend -->
+    <div style="background:#1e293b;border-radius:8px;padding:16px;margin-bottom:20px;border:1px solid #334155;">
+      <p style="margin:0 0 8px 0;font-size:13px;color:#f8fafc;font-weight:600;">Scoring Factors</p>
+      <table style="width:100%;font-size:12px;color:#94a3b8;">
+        <tr><td style="padding:3px 0;">Gap > 5%</td><td style="text-align:right;">+20</td></tr>
+        <tr><td style="padding:3px 0;">Gap 3-5%</td><td style="text-align:right;">+10</td></tr>
+        <tr><td style="padding:3px 0;">RVOL > 3x</td><td style="text-align:right;">+25</td></tr>
+        <tr><td style="padding:3px 0;">RVOL 2-3x</td><td style="text-align:right;">+15</td></tr>
+        <tr><td style="padding:3px 0;">Pre-mkt vol > 30% avg</td><td style="text-align:right;">+15</td></tr>
+        <tr><td style="padding:3px 0;">Strong trend (above DMAs)</td><td style="text-align:right;">+10</td></tr>
+        <tr><td style="padding:3px 0;">Liquidity > 5M avg vol</td><td style="text-align:right;">+10</td></tr>
+      </table>
     </div>
-    ` : ''}
 
     <!-- Disclaimer -->
     <div style="background:#1e293b;border-radius:8px;padding:16px;margin-top:20px;border:1px solid #334155;">
       <p style="margin:0;font-size:11px;color:#64748b;line-height:1.5;">
         <strong>Disclaimer:</strong> This email is generated automatically by StockScreen for informational
-        purposes only. It does not constitute financial advice, investment recommendations, or an offer to
-        buy or sell any securities. Day trading carries significant risk and may not be suitable for all
-        investors. Past performance does not guarantee future results. Always conduct your own research and
-        consult a qualified financial advisor before making investment decisions.
+        purposes only. It does not constitute financial advice or recommendations. Day trading carries
+        significant risk. Always conduct your own research and consult a qualified financial advisor.
       </p>
     </div>
 
@@ -299,37 +376,37 @@ function generateEmailHTML(data: {
 </html>`;
 }
 
-function generatePicksTable(picks: DayTradeScore[], currencySymbol: string): string {
+function generatePicksTable(picks: PreMarketScore[]): string {
   let rows = '';
   picks.forEach((pick, idx) => {
-    const changeColor = pick.changePercent >= 0 ? '#4ade80' : '#f87171';
-    const scoreColor = pick.score >= 60 ? '#4ade80' : pick.score >= 40 ? '#fbbf24' : '#f87171';
-    const signalSummary = pick.signals.slice(0, 4).join(', ');
+    const gapColor = pick.gapPercent >= 0 ? '#4ade80' : '#f87171';
+    const scoreColor = pick.score >= 70 ? '#4ade80' : '#fbbf24';
+    const currencySymbol = pick.market === 'IN' ? '₹' : '$';
+    const signalSummary = pick.signals.slice(0, 4).join(' · ');
     const formattedMcap = formatMarketCap(pick.marketCap, pick.market);
 
     rows += `
     <tr style="border-bottom:1px solid #1e293b;">
-      <td style="padding:12px 8px;text-align:center;font-weight:700;color:#94a3b8;font-size:14px;">${idx + 1}</td>
-      <td style="padding:12px 8px;">
-        <div style="font-weight:700;color:#f8fafc;font-size:14px;">${pick.symbol}</div>
-        <div style="font-size:11px;color:#94a3b8;margin-top:2px;">${pick.name.substring(0, 25)}</div>
-        <div style="font-size:10px;color:#64748b;">${pick.sector} | ${formattedMcap}</div>
-      </td>
       <td style="padding:12px 8px;text-align:center;">
         <div style="background:${scoreColor};color:#0f172a;font-weight:800;font-size:16px;width:40px;height:40px;line-height:40px;border-radius:8px;display:inline-block;">${pick.score}</div>
       </td>
+      <td style="padding:12px 8px;">
+        <div style="font-weight:700;color:#f8fafc;font-size:14px;">${pick.symbol}</div>
+        <div style="font-size:11px;color:#94a3b8;margin-top:2px;">${pick.name.substring(0, 28)}</div>
+        <div style="font-size:10px;color:#64748b;">${pick.sector} · ${formattedMcap}</div>
+      </td>
       <td style="padding:12px 8px;text-align:right;">
         <div style="font-weight:600;color:#f8fafc;font-size:14px;">${currencySymbol}${pick.price.toFixed(2)}</div>
-        <div style="font-size:12px;color:${changeColor};font-weight:600;">${pick.changePercent >= 0 ? '+' : ''}${pick.changePercent.toFixed(2)}%</div>
+        ${pick.preMarketPrice ? `<div style="font-size:12px;color:${gapColor};font-weight:600;">Gap ${pick.gapPercent >= 0 ? '+' : ''}${pick.gapPercent.toFixed(1)}%</div>` : '<div style="font-size:11px;color:#64748b;">No pre-mkt</div>'}
+        ${pick.preMarketPrice ? `<div style="font-size:11px;color:#94a3b8;">Pre: ${currencySymbol}${pick.preMarketPrice.toFixed(2)}</div>` : ''}
       </td>
       <td style="padding:12px 8px;text-align:right;">
-        <div style="font-size:12px;color:#4ade80;">Buy: ${currencySymbol}${pick.buyPrice.toFixed(2)}</div>
-        <div style="font-size:12px;color:#f87171;">Sell: ${currencySymbol}${pick.sellPrice.toFixed(2)}</div>
-        <div style="font-size:11px;color:#fbbf24;">Stop: ${currencySymbol}${pick.stopLoss.toFixed(2)}</div>
+        ${pick.preMarketVolumePercent != null ? `<div style="font-size:12px;color:#60a5fa;">Pre-vol: ${pick.preMarketVolumePercent.toFixed(0)}%</div>` : ''}
+        <div style="font-size:12px;color:#94a3b8;">RVOL: ${pick.relativeVolume.toFixed(1)}x</div>
+        ${pick.beta != null ? `<div style="font-size:11px;color:#64748b;">Beta: ${pick.beta.toFixed(1)}</div>` : ''}
       </td>
       <td style="padding:12px 8px;">
-        <div style="font-size:11px;color:#cbd5e1;line-height:1.4;">${signalSummary}</div>
-        ${pick.rsi != null ? `<div style="font-size:10px;color:#64748b;">RSI ${pick.rsi.toFixed(0)} | Vol ${pick.relativeVolume.toFixed(1)}x${pick.beta != null ? ` | Beta ${pick.beta.toFixed(1)}` : ''}</div>` : ''}
+        <div style="font-size:11px;color:#cbd5e1;line-height:1.5;">${signalSummary}</div>
       </td>
     </tr>`;
   });
@@ -338,11 +415,10 @@ function generatePicksTable(picks: DayTradeScore[], currencySymbol: string): str
   <table style="width:100%;border-collapse:collapse;background:#0f172a;border-radius:8px;overflow:hidden;">
     <thead>
       <tr style="background:#1e293b;">
-        <th style="padding:10px 8px;text-align:center;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">#</th>
-        <th style="padding:10px 8px;text-align:left;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Stock</th>
         <th style="padding:10px 8px;text-align:center;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Score</th>
-        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Price</th>
-        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Targets</th>
+        <th style="padding:10px 8px;text-align:left;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Stock</th>
+        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Price / Gap</th>
+        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Volume</th>
         <th style="padding:10px 8px;text-align:left;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Signals</th>
       </tr>
     </thead>
@@ -359,15 +435,15 @@ function generateNoPicksHTML(dateStr: string, spValue: string, djValue: string, 
 <body style="margin:0;padding:0;background-color:#0f172a;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:20px;">
     <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px;border:1px solid #475569;">
-      <h1 style="margin:0 0 8px 0;font-size:22px;color:#f8fafc;">StockScreen Daily Picks</h1>
+      <h1 style="margin:0 0 8px 0;font-size:22px;color:#f8fafc;">Pre-Market Watchlist</h1>
       <p style="margin:0 0 16px 0;font-size:14px;color:#94a3b8;">${dateStr}</p>
       ${spValue ? `<p style="font-size:13px;color:#60a5fa;margin:4px 0;">${spValue}</p>` : ''}
       ${djValue ? `<p style="font-size:13px;color:#60a5fa;margin:4px 0;">${djValue}</p>` : ''}
       ${niftyValue ? `<p style="font-size:13px;color:#4ade80;margin:4px 0;">${niftyValue}</p>` : ''}
     </div>
     <div style="background:#1e293b;border-radius:8px;padding:24px;margin-top:16px;text-align:center;border:1px solid #334155;">
-      <p style="font-size:16px;color:#fbbf24;margin:0 0 8px 0;font-weight:600;">No Strong Day-Trade Signals Today</p>
-      <p style="font-size:13px;color:#94a3b8;margin:0;">Market conditions did not produce any stocks meeting the minimum scoring threshold. This can happen during low-volatility or bearish sessions.</p>
+      <p style="font-size:16px;color:#fbbf24;margin:0 0 8px 0;font-weight:600;">No Strong Pre-Market Signals Today</p>
+      <p style="font-size:13px;color:#94a3b8;margin:0;">No stocks scored above the minimum threshold. This can happen during low-volatility or flat pre-market sessions.</p>
     </div>
   </div>
 </body>

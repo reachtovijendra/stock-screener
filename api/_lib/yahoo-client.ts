@@ -48,6 +48,10 @@ export interface StockQuote {
   twoHundredDayMA: number | null;
   percentFromFiftyDayMA: number | null;
   percentFromTwoHundredDayMA: number | null;
+  preMarketPrice: number | null;
+  preMarketChange: number | null;
+  preMarketChangePercent: number | null;
+  preMarketVolume: number | null;
   lastUpdated: Date;
 }
 
@@ -274,7 +278,7 @@ async function fetchYahooQuotes(symbols: string[]): Promise<any[]> {
 
   // Build URL with all symbols
   const symbolsParam = symbols.join(',');
-  const fields = 'symbol,shortName,longName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,marketCap,fiftyTwoWeekHigh,fiftyTwoWeekLow,fiftyDayAverage,twoHundredDayAverage,trailingPE,forwardPE,priceToBook,priceToSalesTrailing12Months,epsTrailingTwelveMonths,epsForward,trailingAnnualDividendYield,earningsQuarterlyGrowth,revenueGrowth,averageDailyVolume3Month,averageVolume,beta,exchange,fullExchangeName,currency,sector,industry,sectorDisp,industryDisp';
+  const fields = 'symbol,shortName,longName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,marketCap,fiftyTwoWeekHigh,fiftyTwoWeekLow,fiftyDayAverage,twoHundredDayAverage,trailingPE,forwardPE,priceToBook,priceToSalesTrailing12Months,epsTrailingTwelveMonths,epsForward,trailingAnnualDividendYield,earningsQuarterlyGrowth,revenueGrowth,averageDailyVolume3Month,averageVolume,beta,exchange,fullExchangeName,currency,sector,industry,sectorDisp,industryDisp,preMarketPrice,preMarketChange,preMarketChangePercent,preMarketVolume';
   let url = `/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}&fields=${encodeURIComponent(fields)}`;
   if (auth.crumb) {
     url += `&crumb=${encodeURIComponent(auth.crumb)}`;
@@ -432,6 +436,10 @@ function transformQuote(data: any, market: Market): StockQuote {
     twoHundredDayMA,
     percentFromFiftyDayMA: fiftyDayMA && fiftyDayMA > 0 ? ((price - fiftyDayMA) / fiftyDayMA) * 100 : null,
     percentFromTwoHundredDayMA: twoHundredDayMA && twoHundredDayMA > 0 ? ((price - twoHundredDayMA) / twoHundredDayMA) * 100 : null,
+    preMarketPrice: data.preMarketPrice || null,
+    preMarketChange: data.preMarketChange || null,
+    preMarketChangePercent: data.preMarketChangePercent || null,
+    preMarketVolume: data.preMarketVolume || null,
     lastUpdated: new Date()
   };
 }

@@ -1,7 +1,7 @@
 /**
  * Daily DMA Crossover Alert Cron Job
  *
- * Runs at 8 AM EST (1 PM UTC) on weekdays via Vercel Cron.
+ * Runs at 4 PM EST (9 PM UTC) on weekdays via Vercel Cron.
  *
  * Two-phase approach to scan the full market within the 120s timeout:
  *   Phase 1 - Use the Yahoo screener API (same as the Screener page) to fetch

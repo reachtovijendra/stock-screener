@@ -10,6 +10,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getQuotes, getIndexSymbols, getMarketIndices, Market, StockQuote } from '../_lib/yahoo-client';
+import { computeTechnicals, calculateBuySellTargets } from '../_lib/day-trade-scorer';
 import { sendEmail } from '../_lib/brevo-sender';
 
 // ---------------------------------------------------------------------------
@@ -47,6 +48,10 @@ interface PreMarketScore {
   sector: string;
   marketCap: number;
   beta: number | null;
+  buyPrice: number;
+  sellPrice: number;
+  stopLoss: number;
+  rsi: number | null;
 }
 
 function scorePreMarket(q: StockQuote): PreMarketScore {
@@ -167,6 +172,10 @@ function scorePreMarket(q: StockQuote): PreMarketScore {
     sector: q.sector,
     marketCap: q.marketCap,
     beta: q.beta,
+    buyPrice: 0,
+    sellPrice: 0,
+    stopLoss: 0,
+    rsi: null,
   };
 }
 
@@ -210,7 +219,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`[USPicks] ${qualified.length} qualified (${highPriority.length} high, ${mediumPriority.length} medium)`);
 
-    // --- 4. Fetch US market indices for header ---
+    // --- 4. Compute ATR-based buy/sell/stop for qualified picks ---
+    console.log(`[USPicks] Computing technicals for ${picks.length} picks...`);
+    for (const pick of picks) {
+      try {
+        const tech = await computeTechnicals(pick.symbol);
+        const targets = calculateBuySellTargets(pick.preMarketPrice || pick.price, tech.atr);
+        pick.buyPrice = targets.buyPrice;
+        pick.sellPrice = targets.sellPrice;
+        pick.stopLoss = targets.stopLoss;
+        pick.rsi = tech.rsi;
+      } catch (err: any) {
+        // Fallback: 1% of price as ATR proxy
+        const fallback = pick.price * 0.01;
+        pick.buyPrice = Math.round((pick.price - 0.3 * fallback) * 100) / 100;
+        pick.sellPrice = Math.round((pick.price + 1.0 * fallback) * 100) / 100;
+        pick.stopLoss = Math.round((pick.buyPrice - 0.5 * fallback) * 100) / 100;
+        console.error(`[USPicks] Technicals failed for ${pick.symbol}: ${err.message}`);
+      }
+    }
+
+    // --- 5. Fetch market indices ---
     let spValue = '', djValue = '';
     try {
       const usIndices = await getMarketIndices('US');
@@ -377,12 +406,13 @@ function generatePicksTable(picks: PreMarketScore[]): string {
         ${pick.preMarketPrice ? `<div style="font-size:11px;color:#94a3b8;">Pre: ${currencySymbol}${pick.preMarketPrice.toFixed(2)}</div>` : ''}
       </td>
       <td style="padding:12px 8px;text-align:right;">
-        ${pick.preMarketVolumePercent != null ? `<div style="font-size:12px;color:#60a5fa;">Pre-vol: ${pick.preMarketVolumePercent.toFixed(0)}%</div>` : ''}
-        <div style="font-size:12px;color:#94a3b8;">RVOL: ${pick.relativeVolume.toFixed(1)}x</div>
-        ${pick.beta != null ? `<div style="font-size:11px;color:#64748b;">Beta: ${pick.beta.toFixed(1)}</div>` : ''}
+        <div style="font-size:12px;color:#4ade80;">Buy: ${currencySymbol}${pick.buyPrice.toFixed(2)}</div>
+        <div style="font-size:12px;color:#f87171;">Sell: ${currencySymbol}${pick.sellPrice.toFixed(2)}</div>
+        <div style="font-size:11px;color:#fbbf24;">Stop: ${currencySymbol}${pick.stopLoss.toFixed(2)}</div>
       </td>
       <td style="padding:12px 8px;">
         <div style="font-size:11px;color:#cbd5e1;line-height:1.5;">${signalSummary}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:4px;">RVOL: ${pick.relativeVolume.toFixed(1)}x${pick.rsi != null ? ` · RSI: ${pick.rsi.toFixed(0)}` : ''}${pick.beta != null ? ` · Beta: ${pick.beta.toFixed(1)}` : ''}</div>
       </td>
     </tr>`;
   });
@@ -394,7 +424,7 @@ function generatePicksTable(picks: PreMarketScore[]): string {
         <th style="padding:10px 8px;text-align:center;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Score</th>
         <th style="padding:10px 8px;text-align:left;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Stock</th>
         <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Price / Gap</th>
-        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Volume</th>
+        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Targets</th>
         <th style="padding:10px 8px;text-align:left;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Signals</th>
       </tr>
     </thead>

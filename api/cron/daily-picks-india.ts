@@ -13,6 +13,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getQuotes, getIndexSymbols, getMarketIndices, StockQuote } from '../_lib/yahoo-client';
+import { computeTechnicals, calculateBuySellTargets } from '../_lib/day-trade-scorer';
 import { sendEmail } from '../_lib/brevo-sender';
 
 const RECIPIENTS = [
@@ -44,6 +45,10 @@ interface IndiaScore {
   sector: string;
   marketCap: number;
   beta: number | null;
+  buyPrice: number;
+  sellPrice: number;
+  stopLoss: number;
+  rsi: number | null;
 }
 
 function scorePreviousSession(q: StockQuote): IndiaScore {
@@ -135,6 +140,10 @@ function scorePreviousSession(q: StockQuote): IndiaScore {
     sector: q.sector,
     marketCap: q.marketCap,
     beta: q.beta,
+    buyPrice: 0,
+    sellPrice: 0,
+    stopLoss: 0,
+    rsi: null,
   };
 }
 
@@ -170,6 +179,25 @@ export default async function handler(req: any, res: any) {
     const mediumPriority = picks.filter((s) => s.priority === 'Medium');
 
     console.log(`[IndiaPicks] ${qualified.length} qualified (${highPriority.length} high, ${mediumPriority.length} medium)`);
+
+    // Compute ATR-based buy/sell/stop for picks
+    console.log(`[IndiaPicks] Computing technicals for ${picks.length} picks...`);
+    for (const pick of picks) {
+      try {
+        const tech = await computeTechnicals(pick.symbol);
+        const targets = calculateBuySellTargets(pick.price, tech.atr);
+        pick.buyPrice = targets.buyPrice;
+        pick.sellPrice = targets.sellPrice;
+        pick.stopLoss = targets.stopLoss;
+        pick.rsi = tech.rsi;
+      } catch (err: any) {
+        const fallback = pick.price * 0.01;
+        pick.buyPrice = Math.round((pick.price - 0.3 * fallback) * 100) / 100;
+        pick.sellPrice = Math.round((pick.price + 1.0 * fallback) * 100) / 100;
+        pick.stopLoss = Math.round((pick.buyPrice - 0.5 * fallback) * 100) / 100;
+        console.error(`[IndiaPicks] Technicals failed for ${pick.symbol}: ${err.message}`);
+      }
+    }
 
     // Fetch NIFTY for header
     let niftyValue = '', sensexValue = '';
@@ -316,11 +344,13 @@ function generateTable(picks: IndiaScore[]): string {
         <div style="font-size:12px;color:${changeColor};font-weight:600;">${pick.changePercent >= 0 ? '+' : ''}${pick.changePercent.toFixed(1)}%</div>
       </td>
       <td style="padding:12px 8px;text-align:right;">
-        <div style="font-size:12px;color:#94a3b8;">RVOL: ${pick.relativeVolume.toFixed(1)}x</div>
-        <div style="font-size:11px;color:#64748b;">Vol: ${(pick.volume / 1_000_000).toFixed(1)}M</div>
+        <div style="font-size:12px;color:#4ade80;">Buy: ₹${pick.buyPrice.toFixed(2)}</div>
+        <div style="font-size:12px;color:#f87171;">Sell: ₹${pick.sellPrice.toFixed(2)}</div>
+        <div style="font-size:11px;color:#fbbf24;">Stop: ₹${pick.stopLoss.toFixed(2)}</div>
       </td>
       <td style="padding:12px 8px;">
         <div style="font-size:11px;color:#cbd5e1;line-height:1.5;">${sigs}</div>
+        <div style="font-size:10px;color:#64748b;margin-top:4px;">RVOL: ${pick.relativeVolume.toFixed(1)}x${pick.rsi != null ? ` · RSI: ${pick.rsi.toFixed(0)}` : ''}${pick.beta != null ? ` · Beta: ${pick.beta.toFixed(1)}` : ''}</div>
       </td>
     </tr>`;
   }
@@ -332,7 +362,7 @@ function generateTable(picks: IndiaScore[]): string {
         <th style="padding:10px 8px;text-align:center;font-size:11px;color:#94a3b8;font-weight:600;">SCORE</th>
         <th style="padding:10px 8px;text-align:left;font-size:11px;color:#94a3b8;font-weight:600;">STOCK</th>
         <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;">PRICE</th>
-        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;">VOLUME</th>
+        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;">TARGETS</th>
         <th style="padding:10px 8px;text-align:left;font-size:11px;color:#94a3b8;font-weight:600;">SIGNALS</th>
       </tr>
     </thead>

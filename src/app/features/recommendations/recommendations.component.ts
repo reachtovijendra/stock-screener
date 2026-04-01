@@ -34,6 +34,11 @@ interface DailyPick {
   signals: string[];
   rsi: number | null;
   beta: number | null;
+  outcome: string | null;       // 'hit-target' | 'hit-sl' | 'no-trigger' | null
+  actual_high: number | null;
+  actual_low: number | null;
+  actual_close: number | null;
+  pnl_percent: number | null;
 }
 
 interface DateGroup {
@@ -665,37 +670,21 @@ export class RecommendationsComponent implements OnInit {
   }
 
   /**
-   * Determine outcome based on whether the sell target or stop loss
-   * was closer to the recommended price. For day trades, we compare
-   * buy_price vs sell_price vs stop_loss.
-   *
-   * Simple heuristic for past dates: if the sell target was achievable
-   * (sell_price within a reasonable range), mark as hit target.
-   * For today's picks, mark as pending.
+   * Determine outcome from stored evaluation data.
+   * The evaluate-picks cron runs each morning and updates outcomes
+   * based on actual intraday price data from Yahoo Finance.
    */
   getOutcome(pick: DailyPick): 'hit-target' | 'hit-sl' | 'pending' {
     const today = new Date().toISOString().slice(0, 10);
     if (pick.pick_date >= today) return 'pending';
 
-    // For past dates, use the gap between buy and sell vs buy and stop
-    // as a proxy. If the expected upside (sell - buy) was achieved based
-    // on the day's momentum signals, it's a hit. This is a simplified
-    // heuristic — real tracking would need end-of-day closing prices.
-    const upside = pick.sell_price - pick.buy_price;
-    const downside = pick.buy_price - pick.stop_loss;
+    // Use stored outcome from the evaluate-picks cron
+    if (pick.outcome === 'hit-target') return 'hit-target';
+    if (pick.outcome === 'hit-sl') return 'hit-sl';
+    if (pick.outcome === 'no-trigger') return 'hit-sl'; // no-trigger = didn't work out
 
-    // If the stock had strong positive momentum (high score + positive gap/change), likely hit target
-    if (pick.score >= 70) return 'hit-target';
-    if (pick.gap_percent != null && pick.gap_percent > 3) return 'hit-target';
-    if (pick.change_percent != null && pick.change_percent > 3) return 'hit-target';
-
-    // If downside risk was greater than upside potential, likely stopped out
-    if (downside > upside * 1.5) return 'hit-sl';
-
-    // Medium scores with moderate signals — mark as hit target (benefit of doubt)
-    if (pick.score >= 55) return 'hit-target';
-
-    return 'hit-sl';
+    // Not yet evaluated (cron hasn't run yet for this pick)
+    return 'pending';
   }
 
   getOutcomeLabel(pick: DailyPick): string {
@@ -713,6 +702,10 @@ export class RecommendationsComponent implements OnInit {
   }
 
   getPnlPercent(pick: DailyPick): number {
+    // Use actual P&L from evaluation cron if available
+    if (pick.pnl_percent != null) return pick.pnl_percent;
+
+    // Fallback to estimated P&L based on targets
     const o = this.getOutcome(pick);
     if (o === 'hit-target') {
       return ((pick.sell_price - pick.buy_price) / pick.buy_price) * 100;

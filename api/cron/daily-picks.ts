@@ -12,6 +12,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getQuotes, getIndexSymbols, getMarketIndices, Market, StockQuote } from '../_lib/yahoo-client';
 import { computeTechnicals, calculateBuySellTargets } from '../_lib/day-trade-scorer';
 import { sendEmail } from '../_lib/brevo-sender';
+import { saveDailyPicks, DailyPickRow } from '../_lib/supabase-client';
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -239,7 +240,44 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
     }
 
-    // --- 5. Fetch market indices ---
+    // --- 5. Save picks to Supabase ---
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const rows: DailyPickRow[] = picks.map((p) => ({
+        market: 'US' as const,
+        pick_date: today,
+        symbol: p.symbol,
+        name: p.name,
+        sector: p.sector,
+        market_cap: p.marketCap,
+        price: p.price,
+        previous_close: p.previousClose,
+        pre_market_price: p.preMarketPrice,
+        gap_percent: p.gapPercent,
+        change_percent: null,
+        volume: null,
+        avg_volume: p.avgVolume,
+        relative_volume: p.relativeVolume,
+        pre_market_volume: p.preMarketVolume,
+        pre_market_volume_percent: p.preMarketVolumePercent,
+        fifty_day_ma: p.fiftyDayMA,
+        two_hundred_day_ma: p.twoHundredDayMA,
+        rsi: p.rsi,
+        beta: p.beta,
+        buy_price: p.buyPrice,
+        sell_price: p.sellPrice,
+        stop_loss: p.stopLoss,
+        score: p.score,
+        priority: p.priority,
+        signals: p.signals,
+      }));
+      const saved = await saveDailyPicks(rows);
+      console.log(`[USPicks] Saved ${saved} picks to Supabase`);
+    } catch (err: any) {
+      console.error('[USPicks] Supabase save failed (non-fatal):', err.message);
+    }
+
+    // --- 6. Fetch market indices ---
     let spValue = '', djValue = '';
     try {
       const usIndices = await getMarketIndices('US');

@@ -15,6 +15,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { getQuotes, getIndexSymbols, getMarketIndices, StockQuote } from '../_lib/yahoo-client';
 import { computeTechnicals, calculateBuySellTargets } from '../_lib/day-trade-scorer';
 import { sendEmail } from '../_lib/brevo-sender';
+import { saveDailyPicks, DailyPickRow } from '../_lib/supabase-client';
 
 const RECIPIENTS = [
   'reachtovijendra@gmail.com',
@@ -197,6 +198,43 @@ export default async function handler(req: any, res: any) {
         pick.stopLoss = Math.round((pick.buyPrice - 0.5 * fallback) * 100) / 100;
         console.error(`[IndiaPicks] Technicals failed for ${pick.symbol}: ${err.message}`);
       }
+    }
+
+    // Save picks to Supabase
+    const today = new Date().toISOString().slice(0, 10);
+    try {
+      const rows: DailyPickRow[] = picks.map((p) => ({
+        market: 'IN' as const,
+        pick_date: today,
+        symbol: p.symbol,
+        name: p.name,
+        sector: p.sector,
+        market_cap: p.marketCap,
+        price: p.price,
+        previous_close: null,
+        pre_market_price: null,
+        gap_percent: null,
+        change_percent: p.changePercent,
+        volume: p.volume,
+        avg_volume: p.avgVolume,
+        relative_volume: p.relativeVolume,
+        pre_market_volume: null,
+        pre_market_volume_percent: null,
+        fifty_day_ma: p.fiftyDayMA,
+        two_hundred_day_ma: p.twoHundredDayMA,
+        rsi: p.rsi,
+        beta: p.beta,
+        buy_price: p.buyPrice,
+        sell_price: p.sellPrice,
+        stop_loss: p.stopLoss,
+        score: p.score,
+        priority: p.priority,
+        signals: p.signals,
+      }));
+      const saved = await saveDailyPicks(rows);
+      console.log(`[IndiaPicks] Saved ${saved} picks to Supabase`);
+    } catch (err: any) {
+      console.error('[IndiaPicks] Supabase save failed (non-fatal):', err.message);
     }
 
     // Fetch NIFTY for header

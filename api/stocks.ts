@@ -6,6 +6,7 @@ import { handleList } from './_lib/handlers/stocks-list';
 import { handleStocksIndices } from './_lib/handlers/stocks-indices';
 import { handleTechnicals } from './_lib/handlers/stocks-technicals';
 import { handleDmaCrossovers } from './_lib/handlers/stocks-dma-crossovers';
+import { handleDailyPicksList } from './_lib/handlers/daily-picks-list';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -33,6 +34,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleTechnicals(req, res);
     case 'dma-crossovers':
       return handleDmaCrossovers(req, res);
+    case 'daily-picks':
+      return handleDailyPicksList(req, res);
     default:
       return res.status(400).json({ error: `Unknown action: ${action}` });
   }

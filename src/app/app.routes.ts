@@ -17,6 +17,11 @@ export const routes: Routes = [
     title: 'Technical Breakouts'
   },
   {
+    path: 'recommendations',
+    loadComponent: () => import('./features/recommendations/recommendations.component').then(m => m.RecommendationsComponent),
+    title: 'Recommendations'
+  },
+  {
     path: 'dma-simulator',
     loadComponent: () => import('./features/dma-simulator/dma-simulator.component').then(m => m.DmaSimulatorComponent),
     title: 'DMA Simulator'

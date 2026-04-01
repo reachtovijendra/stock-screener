@@ -23,6 +23,10 @@ import { ThemeService } from './core/services';
             <i class="pi pi-chart-line"></i>
             <span class="nav-label">Breakouts</span>
           </a>
+          <a class="nav-item" routerLink="/recommendations" routerLinkActive="active" title="Recommendations">
+            <i class="pi pi-star"></i>
+            <span class="nav-label">Picks</span>
+          </a>
           <a class="nav-item" routerLink="/news" routerLinkActive="active" title="News">
             <i class="pi pi-bolt"></i>
             <span class="nav-label">News</span>

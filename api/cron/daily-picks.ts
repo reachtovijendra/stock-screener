@@ -1,249 +1,74 @@
 /**
- * US Pre-Market Watchlist Cron Job
+ * US Pre-Market Watchlist Cron Job — Two-Pass Architecture
  *
- * Runs at 8 AM EST (1 PM UTC) on weekdays — before US market open at 9:30 AM.
- * US pre-market is active from 4 AM EST, so gap%, pre-market price and
- * pre-market volume data is available from Yahoo Finance.
+ * Runs at 9 AM EDT (1 PM UTC) on weekdays — before US market open at 9:30 AM.
  *
- * India has a separate cron (daily-picks-india) at 8:30 AM IST.
+ * Pass 1: Quick-score all ~340 stocks on quote-level data → top 50 candidates
+ * Pass 2: Compute full technicals (RSI, MACD, ATR, consolidation) for top 50,
+ *          apply full scoring with relative strength, R:R filter, entry rules
+ *
+ * Email includes exact entry triggers, stops, targets, and entry rules.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { getQuotes, getIndexSymbols, getMarketIndices, Market, StockQuote } from '../_lib/yahoo-client';
-import { computeTechnicals, calculateBuySellTargets } from '../_lib/day-trade-scorer';
+import { getQuotes, getIndexSymbols, getMarketIndices } from '../_lib/yahoo-client';
+import { runTwoPassScoring, DayTradePick } from '../_lib/day-trade-scorer';
 import { sendEmail } from '../_lib/brevo-sender';
 import { saveDailyPicks, DailyPickRow } from '../_lib/supabase-client';
-
-// ---------------------------------------------------------------------------
-// Configuration
-// ---------------------------------------------------------------------------
 
 const RECIPIENTS = [
   'reachtovijendra@gmail.com',
   'poojitha.challagandla@gmail.com',
 ];
-const MAX_PICKS = 15;
-const MIN_SCORE = 50; // Only include Medium and High priority
-
-// ---------------------------------------------------------------------------
-// Pre-Market Scoring
-// ---------------------------------------------------------------------------
-
-interface PreMarketScore {
-  symbol: string;
-  name: string;
-  price: number;
-  previousClose: number;
-  preMarketPrice: number | null;
-  gapPercent: number;
-  preMarketVolume: number | null;
-  avgVolume: number;
-  preMarketVolumePercent: number | null;
-  relativeVolume: number;
-  fiftyDayMA: number | null;
-  twoHundredDayMA: number | null;
-  score: number;
-  priority: 'High' | 'Medium' | 'Low';
-  signals: string[];
-  market: string;
-  sector: string;
-  marketCap: number;
-  beta: number | null;
-  buyPrice: number;
-  sellPrice: number;
-  stopLoss: number;
-  rsi: number | null;
-}
-
-function scorePreMarket(q: StockQuote): PreMarketScore {
-  let score = 0;
-  const signals: string[] = [];
-
-  // Calculate gap % from pre-market price vs previous close
-  const previousClose = q.price; // regularMarketPrice = previous close before market open
-  const preMarketPrice = q.preMarketPrice;
-  const preMarketVol = q.preMarketVolume;
-
-  let gapPercent = 0;
-  if (preMarketPrice && previousClose > 0) {
-    gapPercent = ((preMarketPrice - previousClose) / previousClose) * 100;
-  }
-
-  // --- Gap Score ---
-  const absGap = Math.abs(gapPercent);
-  if (absGap > 5) {
-    score += 20;
-    signals.push(`Gap ${gapPercent > 0 ? '+' : ''}${gapPercent.toFixed(1)}% (strong)`);
-  } else if (absGap >= 3) {
-    score += 10;
-    signals.push(`Gap ${gapPercent > 0 ? '+' : ''}${gapPercent.toFixed(1)}%`);
-  } else if (absGap >= 1) {
-    score += 5;
-    signals.push(`Gap ${gapPercent > 0 ? '+' : ''}${gapPercent.toFixed(1)}%`);
-  }
-
-  // --- Relative Volume Score (from previous session) ---
-  const rvol = q.relativeVolume;
-  if (rvol > 3) {
-    score += 25;
-    signals.push(`RVOL ${rvol.toFixed(1)}x (spike)`);
-  } else if (rvol >= 2) {
-    score += 15;
-    signals.push(`RVOL ${rvol.toFixed(1)}x (elevated)`);
-  } else if (rvol >= 1.5) {
-    score += 8;
-    signals.push(`RVOL ${rvol.toFixed(1)}x`);
-  }
-
-  // --- Pre-Market Volume Score ---
-  let preMarketVolumePercent: number | null = null;
-  if (preMarketVol && q.avgVolume > 0) {
-    preMarketVolumePercent = (preMarketVol / q.avgVolume) * 100;
-    if (preMarketVolumePercent > 30) {
-      score += 15;
-      signals.push(`Pre-mkt vol ${preMarketVolumePercent.toFixed(0)}% of avg (heavy)`);
-    } else if (preMarketVolumePercent > 15) {
-      score += 8;
-      signals.push(`Pre-mkt vol ${preMarketVolumePercent.toFixed(0)}% of avg`);
-    } else if (preMarketVolumePercent > 5) {
-      score += 3;
-    }
-  }
-
-  // --- Trend Strength (DMA positioning) ---
-  if (q.fiftyDayMA && q.twoHundredDayMA) {
-    const effectivePrice = preMarketPrice || previousClose;
-    if (q.fiftyDayMA > q.twoHundredDayMA && effectivePrice > q.fiftyDayMA) {
-      score += 10;
-      signals.push('Above 50 & 200 DMA (bullish trend)');
-    } else if (q.fiftyDayMA > q.twoHundredDayMA) {
-      score += 5;
-      signals.push('Golden cross active');
-    } else if (q.fiftyDayMA < q.twoHundredDayMA && effectivePrice < q.fiftyDayMA) {
-      score += 5;
-      signals.push('Below both DMAs (bearish, short candidate)');
-    }
-  }
-
-  // --- Liquidity Score ---
-  if (q.avgVolume > 5_000_000) {
-    score += 10;
-    signals.push(`Avg vol ${(q.avgVolume / 1_000_000).toFixed(1)}M (liquid)`);
-  } else if (q.avgVolume > 2_000_000) {
-    score += 5;
-    signals.push(`Avg vol ${(q.avgVolume / 1_000_000).toFixed(1)}M`);
-  }
-
-  // --- 52-Week Proximity ---
-  if (q.percentFromFiftyTwoWeekHigh > -3) {
-    score += 5;
-    signals.push('Near 52W high (breakout watch)');
-  } else if (q.percentFromFiftyTwoWeekLow < 10) {
-    score += 3;
-    signals.push('Near 52W low (bounce watch)');
-  }
-
-  // Determine priority
-  let priority: 'High' | 'Medium' | 'Low';
-  if (score >= 70) {
-    priority = 'High';
-  } else if (score >= 50) {
-    priority = 'Medium';
-  } else {
-    priority = 'Low';
-  }
-
-  return {
-    symbol: q.symbol,
-    name: q.name,
-    price: previousClose,
-    previousClose,
-    preMarketPrice,
-    gapPercent,
-    preMarketVolume: preMarketVol,
-    avgVolume: q.avgVolume,
-    preMarketVolumePercent,
-    relativeVolume: rvol,
-    fiftyDayMA: q.fiftyDayMA,
-    twoHundredDayMA: q.twoHundredDayMA,
-    score,
-    priority,
-    signals,
-    market: q.market,
-    sector: q.sector,
-    marketCap: q.marketCap,
-    beta: q.beta,
-    buyPrice: 0,
-    sellPrice: 0,
-    stopLoss: 0,
-    rsi: null,
-  };
-}
-
-// ---------------------------------------------------------------------------
-// Handler
-// ---------------------------------------------------------------------------
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   const authHeader = req.headers['authorization'];
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
-    console.log('[DailyPicks] Unauthorized request');
+    console.log('[USPicks] Unauthorized request');
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
-  console.log('[USPicks] Starting US pre-market watchlist...');
+  console.log('[USPicks] Starting US pre-market watchlist (two-pass)...');
   const startTime = Date.now();
 
   try {
     // --- 1. Fetch US stock quotes ---
-    console.log('[USPicks] Fetching US stock quotes...');
     const usSymbols = getIndexSymbols('US');
     const usQuotes = await getQuotes(usSymbols, 'US');
     console.log(`[USPicks] Got ${usQuotes.length} US quotes`);
 
-    // --- 2. Pre-filter on price/market cap ---
-    const usFiltered = usQuotes.filter(
-      (q) => q.price > 5 && q.marketCap > 1_000_000_000
-    );
-    console.log(`[USPicks] Pre-filtered: ${usFiltered.length} stocks`);
+    // Pre-filter on price/market cap
+    const filtered = usQuotes.filter(q => q.price > 5 && q.marketCap > 1_000_000_000);
+    console.log(`[USPicks] Pre-filtered: ${filtered.length} stocks`);
 
-    // --- 3. Score ---
-    const allScored = usFiltered.map(scorePreMarket);
-    allScored.sort((a, b) => b.score - a.score);
+    // --- 2. Get index performance for relative strength ---
+    let indexChangePercent = 0;
+    try {
+      const indices = await getMarketIndices('US');
+      const sp = indices.find(i => i.symbol === '^GSPC');
+      if (sp) indexChangePercent = sp.changePercent;
+    } catch {}
 
-    const qualified = allScored.filter(s => s.score >= MIN_SCORE);
-    const picks = qualified.slice(0, MAX_PICKS);
+    // --- 3. Run two-pass scoring ---
+    const picks = await runTwoPassScoring({
+      market: 'US',
+      quotes: filtered,
+      indexChangePercent,
+      maxCandidates: 50,
+      maxPicks: 5,
+      minScore: 40,
+      highThreshold: 55,
+      logPrefix: '[USPicks]',
+    });
 
-    const highPriority = picks.filter(s => s.priority === 'High');
-    const mediumPriority = picks.filter(s => s.priority === 'Medium');
+    const highPriority = picks.filter(p => p.priority === 'High');
+    const mediumPriority = picks.filter(p => p.priority === 'Medium');
 
-    console.log(`[USPicks] ${qualified.length} qualified (${highPriority.length} high, ${mediumPriority.length} medium)`);
-
-    // --- 4. Compute ATR-based buy/sell/stop for qualified picks ---
-    console.log(`[USPicks] Computing technicals for ${picks.length} picks...`);
-    for (const pick of picks) {
-      try {
-        const tech = await computeTechnicals(pick.symbol);
-        const targets = calculateBuySellTargets(pick.preMarketPrice || pick.price, tech.atr);
-        pick.buyPrice = targets.buyPrice;
-        pick.sellPrice = targets.sellPrice;
-        pick.stopLoss = targets.stopLoss;
-        pick.rsi = tech.rsi;
-      } catch (err: any) {
-        // Fallback: 1% of price as ATR proxy
-        const fallback = pick.price * 0.01;
-        pick.buyPrice = Math.round((pick.price - 0.3 * fallback) * 100) / 100;
-        pick.sellPrice = Math.round((pick.price + 1.0 * fallback) * 100) / 100;
-        pick.stopLoss = Math.round((pick.buyPrice - 0.5 * fallback) * 100) / 100;
-        console.error(`[USPicks] Technicals failed for ${pick.symbol}: ${err.message}`);
-      }
-    }
-
-    // --- 5. Save picks to Supabase ---
+    // --- 4. Save picks to Supabase ---
     const today = new Date().toISOString().slice(0, 10);
     try {
-      const rows: DailyPickRow[] = picks.map((p) => ({
+      const rows: DailyPickRow[] = picks.map(p => ({
         market: 'US' as const,
         pick_date: today,
         symbol: p.symbol,
@@ -254,12 +79,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         previous_close: p.previousClose,
         pre_market_price: p.preMarketPrice,
         gap_percent: p.gapPercent,
-        change_percent: null,
+        change_percent: p.changePercent,
         volume: null,
         avg_volume: p.avgVolume,
         relative_volume: p.relativeVolume,
         pre_market_volume: p.preMarketVolume,
-        pre_market_volume_percent: p.preMarketVolumePercent,
+        pre_market_volume_percent: p.preMarketVolume && p.avgVolume > 0 ? (p.preMarketVolume / p.avgVolume) * 100 : null,
         fifty_day_ma: p.fiftyDayMA,
         two_hundred_day_ma: p.twoHundredDayMA,
         rsi: p.rsi,
@@ -277,24 +102,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       console.error('[USPicks] Supabase save failed (non-fatal):', err.message);
     }
 
-    // --- 6. Fetch market indices ---
+    // --- 5. Fetch market indices for email header ---
     let spValue = '', djValue = '';
     try {
       const usIndices = await getMarketIndices('US');
-      const sp = usIndices.find((i) => i.symbol === '^GSPC');
-      const dj = usIndices.find((i) => i.symbol === '^DJI');
+      const sp = usIndices.find(i => i.symbol === '^GSPC');
+      const dj = usIndices.find(i => i.symbol === '^DJI');
       if (sp) spValue = `S&P 500: ${sp.price.toLocaleString()} (${sp.changePercent >= 0 ? '+' : ''}${sp.changePercent.toFixed(2)}%)`;
       if (dj) djValue = `Dow Jones: ${dj.price.toLocaleString()} (${dj.changePercent >= 0 ? '+' : ''}${dj.changePercent.toFixed(2)}%)`;
-    } catch (err) {
-      console.log('[USPicks] Failed to fetch indices, continuing without...');
-    }
+    } catch {}
 
-    // --- 5. Generate and send email ---
+    // --- 6. Generate and send email ---
     const dateStr = new Date().toLocaleDateString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
+      weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
       timeZone: 'America/New_York',
     });
 
@@ -303,8 +123,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       : generateNoPicksHTML(dateStr, spValue, djValue);
 
     const subject = picks.length > 0
-      ? `🇺🇸 US Pre-Market Watchlist - ${dateStr} (${highPriority.length} High, ${mediumPriority.length} Medium)`
-      : `🇺🇸 US Pre-Market Watchlist - ${dateStr} (No Strong Signals)`;
+      ? `🇺🇸 US Day Trade Setups - ${dateStr} (${highPriority.length} High, ${mediumPriority.length} Medium)`
+      : `🇺🇸 US Day Trade Setups - ${dateStr} (No Strong Setups)`;
 
     const result = await sendEmail({ to: RECIPIENTS, subject, html });
     console.log('[USPicks] Email sent:', JSON.stringify(result));
@@ -313,14 +133,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log(`[USPicks] Completed in ${elapsed}s`);
 
     return res.status(200).json({
-      success: true,
-      picks: picks.length,
-      high: highPriority.length,
-      medium: mediumPriority.length,
+      success: true, picks: picks.length,
+      high: highPriority.length, medium: mediumPriority.length,
       elapsed: `${elapsed}s`,
     });
   } catch (error: any) {
-    console.error('[DailyPicks] Fatal error:', error);
+    console.error('[USPicks] Fatal error:', error);
     return res.status(500).json({ error: 'Failed to generate watchlist', message: error.message });
   }
 }
@@ -330,11 +148,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 // ---------------------------------------------------------------------------
 
 function generateEmailHTML(data: {
-  dateStr: string;
-  spValue: string;
-  djValue: string;
-  highPriority: PreMarketScore[];
-  mediumPriority: PreMarketScore[];
+  dateStr: string; spValue: string; djValue: string;
+  highPriority: DayTradePick[]; mediumPriority: DayTradePick[];
 }): string {
   const { dateStr, spValue, djValue, highPriority, mediumPriority } = data;
 
@@ -343,14 +158,14 @@ function generateEmailHTML(data: {
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>US Pre-Market Watchlist</title>
+  <title>US Day Trade Setups</title>
 </head>
 <body style="margin:0;padding:0;background-color:#0f172a;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
   <div style="max-width:720px;margin:0 auto;padding:20px;">
 
     <!-- Header -->
     <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px;margin-bottom:20px;border:1px solid #475569;">
-      <h1 style="margin:0 0 4px 0;font-size:22px;color:#f8fafc;">🇺🇸 US Pre-Market Watchlist</h1>
+      <h1 style="margin:0 0 4px 0;font-size:22px;color:#f8fafc;">🇺🇸 US Day Trade Setups</h1>
       <p style="margin:0 0 16px 0;font-size:14px;color:#94a3b8;">${dateStr}</p>
       <div style="display:flex;gap:12px;flex-wrap:wrap;">
         ${spValue ? `<span style="background:#1e3a5f;color:#60a5fa;padding:6px 12px;border-radius:6px;font-size:13px;font-weight:600;">${spValue}</span>` : ''}
@@ -362,135 +177,150 @@ function generateEmailHTML(data: {
     <div style="display:flex;gap:12px;margin-bottom:20px;">
       <div style="flex:1;background:#14532d;border-radius:8px;padding:16px;text-align:center;border:1px solid #22c55e33;">
         <div style="font-size:28px;font-weight:800;color:#4ade80;">${highPriority.length}</div>
-        <div style="font-size:12px;color:#86efac;font-weight:600;">HIGH PRIORITY</div>
+        <div style="font-size:12px;color:#86efac;font-weight:600;">HIGH CONVICTION</div>
       </div>
       <div style="flex:1;background:#78350f;border-radius:8px;padding:16px;text-align:center;border:1px solid #f59e0b33;">
         <div style="font-size:28px;font-weight:800;color:#fbbf24;">${mediumPriority.length}</div>
-        <div style="font-size:12px;color:#fcd34d;font-weight:600;">WATCH CLOSELY</div>
+        <div style="font-size:12px;color:#fcd34d;font-weight:600;">WATCH LIST</div>
       </div>
     </div>
 
-    <!-- High Priority -->
+    <!-- How to use -->
+    <div style="background:#1a1a2e;border-radius:8px;padding:14px 16px;margin-bottom:20px;border:1px solid #4a4a6a;">
+      <p style="margin:0;font-size:12px;color:#c4b5fd;font-weight:600;">📋 How to use these setups</p>
+      <p style="margin:6px 0 0 0;font-size:11px;color:#94a3b8;line-height:1.6;">
+        Each pick includes an <strong style="color:#4ade80;">Entry Trigger</strong> — the price level where the trade activates.
+        Wait for price to break the trigger level, confirm it holds above VWAP for 5 min, then enter.
+        Do NOT chase if price has already run past the Sell target.
+      </p>
+    </div>
+
     ${highPriority.length > 0 ? `
     <div style="margin-bottom:24px;">
       <h2 style="font-size:16px;color:#4ade80;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid #334155;">
-        🔥 High Priority Trades (Score ≥ 70)
+        🔥 High Conviction (Score ≥ 55)
       </h2>
-      ${generatePicksTable(highPriority)}
+      ${generatePicksTable(highPriority, 'US')}
     </div>` : ''}
 
-    <!-- Medium Priority -->
     ${mediumPriority.length > 0 ? `
     <div style="margin-bottom:24px;">
       <h2 style="font-size:16px;color:#fbbf24;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid #334155;">
-        👀 Watch Closely (Score 50–69)
+        👀 Watch List (Score 35–54)
       </h2>
-      ${generatePicksTable(mediumPriority)}
+      ${generatePicksTable(mediumPriority, 'US')}
     </div>` : ''}
 
     <!-- Scoring Legend -->
     <div style="background:#1e293b;border-radius:8px;padding:16px;margin-bottom:20px;border:1px solid #334155;">
-      <p style="margin:0 0 8px 0;font-size:13px;color:#f8fafc;font-weight:600;">Scoring Factors</p>
+      <p style="margin:0 0 8px 0;font-size:13px;color:#f8fafc;font-weight:600;">Two-Pass Scoring Model</p>
       <table style="width:100%;font-size:12px;color:#94a3b8;">
-        <tr><td style="padding:3px 0;">Gap > 5%</td><td style="text-align:right;">+20</td></tr>
-        <tr><td style="padding:3px 0;">Gap 3-5%</td><td style="text-align:right;">+10</td></tr>
-        <tr><td style="padding:3px 0;">RVOL > 3x</td><td style="text-align:right;">+25</td></tr>
-        <tr><td style="padding:3px 0;">RVOL 2-3x</td><td style="text-align:right;">+15</td></tr>
-        <tr><td style="padding:3px 0;">Pre-mkt vol > 30% avg</td><td style="text-align:right;">+15</td></tr>
-        <tr><td style="padding:3px 0;">Strong trend (above DMAs)</td><td style="text-align:right;">+10</td></tr>
-        <tr><td style="padding:3px 0;">Liquidity > 5M avg vol</td><td style="text-align:right;">+10</td></tr>
+        <tr><td style="padding:3px 0;color:#4ade80;font-weight:600;" colspan="2">Bullish Signals</td></tr>
+        <tr><td style="padding:2px 0;">RSI sweet spot (trend-adjusted)</td><td style="text-align:right;">+15</td></tr>
+        <tr><td style="padding:2px 0;">MACD bullish confirmation</td><td style="text-align:right;">+12</td></tr>
+        <tr><td style="padding:2px 0;">Relative strength vs S&P</td><td style="text-align:right;">+10</td></tr>
+        <tr><td style="padding:2px 0;">Trend alignment (above DMAs)</td><td style="text-align:right;">+10</td></tr>
+        <tr><td style="padding:2px 0;">Gap + volume confirmation</td><td style="text-align:right;">+10</td></tr>
+        <tr><td style="padding:2px 0;">Multi-day uptrend</td><td style="text-align:right;">+8</td></tr>
+        <tr><td style="padding:2px 0;">Near 52W high / breakout</td><td style="text-align:right;">+8</td></tr>
+        <tr><td style="padding:2px 0;">Tight consolidation (base)</td><td style="text-align:right;">+8</td></tr>
+        <tr><td style="padding:3px 0;color:#f87171;font-weight:600;" colspan="2">Penalties</td></tr>
+        <tr><td style="padding:2px 0;">RSI > 75 (overbought)</td><td style="text-align:right;">−10</td></tr>
+        <tr><td style="padding:2px 0;">Bearish MACD</td><td style="text-align:right;">−8</td></tr>
+        <tr><td style="padding:2px 0;">Below both DMAs</td><td style="text-align:right;">−8</td></tr>
+        <tr><td style="padding:2px 0;">R:R < 2:1</td><td style="text-align:right;">−5</td></tr>
       </table>
     </div>
 
     <!-- Disclaimer -->
     <div style="background:#1e293b;border-radius:8px;padding:16px;margin-top:20px;border:1px solid #334155;">
       <p style="margin:0;font-size:11px;color:#64748b;line-height:1.5;">
-        <strong>Disclaimer:</strong> This email is generated automatically by StockScreen for informational
-        purposes only. It does not constitute financial advice or recommendations. Day trading carries
-        significant risk. Always conduct your own research and consult a qualified financial advisor.
+        <strong>Disclaimer:</strong> Auto-generated by StockScreen. Not financial advice.
+        Day trading carries significant risk. Always do your own research.
       </p>
     </div>
 
     <p style="text-align:center;font-size:11px;color:#475569;margin-top:16px;">
-      Powered by StockScreen | Generated at ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York' })} EST
+      Powered by StockScreen | ${new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York' })} EST
     </p>
   </div>
 </body>
 </html>`;
 }
 
-function generatePicksTable(picks: PreMarketScore[]): string {
+function generatePicksTable(picks: DayTradePick[], market: string): string {
   let rows = '';
-  picks.forEach((pick, idx) => {
-    const gapColor = pick.gapPercent >= 0 ? '#4ade80' : '#f87171';
-    const scoreColor = pick.score >= 70 ? '#4ade80' : '#fbbf24';
-    const currencySymbol = pick.market === 'IN' ? '₹' : '$';
-    const signalSummary = pick.signals.slice(0, 4).join(' · ');
-    const formattedMcap = formatMarketCap(pick.marketCap, pick.market);
+  for (const pick of picks) {
+    const scoreColor = pick.priority === 'High' ? '#4ade80' : '#fbbf24';
+    const curr = market === 'IN' ? '₹' : '$';
+    const sigs = pick.signals.slice(0, 5).join(' · ');
+    const mcap = formatMarketCap(pick.marketCap, market);
+    const rrColor = pick.rewardRiskRatio >= 2 ? '#4ade80' : '#f87171';
 
     rows += `
     <tr style="border-bottom:1px solid #1e293b;">
-      <td style="padding:12px 8px;text-align:center;">
+      <td style="padding:12px 8px;text-align:center;vertical-align:top;">
         <div style="background:${scoreColor};color:#0f172a;font-weight:800;font-size:16px;width:40px;height:40px;line-height:40px;border-radius:8px;display:inline-block;">${pick.score}</div>
       </td>
-      <td style="padding:12px 8px;">
-        <div style="font-weight:700;color:#f8fafc;font-size:14px;">${pick.symbol}</div>
+      <td style="padding:12px 8px;vertical-align:top;">
+        <div style="font-weight:700;color:#f8fafc;font-size:14px;">${pick.symbol.replace('.NS', '').replace('.BO', '')}${pick.hasCatalyst ? ' <span style="background:#7c3aed;color:#fff;font-size:9px;padding:2px 5px;border-radius:3px;vertical-align:middle;">CATALYST</span>' : ''}</div>
         <div style="font-size:11px;color:#94a3b8;margin-top:2px;">${pick.name.substring(0, 28)}</div>
-        <div style="font-size:10px;color:#64748b;">${pick.sector} · ${formattedMcap}</div>
+        <div style="font-size:10px;color:#64748b;">${pick.sector} · ${mcap}</div>
+        ${pick.catalystLabel ? `<div style="font-size:10px;color:#c4b5fd;margin-top:1px;">${pick.catalystLabel}</div>` : ''}
+        ${pick.relativeStrength != null ? `<div style="font-size:10px;color:${pick.relativeStrength > 0 ? '#4ade80' : '#f87171'};">RS: ${pick.relativeStrength > 0 ? '+' : ''}${pick.relativeStrength.toFixed(1)}%</div>` : ''}
       </td>
-      <td style="padding:12px 8px;text-align:right;">
-        <div style="font-weight:600;color:#f8fafc;font-size:14px;">${currencySymbol}${pick.price.toFixed(2)}</div>
-        ${pick.preMarketPrice ? `<div style="font-size:12px;color:${gapColor};font-weight:600;">Gap ${pick.gapPercent >= 0 ? '+' : ''}${pick.gapPercent.toFixed(1)}%</div>` : '<div style="font-size:11px;color:#64748b;">No pre-mkt</div>'}
-        ${pick.preMarketPrice ? `<div style="font-size:11px;color:#94a3b8;">Pre: ${currencySymbol}${pick.preMarketPrice.toFixed(2)}</div>` : ''}
+      <td style="padding:12px 8px;text-align:right;vertical-align:top;">
+        <div style="font-weight:600;color:#f8fafc;font-size:14px;">${curr}${pick.price.toFixed(2)}</div>
+        ${pick.preMarketPrice ? `<div style="font-size:11px;color:${pick.gapPercent >= 0 ? '#4ade80' : '#f87171'};">Gap ${pick.gapPercent >= 0 ? '+' : ''}${pick.gapPercent.toFixed(1)}%</div>` : ''}
+        <div style="font-size:10px;color:#94a3b8;">RSI: ${pick.rsi != null ? pick.rsi.toFixed(0) : '–'}${pick.beta != null ? ` · β${pick.beta.toFixed(1)}` : ''}</div>
+        ${pick.atrPercent != null ? `<div style="font-size:10px;color:#94a3b8;">ATR: ${pick.atrPercent.toFixed(1)}%</div>` : ''}
       </td>
-      <td style="padding:12px 8px;text-align:right;">
-        <div style="font-size:12px;color:#4ade80;">Buy: ${currencySymbol}${pick.buyPrice.toFixed(2)}</div>
-        <div style="font-size:12px;color:#f87171;">Sell: ${currencySymbol}${pick.sellPrice.toFixed(2)}</div>
-        <div style="font-size:11px;color:#fbbf24;">Stop: ${currencySymbol}${pick.stopLoss.toFixed(2)}</div>
+      <td style="padding:12px 8px;text-align:right;vertical-align:top;">
+        <div style="font-size:12px;color:#c4b5fd;font-weight:700;">▶ ${curr}${pick.entryTrigger.toFixed(2)}</div>
+        <div style="font-size:11px;color:#4ade80;">T: ${curr}${pick.sellPrice.toFixed(2)}</div>
+        <div style="font-size:11px;color:#f87171;">S: ${curr}${pick.stopLoss.toFixed(2)}</div>
+        <div style="font-size:10px;color:${rrColor};font-weight:600;">R:R ${pick.rewardRiskRatio.toFixed(1)}</div>
       </td>
-      <td style="padding:12px 8px;">
-        <div style="font-size:11px;color:#cbd5e1;line-height:1.5;">${signalSummary}</div>
-        <div style="font-size:10px;color:#64748b;margin-top:4px;">RVOL: ${pick.relativeVolume.toFixed(1)}x${pick.rsi != null ? ` · RSI: ${pick.rsi.toFixed(0)}` : ''}${pick.beta != null ? ` · Beta: ${pick.beta.toFixed(1)}` : ''}</div>
+    </tr>
+    <tr style="border-bottom:1px solid #334155;">
+      <td colspan="4" style="padding:4px 8px 10px 8px;">
+        <div style="font-size:11px;color:#cbd5e1;line-height:1.4;">${sigs}</div>
+        <div style="font-size:10px;color:#a78bfa;margin-top:4px;font-style:italic;">${pick.entryRule}</div>
       </td>
     </tr>`;
-  });
+  }
 
   return `
   <table style="width:100%;border-collapse:collapse;background:#0f172a;border-radius:8px;overflow:hidden;">
     <thead>
       <tr style="background:#1e293b;">
-        <th style="padding:10px 8px;text-align:center;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Score</th>
-        <th style="padding:10px 8px;text-align:left;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Stock</th>
-        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Price / Gap</th>
-        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Targets</th>
-        <th style="padding:10px 8px;text-align:left;font-size:11px;color:#94a3b8;font-weight:600;text-transform:uppercase;">Signals</th>
+        <th style="padding:10px 8px;text-align:center;font-size:11px;color:#94a3b8;font-weight:600;">SCORE</th>
+        <th style="padding:10px 8px;text-align:left;font-size:11px;color:#94a3b8;font-weight:600;">STOCK</th>
+        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;">PRICE</th>
+        <th style="padding:10px 8px;text-align:right;font-size:11px;color:#94a3b8;font-weight:600;">ENTRY / TARGET / STOP</th>
       </tr>
     </thead>
-    <tbody>
-      ${rows}
-    </tbody>
+    <tbody>${rows}</tbody>
   </table>`;
 }
 
 function generateNoPicksHTML(dateStr: string, spValue: string, djValue: string): string {
   return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"></head>
-<body style="margin:0;padding:0;background-color:#0f172a;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+<html><head><meta charset="utf-8"></head>
+<body style="margin:0;padding:0;background-color:#0f172a;color:#e2e8f0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
   <div style="max-width:600px;margin:0 auto;padding:20px;">
-    <div style="background:linear-gradient(135deg,#1e293b 0%,#334155 100%);border-radius:12px;padding:24px;border:1px solid #475569;">
-      <h1 style="margin:0 0 8px 0;font-size:22px;color:#f8fafc;">🇺🇸 US Pre-Market Watchlist</h1>
-      <p style="margin:0 0 16px 0;font-size:14px;color:#94a3b8;">${dateStr}</p>
+    <div style="background:linear-gradient(135deg,#1e293b,#334155);border-radius:12px;padding:24px;border:1px solid #475569;">
+      <h1 style="margin:0 0 8px;font-size:22px;color:#f8fafc;">🇺🇸 US Day Trade Setups</h1>
+      <p style="margin:0 0 16px;font-size:14px;color:#94a3b8;">${dateStr}</p>
       ${spValue ? `<p style="font-size:13px;color:#60a5fa;margin:4px 0;">${spValue}</p>` : ''}
       ${djValue ? `<p style="font-size:13px;color:#60a5fa;margin:4px 0;">${djValue}</p>` : ''}
     </div>
     <div style="background:#1e293b;border-radius:8px;padding:24px;margin-top:16px;text-align:center;border:1px solid #334155;">
-      <p style="font-size:16px;color:#fbbf24;margin:0 0 8px 0;font-weight:600;">No Strong Pre-Market Signals Today</p>
-      <p style="font-size:13px;color:#94a3b8;margin:0;">No stocks scored above the minimum threshold. This can happen during low-volatility or flat pre-market sessions.</p>
+      <p style="font-size:16px;color:#fbbf24;margin:0 0 8px;font-weight:600;">No High-Conviction Setups Today</p>
+      <p style="font-size:13px;color:#94a3b8;margin:0;">No stocks passed the two-pass scoring model. This happens during low-volatility or choppy sessions — sitting out is a valid strategy.</p>
     </div>
   </div>
-</body>
-</html>`;
+</body></html>`;
 }
 
 function formatMarketCap(cap: number, market: string): string {

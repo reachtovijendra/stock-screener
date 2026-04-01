@@ -52,6 +52,9 @@ export interface StockQuote {
   preMarketChange: number | null;
   preMarketChangePercent: number | null;
   preMarketVolume: number | null;
+  earningsTimestamp: number | null;      // Unix timestamp of next/recent earnings
+  earningsTimestampStart: number | null; // Earnings window start
+  earningsTimestampEnd: number | null;   // Earnings window end
   lastUpdated: Date;
 }
 
@@ -278,7 +281,7 @@ async function fetchYahooQuotes(symbols: string[]): Promise<any[]> {
 
   // Build URL with all symbols
   const symbolsParam = symbols.join(',');
-  const fields = 'symbol,shortName,longName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,marketCap,fiftyTwoWeekHigh,fiftyTwoWeekLow,fiftyDayAverage,twoHundredDayAverage,trailingPE,forwardPE,priceToBook,priceToSalesTrailing12Months,epsTrailingTwelveMonths,epsForward,trailingAnnualDividendYield,earningsQuarterlyGrowth,revenueGrowth,averageDailyVolume3Month,averageVolume,beta,exchange,fullExchangeName,currency,sector,industry,sectorDisp,industryDisp,preMarketPrice,preMarketChange,preMarketChangePercent,preMarketVolume';
+  const fields = 'symbol,shortName,longName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,marketCap,fiftyTwoWeekHigh,fiftyTwoWeekLow,fiftyDayAverage,twoHundredDayAverage,trailingPE,forwardPE,priceToBook,priceToSalesTrailing12Months,epsTrailingTwelveMonths,epsForward,trailingAnnualDividendYield,earningsQuarterlyGrowth,revenueGrowth,averageDailyVolume3Month,averageVolume,beta,exchange,fullExchangeName,currency,sector,industry,sectorDisp,industryDisp,preMarketPrice,preMarketChange,preMarketChangePercent,preMarketVolume,earningsTimestamp,earningsTimestampStart,earningsTimestampEnd';
   let url = `/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}&fields=${encodeURIComponent(fields)}`;
   if (auth.crumb) {
     url += `&crumb=${encodeURIComponent(auth.crumb)}`;
@@ -440,6 +443,9 @@ function transformQuote(data: any, market: Market): StockQuote {
     preMarketChange: data.preMarketChange || null,
     preMarketChangePercent: data.preMarketChangePercent || null,
     preMarketVolume: data.preMarketVolume || null,
+    earningsTimestamp: data.earningsTimestamp || null,
+    earningsTimestampStart: data.earningsTimestampStart || null,
+    earningsTimestampEnd: data.earningsTimestampEnd || null,
     lastUpdated: new Date()
   };
 }
@@ -951,6 +957,9 @@ async function fetchScreenerRange(
         preMarketChange: q.preMarketChange || null,
         preMarketChangePercent: q.preMarketChangePercent || null,
         preMarketVolume: q.preMarketVolume || null,
+        earningsTimestamp: q.earningsTimestamp || null,
+        earningsTimestampStart: q.earningsTimestampStart || null,
+        earningsTimestampEnd: q.earningsTimestampEnd || null,
         lastUpdated: new Date()
       });
     }

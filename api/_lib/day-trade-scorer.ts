@@ -96,6 +96,9 @@ export interface DayTradePick {
   // --- Catalyst ---
   hasCatalyst: boolean;
   catalystLabel: string | null;
+  // --- Setup classification ---
+  setupType: 'breakout' | 'pullback' | 'momentum';
+  extensionPercent: number | null;  // how far price is from key level (DMA/prev close)
 }
 
 export interface DayTradeScore {
@@ -413,6 +416,8 @@ export interface FullScoreResult {
   consolidationTightness: number | null;
   hasCatalyst: boolean;
   catalystLabel: string | null;
+  setupType: 'breakout' | 'pullback' | 'momentum';
+  extensionPercent: number;  // how extended price is from 50 DMA (higher = riskier)
 }
 
 /**
@@ -677,16 +682,63 @@ export function fullScore(input: FullScoreInput): FullScoreResult {
     signals.push(`R:R ${rewardRiskRatio.toFixed(1)} (weak)`);
   }
 
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SETUP CLASSIFICATION — breakout vs pullback vs momentum
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  let setupType: 'breakout' | 'pullback' | 'momentum' = 'momentum';
+
+  // Breakout: near 52W high or breaking out of tight consolidation
+  if (q.percentFromFiftyTwoWeekHigh > -3 ||
+      (tech.consolidationTightness != null && tech.consolidationTightness < 2)) {
+    setupType = 'breakout';
+  }
+  // Pullback: RSI pulled back (40-55) in an uptrend, or gap-down in uptrend
+  else if (q.fiftyDayMA && q.twoHundredDayMA &&
+           q.fiftyDayMA > q.twoHundredDayMA && price > q.twoHundredDayMA) {
+    if ((tech.rsi != null && tech.rsi >= 40 && tech.rsi <= 55) || gapPercent < -1) {
+      setupType = 'pullback';
+      score += 3; // pullbacks have higher win rate
+      signals.push('Pullback setup (higher win rate)');
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // EXTENSION FILTER — penalize if too far from key levels
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  // Extension = how far price is above 50 DMA (as % of ATR)
+  // If price is 3+ ATR above 50 DMA → extended, likely to pull back
+  let extensionPercent = 0;
+  if (q.fiftyDayMA && q.fiftyDayMA > 0) {
+    extensionPercent = round2(((price - q.fiftyDayMA) / q.fiftyDayMA) * 100);
+  }
+
+  if (tech.atr && q.fiftyDayMA && q.fiftyDayMA > 0) {
+    const atrFromDMA = (price - q.fiftyDayMA) / tech.atr;
+    if (atrFromDMA > 4) {
+      score -= 8;
+      signals.push(`Extended ${atrFromDMA.toFixed(1)} ATR from 50 DMA`);
+    } else if (atrFromDMA > 3) {
+      score -= 4;
+      signals.push(`Stretched ${atrFromDMA.toFixed(1)} ATR from 50 DMA`);
+    }
+  }
+
   score = Math.max(0, Math.min(100, score));
 
   // Entry rule with max chase distance (0.3 * ATR above trigger)
   const currency = q.market === 'IN' ? '₹' : '$';
   const maxChase = round2(entryTrigger + 0.3 * atr);
+  const setupLabel = setupType === 'breakout' ? '🔺 Breakout' :
+                     setupType === 'pullback' ? '🔄 Pullback' : '➡️ Momentum';
   let entryRule: string;
-  if (q.preMarketPrice) {
-    entryRule = `Break ${currency}${entryTrigger.toFixed(2)}, hold VWAP 5 min. Max entry ${currency}${maxChase.toFixed(2)}. Stop ${currency}${stopLoss.toFixed(2)}.`;
+  if (setupType === 'pullback') {
+    entryRule = `${setupLabel}: Buy dip near ${currency}${buyPrice.toFixed(2)}, hold if reclaims VWAP. Stop ${currency}${stopLoss.toFixed(2)}.`;
+  } else if (q.preMarketPrice) {
+    entryRule = `${setupLabel}: Break ${currency}${entryTrigger.toFixed(2)}, hold VWAP 5 min. Max ${currency}${maxChase.toFixed(2)}. Stop ${currency}${stopLoss.toFixed(2)}.`;
   } else {
-    entryRule = `Break prev high ${currency}${entryTrigger.toFixed(2)} with vol. Max entry ${currency}${maxChase.toFixed(2)}. Stop ${currency}${stopLoss.toFixed(2)}.`;
+    entryRule = `${setupLabel}: Break prev high ${currency}${entryTrigger.toFixed(2)} with vol. Max ${currency}${maxChase.toFixed(2)}. Stop ${currency}${stopLoss.toFixed(2)}.`;
   }
 
   return {
@@ -697,6 +749,7 @@ export function fullScore(input: FullScoreInput): FullScoreResult {
     relativeStrength: round2(relStr),
     entryRule, consolidationTightness: tech.consolidationTightness,
     hasCatalyst, catalystLabel,
+    setupType, extensionPercent,
   };
 }
 
@@ -791,6 +844,8 @@ export async function runTwoPassScoring(config: TwoPassConfig): Promise<DayTrade
             entryRule: result.entryRule,
             hasCatalyst: result.hasCatalyst,
             catalystLabel: result.catalystLabel,
+            setupType: result.setupType,
+            extensionPercent: result.extensionPercent,
           };
           return pick;
         }
@@ -809,7 +864,22 @@ export async function runTwoPassScoring(config: TwoPassConfig): Promise<DayTrade
   }
 
   fullResults.sort((a, b) => b.score - a.score);
-  const picks = fullResults.slice(0, maxPicks);
+
+  // --- Sector exposure limit: max 2 picks per sector ---
+  const sectorCount: Record<string, number> = {};
+  const diversifiedResults: DayTradePick[] = [];
+  for (const pick of fullResults) {
+    const sector = pick.sector || 'Unknown';
+    const count = sectorCount[sector] || 0;
+    if (count < 2) {
+      diversifiedResults.push(pick);
+      sectorCount[sector] = count + 1;
+    } else {
+      console.log(`${logPrefix} Sector limit: skipping ${pick.symbol} (${sector} already has ${count} picks)`);
+    }
+  }
+
+  const picks = diversifiedResults.slice(0, maxPicks);
 
   const high = picks.filter(p => p.priority === 'High').length;
   const medium = picks.filter(p => p.priority === 'Medium').length;

@@ -233,6 +233,10 @@ function generateTable(picks: DayTradePick[]): string {
   let rows = '';
   for (const pick of picks) {
     const scoreColor = pick.priority === 'High' ? '#4ade80' : '#fbbf24';
+    const setupBg = pick.setupType === 'breakout' ? '#1e3a5f' : pick.setupType === 'pullback' ? '#3b1f2b' : '#1e293b';
+    const setupColor = pick.setupType === 'breakout' ? '#60a5fa' : pick.setupType === 'pullback' ? '#f472b6' : '#94a3b8';
+    const setupIcon = pick.setupType === 'breakout' ? '🔺' : pick.setupType === 'pullback' ? '🔄' : '➡️';
+    const setupLabel = pick.setupType.charAt(0).toUpperCase() + pick.setupType.slice(1);
     const mcap = formatMarketCap(pick.marketCap);
     const sigs = pick.signals.slice(0, 5).join(' · ');
     const rrColor = pick.rewardRiskRatio >= 2 ? '#4ade80' : '#f87171';
@@ -241,6 +245,7 @@ function generateTable(picks: DayTradePick[]): string {
     <tr style="border-bottom:1px solid #1e293b;">
       <td style="padding:12px 8px;text-align:center;vertical-align:top;">
         <div style="background:${scoreColor};color:#0f172a;font-weight:800;font-size:16px;width:40px;height:40px;line-height:40px;border-radius:8px;display:inline-block;">${pick.score}</div>
+        <div style="background:${setupBg};color:${setupColor};font-size:9px;padding:2px 6px;border-radius:4px;margin-top:4px;display:inline-block;">${setupIcon} ${setupLabel}</div>
       </td>
       <td style="padding:12px 8px;vertical-align:top;">
         <div style="font-weight:700;color:#f8fafc;font-size:14px;">${pick.symbol.replace('.NS', '').replace('.BO', '')}${pick.hasCatalyst ? ' <span style="background:#7c3aed;color:#fff;font-size:9px;padding:2px 5px;border-radius:3px;vertical-align:middle;">CATALYST</span>' : ''}</div>

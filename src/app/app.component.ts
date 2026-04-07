@@ -27,6 +27,10 @@ import { ThemeService } from './core/services';
             <i class="pi pi-star"></i>
             <span class="nav-label">Picks</span>
           </a>
+          <a class="nav-item" routerLink="/watchlists" routerLinkActive="active" title="Watchlists">
+            <i class="pi pi-bookmark"></i>
+            <span class="nav-label">Watch</span>
+          </a>
           <a class="nav-item" routerLink="/news" routerLinkActive="active" title="News">
             <i class="pi pi-bolt"></i>
             <span class="nav-label">News</span>
@@ -49,6 +53,7 @@ import { ThemeService } from './core/services';
       min-height: 100vh;
       display: flex;
       flex-direction: column;
+      padding-top: 56px;
     }
 
     .content-wrapper {

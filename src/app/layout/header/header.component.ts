@@ -10,6 +10,7 @@ import { FormsModule } from '@angular/forms';
 import { filter } from 'rxjs/operators';
 
 import { MarketService, ThemeService } from '../../core/services';
+import { AuthService } from '../../core/services/auth.service';
 import { Market, MARKETS, Stock } from '../../core/models';
 
 interface MarketIndex {
@@ -137,15 +138,37 @@ interface MarketIndex {
           </div>
 
           <!-- Theme Toggle -->
-          <button 
-            pButton 
-            type="button" 
+          <button
+            pButton
+            type="button"
             [icon]="themeService.isDark() ? 'pi pi-sun' : 'pi pi-moon'"
             class="p-button-rounded p-button-text theme-toggle"
             (click)="themeService.toggleTheme()"
             [pTooltip]="themeService.isDark() ? 'Light Mode' : 'Dark Mode'"
             tooltipPosition="bottom">
           </button>
+
+          <!-- Auth -->
+          <button
+            *ngIf="!authService.isAuthenticated()"
+            class="auth-btn sign-in"
+            (click)="router.navigate(['/login'])"
+            pTooltip="Sign in for Day Trade Picks"
+            tooltipPosition="bottom">
+            <i class="pi pi-sign-in"></i>
+            <span class="auth-label">Sign In</span>
+          </button>
+          <div *ngIf="authService.isAuthenticated()" class="auth-user">
+            <img
+              *ngIf="authService.userAvatar()"
+              [src]="authService.userAvatar()"
+              class="user-avatar"
+              referrerpolicy="no-referrer" />
+            <span *ngIf="!authService.userAvatar()" class="user-initial">{{ (authService.userName() || '?')[0] | uppercase }}</span>
+            <button class="auth-btn sign-out" (click)="authService.signOut()" pTooltip="Sign Out" tooltipPosition="bottom">
+              <i class="pi pi-sign-out"></i>
+            </button>
+          </div>
         </div>
       </div>
     </header>
@@ -158,8 +181,10 @@ interface MarketIndex {
       height: 56px;
       display: flex;
       align-items: center;
-      position: sticky;
+      position: fixed;
       top: 0;
+      left: 0;
+      right: 0;
       z-index: 1000;
     }
 
@@ -477,6 +502,68 @@ interface MarketIndex {
       }
     }
 
+    .auth-btn {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: all 0.2s;
+    }
+
+    .auth-btn.sign-in {
+      background: linear-gradient(135deg, #3b82f6, #2563eb);
+      color: #fff;
+    }
+
+    .auth-btn.sign-in:hover {
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+    }
+
+    .auth-btn.sign-out {
+      background: var(--surface-hover);
+      color: var(--text-color-secondary);
+      padding: 6px;
+    }
+
+    .auth-btn.sign-out:hover {
+      color: #ef4444;
+      background: rgba(239, 68, 68, 0.1);
+    }
+
+    .auth-user {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .user-avatar {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      border: 2px solid var(--surface-border);
+    }
+
+    .user-initial {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: #3b82f6;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .auth-label { white-space: nowrap; }
+
     @media (max-width: 1024px) {
       .market-indices {
         display: none;
@@ -487,14 +574,18 @@ interface MarketIndex {
       .market-status {
         display: none;
       }
+      .auth-label {
+        display: none;
+      }
     }
   `]
 })
 export class HeaderComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
-  private router = inject(Router);
+  router = inject(Router);
   marketService = inject(MarketService);
   themeService = inject(ThemeService);
+  authService = inject(AuthService);
 
   marketOptions = [
     { label: 'US', value: 'US' as Market, flag: MARKETS.US.flag },

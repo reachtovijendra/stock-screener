@@ -1,10 +1,16 @@
 import { Routes } from '@angular/router';
+import { authGuard } from './core/guards/auth.guard';
 
 export const routes: Routes = [
   {
     path: '',
     loadComponent: () => import('./features/screener/screener.component').then(m => m.ScreenerComponent),
     title: 'Stock Screener'
+  },
+  {
+    path: 'login',
+    loadComponent: () => import('./features/login/login.component').then(m => m.LoginComponent),
+    title: 'Sign In - StockScreen'
   },
   {
     path: 'news',
@@ -19,7 +25,14 @@ export const routes: Routes = [
   {
     path: 'recommendations',
     loadComponent: () => import('./features/recommendations/recommendations.component').then(m => m.RecommendationsComponent),
+    canActivate: [authGuard],
     title: 'Recommendations'
+  },
+  {
+    path: 'watchlists',
+    loadComponent: () => import('./features/watchlists/watchlists.component').then(m => m.WatchlistsComponent),
+    canActivate: [authGuard],
+    title: 'Watchlists'
   },
   {
     path: 'dma-simulator',

@@ -13,6 +13,8 @@ import { DividerModule } from 'primeng/divider';
 import { MultiSelectModule } from 'primeng/multiselect';
 
 import { Stock } from '../../core/models/stock.model';
+import { AuthService } from '../../core/services/auth.service';
+import { WatchlistService, Watchlist } from '../../core/services/watchlist.service';
 import { MarketService } from '../../core/services';
 
 interface FilterOption {
@@ -110,6 +112,28 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
                 ({{ s.change >= 0 ? '+' : '' }}{{ marketService.formatCurrency(s.change, s.market) }})
               </span>
             </div>
+
+            <!-- Add to Watchlist -->
+            <div class="watchlist-add" *ngIf="authService.isAuthenticated()">
+              <button class="wl-btn" (click)="showWlDropdown = !showWlDropdown">
+                <i class="pi pi-bookmark"></i> + Watchlist
+              </button>
+              <div class="wl-dropdown" *ngIf="showWlDropdown">
+                <div
+                  *ngFor="let wl of watchlistService.watchlists()"
+                  class="wl-option"
+                  (click)="addToWatchlist(wl, s); showWlDropdown = false">
+                  <i [class]="isInWatchlist(wl.id) ? 'pi pi-check-circle' : 'pi pi-circle'" [style.color]="isInWatchlist(wl.id) ? '#10b981' : '#64748b'"></i>
+                  {{ wl.name }}
+                </div>
+                <div class="wl-option new" (click)="createAndAdd(s)">
+                  <i class="pi pi-plus" style="color: #3b82f6;"></i> New watchlist...
+                </div>
+              </div>
+            </div>
+            <button *ngIf="!authService.isAuthenticated()" class="wl-btn signin" (click)="router.navigate(['/login'])">
+              <i class="pi pi-sign-in"></i> Sign in to save
+            </button>
           </div>
           
           <div class="key-stats-grid">
@@ -539,6 +563,30 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
 
     .stock-price .change.positive { color: var(--green-500); }
     .stock-price .change.negative { color: var(--red-500); }
+
+    .watchlist-add { position: relative; margin-top: 8px; text-align: right; }
+    .wl-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 14px; border-radius: 8px; font-size: 12px; font-weight: 600;
+      cursor: pointer; font-family: inherit; border: 1px solid var(--surface-border);
+      background: var(--surface-card); color: var(--text-color);
+      transition: all 0.15s;
+    }
+    .wl-btn:hover { border-color: #3b82f6; color: #3b82f6; }
+    .wl-btn.signin { color: #3b82f6; }
+    .wl-dropdown {
+      position: absolute; right: 0; top: 100%; margin-top: 4px; z-index: 100;
+      background: var(--surface-card); border: 1px solid var(--surface-border);
+      border-radius: 10px; padding: 6px; min-width: 200px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .wl-option {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 6px; cursor: pointer;
+      font-size: 13px; color: var(--text-color);
+    }
+    .wl-option:hover { background: var(--surface-hover); }
+    .wl-option.new { color: #3b82f6; border-top: 1px solid var(--surface-border); margin-top: 4px; padding-top: 10px; }
 
     /* Key Stats - horizontal layout */
     .key-stats-grid {
@@ -983,13 +1031,19 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
 })
 export class StockDetailComponent implements OnInit {
   private route = inject(ActivatedRoute);
-  private router = inject(Router);
+  router = inject(Router);
   private http = inject(HttpClient);
   marketService = inject(MarketService);
+  authService = inject(AuthService);
+  watchlistService = inject(WatchlistService);
 
   stock = signal<Stock | null>(null);
   loading = signal(true);
   error = signal<string | null>(null);
+
+  // Watchlist state
+  showWlDropdown = false;
+  private symbolWatchlistIds = signal<Set<string>>(new Set());
   
   // News state
   news = signal<NewsItem[]>([]);
@@ -1119,7 +1173,7 @@ export class StockDetailComponent implements OnInit {
     this.route.paramMap.subscribe(params => {
       const symbol = params.get('symbol');
       if (symbol) {
-        this.loadStock(symbol);
+        this.loadStock(symbol).then(() => this.loadWatchlistState());
       } else {
         this.error.set('No symbol provided');
         this.loading.set(false);
@@ -1277,5 +1331,38 @@ export class StockDetailComponent implements OnInit {
     if (signalType.includes('bullish')) return 'Buy';
     if (signalType.includes('bearish')) return 'Sell';
     return 'Neutral';
+  }
+
+  // --- Watchlist methods ---
+
+  async loadWatchlistState() {
+    if (!this.authService.isAuthenticated()) return;
+    await this.watchlistService.loadWatchlists();
+    const s = this.stock();
+    if (s) {
+      const inLists = await this.watchlistService.getWatchlistsForSymbol(s.symbol);
+      this.symbolWatchlistIds.set(new Set(inLists.map(l => l.watchlistId)));
+    }
+  }
+
+  isInWatchlist(watchlistId: string): boolean {
+    return this.symbolWatchlistIds().has(watchlistId);
+  }
+
+  async addToWatchlist(wl: Watchlist, s: Stock) {
+    if (this.isInWatchlist(wl.id)) return;
+    await this.watchlistService.addItem(wl.id, s.symbol, s.name, s.market, s.price);
+    this.symbolWatchlistIds.update(set => new Set([...set, wl.id]));
+  }
+
+  async createAndAdd(s: Stock) {
+    const name = prompt('Watchlist name:');
+    if (!name?.trim()) return;
+    const wl = await this.watchlistService.createWatchlist(name.trim());
+    if (wl) {
+      await this.watchlistService.addItem(wl.id, s.symbol, s.name, s.market, s.price);
+      this.symbolWatchlistIds.update(set => new Set([...set, wl.id]));
+    }
+    this.showWlDropdown = false;
   }
 }

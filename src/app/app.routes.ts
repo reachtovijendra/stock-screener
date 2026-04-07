@@ -35,6 +35,12 @@ export const routes: Routes = [
     title: 'Watchlists'
   },
   {
+    path: 'portfolio',
+    loadComponent: () => import('./features/portfolio-tracker/portfolio-tracker.component').then(m => m.PortfolioTrackerComponent),
+    canActivate: [authGuard],
+    title: 'Portfolio Tracker'
+  },
+  {
     path: 'dma-simulator',
     loadComponent: () => import('./features/dma-simulator/dma-simulator.component').then(m => m.DmaSimulatorComponent),
     title: 'DMA Simulator'

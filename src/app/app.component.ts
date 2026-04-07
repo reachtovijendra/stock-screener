@@ -35,6 +35,10 @@ import { ThemeService } from './core/services';
             <i class="pi pi-bolt"></i>
             <span class="nav-label">News</span>
           </a>
+          <a class="nav-item" routerLink="/portfolio" routerLinkActive="active" title="Portfolio Tracker">
+            <i class="pi pi-wallet"></i>
+            <span class="nav-label">Portfolio</span>
+          </a>
           <a class="nav-item" routerLink="/dma-simulator" routerLinkActive="active" title="DMA Simulator">
             <i class="pi pi-chart-bar"></i>
             <span class="nav-label">DMA</span>

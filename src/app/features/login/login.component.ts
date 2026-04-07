@@ -475,12 +475,19 @@ export class LoginComponent {
     private router: Router,
     private route: ActivatedRoute
   ) {
-    this.returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/recommendations';
+    // Restore return URL from query param or sessionStorage (survives OAuth round-trip)
+    const queryReturn = this.route.snapshot.queryParams['returnUrl'];
+    if (queryReturn) {
+      this.returnUrl = queryReturn;
+      sessionStorage.setItem('authReturnUrl', queryReturn);
+    } else {
+      this.returnUrl = sessionStorage.getItem('authReturnUrl') || '/recommendations';
+    }
 
-    // Wait for Supabase to restore session (handles OAuth callback)
-    // Use effect to watch for auth state changes
+    // Watch for auth state changes (handles OAuth callback)
     effect(() => {
       if (this.auth.isAuthenticated()) {
+        sessionStorage.removeItem('authReturnUrl');
         this.router.navigate([this.returnUrl]);
       }
     });

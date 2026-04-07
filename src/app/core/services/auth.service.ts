@@ -18,6 +18,9 @@ export class AuthService {
 
   get supabaseClient(): SupabaseClient { return this.supabase; }
 
+  /** Resolves once the initial auth check is complete (session restored or confirmed empty) */
+  readonly initialized: Promise<void>;
+
   constructor() {
     this.supabase = createClient(environment.supabaseUrl, environment.supabaseAnonKey, {
       auth: {
@@ -31,8 +34,8 @@ export class AuthService {
       this.currentUser.set(session?.user ?? null);
     });
 
-    // Check initial session
-    this.supabase.auth.getSession().then(({ data: { session } }) => {
+    // Check initial session — expose as a promise the guard can await
+    this.initialized = this.supabase.auth.getSession().then(({ data: { session } }) => {
       this.currentUser.set(session?.user ?? null);
     });
   }

@@ -15,6 +15,7 @@ import { ThemeService } from './core/services';
       <div class="content-wrapper">
         <!-- Left Nav Sidebar -->
         <nav class="nav-sidebar">
+          <!-- Public -->
           <a class="nav-item" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" title="Screener">
             <i class="pi pi-table"></i>
             <span class="nav-label">Screener</span>
@@ -23,25 +24,30 @@ import { ThemeService } from './core/services';
             <i class="pi pi-chart-line"></i>
             <span class="nav-label">Breakouts</span>
           </a>
-          <a class="nav-item" routerLink="/recommendations" routerLinkActive="active" title="Recommendations">
-            <i class="pi pi-star"></i>
-            <span class="nav-label">Picks</span>
-          </a>
-          <a class="nav-item" routerLink="/watchlists" routerLinkActive="active" title="Watchlists">
-            <i class="pi pi-bookmark"></i>
-            <span class="nav-label">Watch</span>
-          </a>
           <a class="nav-item" routerLink="/news" routerLinkActive="active" title="News">
             <i class="pi pi-bolt"></i>
             <span class="nav-label">News</span>
           </a>
-          <a class="nav-item" routerLink="/portfolio" routerLinkActive="active" title="Portfolio Tracker">
+          <a class="nav-item" routerLink="/dma-simulator" routerLinkActive="active" title="Moving Average Simulator">
+            <i class="pi pi-chart-bar"></i>
+            <span class="nav-label">Simulator</span>
+          </a>
+
+          <!-- Divider -->
+          <div class="nav-divider"></div>
+
+          <!-- Auth required -->
+          <a class="nav-item premium" routerLink="/portfolio" routerLinkActive="active" title="Portfolio Tracker">
             <i class="pi pi-wallet"></i>
             <span class="nav-label">Portfolio</span>
           </a>
-          <a class="nav-item" routerLink="/dma-simulator" routerLinkActive="active" title="DMA Simulator">
-            <i class="pi pi-chart-bar"></i>
-            <span class="nav-label">DMA</span>
+          <a class="nav-item premium" routerLink="/recommendations" routerLinkActive="active" title="Day Trades">
+            <i class="pi pi-star"></i>
+            <span class="nav-label">Trades</span>
+          </a>
+          <a class="nav-item premium" routerLink="/watchlists" routerLinkActive="active" title="Watchlists">
+            <i class="pi pi-bookmark"></i>
+            <span class="nav-label">Watchlists</span>
           </a>
         </nav>
 
@@ -116,6 +122,41 @@ import { ThemeService } from './core/services';
 
     .nav-item.active i {
       transform: scale(1.1);
+    }
+
+    .nav-divider {
+      width: 32px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--surface-border), transparent);
+      margin: 0.35rem 0;
+    }
+
+    .nav-item.premium {
+      position: relative;
+
+      i {
+        background: linear-gradient(135deg, #a78bfa, #60a5fa);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+    }
+
+    .nav-item.premium:hover {
+      background: rgba(167, 139, 250, 0.08);
+      color: #c4b5fd;
+    }
+
+    .nav-item.premium.active {
+      background: rgba(167, 139, 250, 0.12);
+      color: #a78bfa;
+
+      i {
+        background: linear-gradient(135deg, #c4b5fd, #93c5fd);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
     }
 
     .nav-label {

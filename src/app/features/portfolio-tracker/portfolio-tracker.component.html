@@ -1,7 +1,7 @@
-<div class="portfolio-tracker-container">
+<div class="portfolio-container">
   <p-toast position="top-right" [life]="3000"></p-toast>
 
-  <!-- Loading Spinner -->
+  <!-- Loading -->
   @if (isLoading) {
     <div class="loading-overlay">
       <p-progressSpinner strokeWidth="4" animationDuration="1s"></p-progressSpinner>
@@ -9,356 +9,471 @@
     </div>
   }
 
-  <!-- Custom Confirmation Modal - Clear All -->
+  <!-- Confirm Modal - Clear All -->
   <div class="confirm-overlay" *ngIf="showConfirmModal" (click)="cancelClear()">
-    <div class="confirm-modal" (click)="$event.stopPropagation()">
-      <div class="confirm-header">
-        <i class="pi pi-exclamation-triangle"></i>
-        <span>Clear All Data</span>
+    <div class="confirm-dialog" (click)="$event.stopPropagation()">
+      <div class="dialog-icon danger">
+        <i class="pi pi-trash"></i>
       </div>
-      <div class="confirm-body">
-        This will delete ALL your data including any actuals you have entered. This action cannot be undone.
-      </div>
-      <div class="confirm-footer">
-        <button pButton label="Cancel" class="p-button-text" (click)="cancelClear()"></button>
-        <button pButton label="Yes, Clear All" class="p-button-danger" icon="pi pi-trash" (click)="confirmClear()"></button>
+      <h3 class="dialog-title">Clear All Data</h3>
+      <p class="dialog-message">
+        This will permanently delete <strong>all targets and actuals</strong> you have entered. A fresh 10-year projection will be regenerated.
+      </p>
+      <div class="dialog-actions">
+        <button class="btn-ghost" (click)="cancelClear()">Cancel</button>
+        <button class="btn-solid danger" (click)="confirmClear()">Yes, Clear Everything</button>
       </div>
     </div>
   </div>
 
-  <!-- Custom Confirmation Modal - Clear Row -->
+  <!-- Confirm Modal - Clear Row -->
   <div class="confirm-overlay" *ngIf="showRowClearModal" (click)="cancelRowClear()">
-    <div class="confirm-modal" (click)="$event.stopPropagation()">
-      <div class="confirm-header warning">
-        <i class="pi pi-question-circle"></i>
-        <span>Clear Row Data</span>
+    <div class="confirm-dialog" (click)="$event.stopPropagation()">
+      <div class="dialog-icon warning">
+        <i class="pi pi-eraser"></i>
       </div>
-      <div class="confirm-body">
-        Clear all actual data for <strong>{{ rowToClear ? getMonthName(rowToClear.month) + ' ' + rowToClear.year : '' }}</strong>?
-      </div>
-      <div class="confirm-footer">
-        <button pButton label="Cancel" class="p-button-text" (click)="cancelRowClear()"></button>
-        <button pButton label="Yes, Clear" class="p-button-warning" icon="pi pi-times" (click)="confirmRowClear()"></button>
-      </div>
-    </div>
-  </div>
-
-  <div class="action-bar" style="display: flex; flex-direction: row; justify-content: space-between; align-items: center; flex-wrap: nowrap;">
-    <div class="action-buttons" style="display: flex; gap: 1.5rem;">
-      <input
-        type="file"
-        #fileInput
-        accept=".xlsx,.xls"
-        style="display: none"
-        (change)="onFileSelect($event)">
-      <button
-        pButton
-        type="button"
-        label="Import from Excel"
-        icon="pi pi-upload"
-        class="p-button-text btn-import"
-        (click)="fileInput.click()"></button>
-      <button
-        pButton
-        type="button"
-        label="Export to Excel"
-        icon="pi pi-file-excel"
-        class="p-button-text btn-export"
-        (click)="exportToExcel()"></button>
-      <button
-        pButton
-        type="button"
-        label="Clear All Data"
-        icon="pi pi-trash"
-        class="p-button-text btn-clear"
-        (click)="openClearConfirm()"></button>
-    </div>
-    <div class="initial-contributions" style="display: flex; flex-direction: row; gap: 1.5rem; align-items: center;">
-      <div class="contribution-input" style="display: flex; align-items: center; gap: 0.5rem;">
-        <label style="white-space: nowrap;">Target Initial:</label>
-        <p-inputNumber
-          [(ngModel)]="targetInitialContribution"
-          mode="currency"
-          currency="USD"
-          locale="en-US"
-          [minFractionDigits]="0"
-          [maxFractionDigits]="0"
-          (onBlur)="onTargetInitialChange()"
-          styleClass="contribution-input-field">
-        </p-inputNumber>
-      </div>
-      <div class="contribution-input" style="display: flex; align-items: center; gap: 0.5rem;">
-        <label style="white-space: nowrap;">Actual Initial:</label>
-        <p-inputNumber
-          [(ngModel)]="actualInitialContribution"
-          mode="currency"
-          currency="USD"
-          locale="en-US"
-          [minFractionDigits]="0"
-          [maxFractionDigits]="0"
-          (onBlur)="onActualInitialChange()"
-          styleClass="contribution-input-field">
-        </p-inputNumber>
+      <h3 class="dialog-title">Clear Row Data</h3>
+      <p class="dialog-message">
+        Remove actual data for <strong>{{ rowToClear ? getMonthName(rowToClear.month) + ' ' + rowToClear.year : '' }}</strong>?
+      </p>
+      <div class="dialog-actions">
+        <button class="btn-ghost" (click)="cancelRowClear()">Cancel</button>
+        <button class="btn-solid warning" (click)="confirmRowClear()">Yes, Clear Row</button>
       </div>
     </div>
   </div>
 
+  <!-- Confirm Modal - Reconfigure -->
+  <div class="confirm-overlay" *ngIf="showReconfigureModal" (click)="cancelReconfigure()">
+    <div class="confirm-dialog" (click)="$event.stopPropagation()">
+      <div class="dialog-icon warning">
+        <i class="pi pi-refresh"></i>
+      </div>
+      <h3 class="dialog-title">Reconfigure Portfolio</h3>
+      <p class="dialog-message">
+        This will <strong>delete all your data</strong> and take you back to the setup screen to start fresh. Are you sure?
+      </p>
+      <div class="dialog-actions">
+        <button class="btn-ghost" (click)="cancelReconfigure()">Cancel</button>
+        <button class="btn-solid warning" (click)="confirmReconfigure()">Yes, Start Over</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Setup Screen for new users -->
+  @if (showSetup) {
+    <div class="setup-container">
+      <div class="setup-card">
+        <div class="setup-icon">
+          <i class="pi pi-wallet"></i>
+        </div>
+        <h2 class="setup-title">Set Up Your Portfolio Tracker</h2>
+        <p class="setup-subtitle">Configure your investment parameters to generate a 10-year projection.</p>
+
+        <div class="setup-fields">
+          <div class="setup-field">
+            <label>Starting Investment</label>
+            <p class="setup-hint">How much are you starting with?</p>
+            <p-inputNumber
+              [(ngModel)]="targetInitialContribution"
+              mode="currency" currency="USD" locale="en-US"
+              [minFractionDigits]="0" [maxFractionDigits]="0"
+              placeholder="e.g. 100,000"
+              styleClass="setup-input">
+            </p-inputNumber>
+          </div>
+
+          <div class="setup-field">
+            <label>Monthly Contribution</label>
+            <p class="setup-hint">How much will you invest each month?</p>
+            <p-inputNumber
+              [(ngModel)]="monthlyAddition"
+              mode="currency" currency="USD" locale="en-US"
+              [minFractionDigits]="0" [maxFractionDigits]="0"
+              placeholder="e.g. 3,500"
+              styleClass="setup-input">
+            </p-inputNumber>
+          </div>
+
+          <div class="setup-field">
+            <label>Actual Starting Investment</label>
+            <p class="setup-hint">Your real starting amount (optional)</p>
+            <p-inputNumber
+              [(ngModel)]="actualInitialContribution"
+              mode="currency" currency="USD" locale="en-US"
+              [minFractionDigits]="0" [maxFractionDigits]="0"
+              placeholder="e.g. 100,000"
+              styleClass="setup-input">
+            </p-inputNumber>
+          </div>
+
+          <div class="setup-field">
+            <label>Expected Monthly Return %</label>
+            <p class="setup-hint">Your target monthly return rate</p>
+            <p-inputNumber
+              [(ngModel)]="expectedMonthlyReturn"
+              mode="decimal"
+              [minFractionDigits]="1" [maxFractionDigits]="2"
+              [allowEmpty]="true"
+              suffix="%"
+              placeholder="e.g. 1.6"
+              styleClass="setup-input">
+            </p-inputNumber>
+          </div>
+
+          <div class="setup-field">
+            <label>Start Year</label>
+            <p class="setup-hint">When does your tracking begin?</p>
+            <select class="start-year-select setup-select" [(ngModel)]="startYear">
+              @for (y of startYearOptions; track y) {
+                <option [value]="y">{{ y }}</option>
+              }
+            </select>
+          </div>
+        </div>
+
+        <div class="setup-summary">
+          <span>Projection: <strong>{{ startYear }} &ndash; {{ startYear + 9 }}</strong></span>
+          <span>Expected return: <strong>{{ expectedMonthlyReturn ?? '–' }}% / month</strong></span>
+        </div>
+
+        <button class="setup-btn" [disabled]="!setupValid" (click)="completeSetup()">
+          <i class="pi pi-chart-line"></i> Generate My Projection
+        </button>
+      </div>
+    </div>
+  }
+
+  <!-- Main content (hidden during setup) -->
+  @if (!showSetup) {
+
+  <!-- Page Header -->
+  <div class="page-header">
+    <div class="header-left">
+      <h1><i class="pi pi-wallet"></i> Portfolio Tracker</h1>
+      <p class="subtitle">10-year investment projection &mdash; track your targets vs actual performance</p>
+    </div>
+    <div class="header-actions">
+      <input type="file" #fileInput accept=".xlsx,.xls" style="display: none" (change)="onFileSelect($event)">
+      <button class="action-btn" (click)="fileInput.click()" title="Import from Excel">
+        <i class="pi pi-upload"></i> Import
+      </button>
+      <button class="action-btn" (click)="exportToExcel()" title="Export to Excel">
+        <i class="pi pi-file-excel"></i> Export
+      </button>
+      <button class="action-btn danger" (click)="openClearConfirm()" title="Clear All Data">
+        <i class="pi pi-trash"></i> Clear
+      </button>
+      <button class="action-btn" (click)="openReconfigureConfirm()" title="Reconfigure from scratch">
+        <i class="pi pi-refresh"></i> Reconfigure
+      </button>
+    </div>
+  </div>
+
+  <!-- Actual Performance Cards (below subtitle) -->
+  @if (getFilledRowsCount() > 0) {
+    <div class="summary-strip performance-strip">
+      <div class="summary-card perf-card">
+        <div class="summary-label">Months</div>
+        <div class="summary-value mono">{{ getFilledRowsCount() }}</div>
+      </div>
+      <div class="summary-card perf-card">
+        <div class="summary-label">Total Invested</div>
+        <div class="summary-value mono">{{ formatCurrency(getActualTotalInvested()) }}</div>
+      </div>
+      <div class="summary-card perf-card accent">
+        <div class="summary-label">Portfolio Value</div>
+        <div class="summary-value mono">{{ formatCurrency(getLatestActualTotal()) }}</div>
+      </div>
+      <div class="summary-card perf-card" [class.positive]="getTotalActualProfit() > 0" [class.negative]="getTotalActualProfit() < 0">
+        <div class="summary-label">Profit / Loss</div>
+        <div class="summary-value mono">{{ formatCurrency(getTotalActualProfit()) }}</div>
+      </div>
+      <div class="summary-card perf-card" [class.positive]="getTotalActualProfit() > 0" [class.negative]="getTotalActualProfit() < 0">
+        <div class="summary-label">Return</div>
+        <div class="summary-value mono">{{ getOverallReturnPercent() }}%</div>
+      </div>
+      <div class="summary-card perf-card" [class.positive]="getOverallVariance() > 0" [class.negative]="getOverallVariance() < 0">
+        <div class="summary-label">vs Target</div>
+        <div class="summary-value mono">{{ getOverallVariance() > 0 ? '+' : '' }}{{ formatCurrency(getOverallVariance()) }}</div>
+      </div>
+      <div class="summary-card perf-card" [class.positive]="getTotalActualProfit() > 0" [class.negative]="getTotalActualProfit() < 0">
+        <div class="summary-label">Avg Yearly</div>
+        <div class="summary-value mono">{{ getAverageYearlyReturn() }}%</div>
+      </div>
+    </div>
+  }
+
+  <!-- Summary Cards -->
+  <div class="summary-strip">
+    <div class="summary-card">
+      <div class="summary-label">Starting Investment</div>
+      <div class="summary-value mono">{{ getActualInitialContribution() }}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Monthly Addition</div>
+      <div class="summary-value mono">${{ formatCurrency(monthlyAddition ?? 0) }}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Target Monthly Return</div>
+      <div class="summary-value mono">{{ expectedMonthlyReturn ?? 0 }}%</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Projection</div>
+      <div class="summary-value mono">{{ startYear }} &ndash; {{ startYear + 9 }}</div>
+    </div>
+  </div>
+
+  <!-- Configuration Bar -->
+  <div class="config-bar">
+    <div class="config-group">
+      <label>Target Initial</label>
+      <p-inputNumber
+        [(ngModel)]="targetInitialContribution"
+        mode="currency" currency="USD" locale="en-US"
+        [minFractionDigits]="0" [maxFractionDigits]="0"
+        (onBlur)="onTargetInitialChange()"
+        styleClass="config-input">
+      </p-inputNumber>
+    </div>
+    <div class="config-group">
+      <label>Actual Initial</label>
+      <p-inputNumber
+        [(ngModel)]="actualInitialContribution"
+        mode="currency" currency="USD" locale="en-US"
+        [minFractionDigits]="0" [maxFractionDigits]="0"
+        (onBlur)="onActualInitialChange()"
+        styleClass="config-input">
+      </p-inputNumber>
+    </div>
+    <div class="config-group">
+      <label>Monthly Addition</label>
+      <p-inputNumber
+        [(ngModel)]="monthlyAddition"
+        mode="currency" currency="USD" locale="en-US"
+        [minFractionDigits]="0" [maxFractionDigits]="0"
+        (onBlur)="onMonthlyAdditionChange()"
+        styleClass="config-input">
+      </p-inputNumber>
+    </div>
+    <div class="config-group">
+      <label>Monthly Return %</label>
+      <p-inputNumber
+        [(ngModel)]="expectedMonthlyReturn"
+        mode="decimal"
+        [minFractionDigits]="1" [maxFractionDigits]="2"
+        suffix="%"
+        (onBlur)="onExpectedReturnChange()"
+        styleClass="config-input-sm">
+      </p-inputNumber>
+    </div>
+    <div class="config-group">
+      <label>Start Year</label>
+      <select class="start-year-select" [(ngModel)]="startYear" (change)="onStartYearChange()">
+        @for (y of startYearOptions; track y) {
+          <option [value]="y">{{ y }}</option>
+        }
+      </select>
+    </div>
+    <div class="config-spacer"></div>
+    <div class="config-group year-chips-group">
+      <label>Year</label>
+      <div class="year-chips">
+        @for (opt of yearOptions; track opt.value) {
+          <button class="year-chip"
+                  [class.active]="selectedYears.includes(opt.value)"
+                  (click)="toggleYear(opt.value)">
+            {{ opt.label }}
+          </button>
+        }
+        @if (selectedYears.length > 0) {
+          <button class="year-chip clear" (click)="selectedYears = []; onYearFilterChange()" title="Show all">
+            <i class="pi pi-times"></i>
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+
+  <!-- Data Table -->
   <div class="table-container">
-  <p-table
-    [value]="filteredData"
-    [scrollable]="true"
-    scrollHeight="flex"
-    styleClass="p-datatable-sm p-datatable-gridlines portfolio-table"
-    [tableStyle]="{'min-width': '900px'}"
-    [rowHover]="true">
+    <p-table
+      [value]="filteredData"
+      [scrollable]="true"
+      scrollHeight="flex"
+      styleClass="p-datatable-sm portfolio-table"
+      [tableStyle]="{'min-width': '1100px'}"
+      [rowHover]="true">
 
-    <ng-template pTemplate="header">
-      <tr>
-        <th style="width: 180px" class="text-center">
-          <div class="year-filter-header">
-            <span>Year</span>
-            <p-multiselect
-              [options]="yearOptions"
-              [(ngModel)]="selectedYears"
-              (onChange)="onYearFilterChange()"
-              placeholder="Select Years"
-              optionLabel="label"
-              optionValue="value"
-              display="chip"
-              [showToggleAll]="true"
-              [filter]="true"
-              filterPlaceholder="Search"
-              [showClear]="true"
-              styleClass="year-filter"
-              panelStyleClass="year-panel">
-            </p-multiselect>
-          </div>
-        </th>
-        <th style="width: 50px" class="text-center">Month</th>
-        <th style="width: 170px" class="text-center header-dual">
-          <div class="dual-header">
-            <span>Initial Contributions</span>
-            <div class="sub-headers">
-              <span class="target-label">Target</span>
-              <span class="actual-label">Actual</span>
+      <ng-template pTemplate="header">
+        <tr>
+          <th class="col-year">Year</th>
+          <th class="col-month">Month</th>
+          <th class="col-dual header-dual">
+            <div class="dual-header">
+              <span>Contributions</span>
+              <div class="sub-headers">
+                <span class="target-label">Target</span>
+                <span class="actual-label">Actual</span>
+              </div>
             </div>
-          </div>
-        </th>
-        <th style="width: 140px" class="text-center header-dual">
-          <div class="dual-header">
-            <span>Contributions Added</span>
-            <div class="sub-headers">
-              <span class="target-label">Target</span>
-              <span class="actual-label">Actual</span>
+          </th>
+          <th class="col-dual header-dual">
+            <div class="dual-header">
+              <span>Added</span>
+              <div class="sub-headers">
+                <span class="target-label">Target</span>
+                <span class="actual-label">Actual</span>
+              </div>
             </div>
-          </div>
-        </th>
-        <th style="width: 160px" class="text-center header-dual">
-          <div class="dual-header">
-            <span>Principal</span>
-            <div class="sub-headers">
-              <span class="target-label">Target</span>
-              <span class="actual-label">Actual</span>
+          </th>
+          <th class="col-dual header-dual">
+            <div class="dual-header">
+              <span>Principal</span>
+              <div class="sub-headers">
+                <span class="target-label">Target</span>
+                <span class="actual-label">Actual</span>
+              </div>
             </div>
-          </div>
-        </th>
-        <th style="width: 170px" class="text-center header-dual">
-          <div class="dual-header">
-            <span>Total Value EOM</span>
-            <div class="sub-headers">
-              <span class="target-label">Target</span>
-              <span class="actual-label">Actual</span>
+          </th>
+          <th class="col-dual header-dual">
+            <div class="dual-header">
+              <span>Total Value EOM</span>
+              <div class="sub-headers">
+                <span class="target-label">Target</span>
+                <span class="actual-label">Actual</span>
+              </div>
             </div>
-          </div>
-        </th>
-        <th style="width: 130px" class="text-center header-dual">
-          <div class="dual-header">
-            <span>Return %</span>
-            <div class="sub-headers">
-              <span class="target-label">Target</span>
-              <span class="actual-label">Actual</span>
+          </th>
+          <th class="col-dual header-dual">
+            <div class="dual-header">
+              <span>Return %</span>
+              <div class="sub-headers">
+                <span class="target-label">Target</span>
+                <span class="actual-label">Actual</span>
+              </div>
             </div>
-          </div>
-        </th>
-        <th style="width: 150px" class="text-center header-dual">
-          <div class="dual-header">
-            <span>Profit</span>
-            <div class="sub-headers">
-              <span class="target-label">Target</span>
-              <span class="actual-label">Actual</span>
+          </th>
+          <th class="col-dual header-dual">
+            <div class="dual-header">
+              <span>Profit</span>
+              <div class="sub-headers">
+                <span class="target-label">Target</span>
+                <span class="actual-label">Actual</span>
+              </div>
             </div>
-          </div>
-        </th>
-        <th style="width: 120px" class="text-right header-overall-profit">Overall Profit</th>
-        <th style="width: 130px" class="text-right header-variance">Variance From Goal</th>
-      </tr>
-    </ng-template>
+          </th>
+          <th class="col-overall">Overall Profit</th>
+          <th class="col-variance">Variance</th>
+        </tr>
+      </ng-template>
 
-    <ng-template pTemplate="body" let-row>
-      <tr>
-        <td class="text-center font-semibold">{{ row.year }}</td>
-        <td class="text-center month-cell">
-          <span class="month-name">{{ getMonthName(row.month) }}</span>
-          <i class="pi pi-times-circle clear-row-icon"
-             title="Clear row data"
-             (click)="clearRowData(row)"></i>
-        </td>
+      <ng-template pTemplate="body" let-row>
+        <tr>
+          <td class="col-year mono">{{ row.year }}</td>
+          <td class="col-month month-cell">
+            <span class="month-name">{{ getMonthName(row.month) }}</span>
+            <i class="pi pi-times-circle clear-row-icon"
+               title="Clear row data"
+               (click)="clearRowData(row)"></i>
+          </td>
 
-        <!-- Investment: Target / Actual -->
-        <td class="dual-cell">
-          <div class="dual-value">
-            <span class="target-value">{{ formatCurrency(row.investment) }}</span>
-            <div class="actual-input-wrapper">
-              <p-inputNumber
-                [(ngModel)]="row.actualInvestment"
-                mode="decimal"
-                [minFractionDigits]="0"
-                [maxFractionDigits]="0"
-                [allowEmpty]="true"
-                [disabled]="true"
-                placeholder="-"
-                styleClass="actual-input disabled-input">
-              </p-inputNumber>
+          <!-- Contributions: Target / Actual -->
+          <td class="dual-cell">
+            <div class="dual-value">
+              <span class="target-value mono">{{ formatCurrency(row.investment) }}</span>
+              <div class="actual-input-wrapper">
+                <p-inputNumber
+                  [(ngModel)]="row.actualInvestment"
+                  mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
+                  [allowEmpty]="true" [disabled]="true" placeholder="-"
+                  styleClass="actual-input disabled-input">
+                </p-inputNumber>
+              </div>
             </div>
-          </div>
-        </td>
+          </td>
 
-        <!-- Added: Target / Actual -->
-        <td class="dual-cell">
-          <div class="dual-value">
-            <span class="target-value">{{ formatCurrency(row.added) }}</span>
-            <div class="actual-input-wrapper">
-              <p-inputNumber
-                [(ngModel)]="row.actualAdded"
-                mode="decimal"
-                [minFractionDigits]="0"
-                [maxFractionDigits]="0"
-                [allowEmpty]="true"
-                placeholder="-"
-                (onBlur)="onActualChange(row)"
-                styleClass="actual-input">
-              </p-inputNumber>
+          <!-- Added: Target / Actual -->
+          <td class="dual-cell">
+            <div class="dual-value">
+              <span class="target-value mono">{{ formatCurrency(row.added) }}</span>
+              <div class="actual-input-wrapper">
+                <p-inputNumber
+                  [(ngModel)]="row.actualAdded"
+                  mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
+                  [allowEmpty]="true" placeholder="-"
+                  (onBlur)="onActualChange(row)"
+                  styleClass="actual-input">
+                </p-inputNumber>
+              </div>
             </div>
-          </div>
-        </td>
+          </td>
 
-        <!-- Principal: Target / Actual (calculated - cumulative) -->
-        <td class="dual-cell">
-          <div class="dual-value">
-            <span class="target-value">{{ formatCurrency(row.principal) }}</span>
-            <span class="actual-value" [ngClass]="getActualPrincipalClass(row)">
-              {{ getActualPrincipalDisplay(row) }}
+          <!-- Principal: Target / Actual -->
+          <td class="dual-cell">
+            <div class="dual-value">
+              <span class="target-value mono">{{ formatCurrency(row.principal) }}</span>
+              <span class="actual-value mono" [ngClass]="getActualPrincipalClass(row)">
+                {{ getActualPrincipalDisplay(row) }}
+              </span>
+            </div>
+          </td>
+
+          <!-- Total Value EOM: Target / Actual -->
+          <td class="dual-cell">
+            <div class="dual-value">
+              <span class="target-value mono">{{ formatCurrency(row.total) }}</span>
+              <div class="actual-input-wrapper">
+                <p-inputNumber
+                  [(ngModel)]="row.actualTotal"
+                  mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
+                  [allowEmpty]="true" placeholder="-"
+                  (onBlur)="onActualChange(row)"
+                  styleClass="actual-input">
+                </p-inputNumber>
+              </div>
+            </div>
+          </td>
+
+          <!-- Return %: Target / Actual -->
+          <td class="dual-cell">
+            <div class="dual-value center-values">
+              <span class="target-value mono center">{{ row.return_percent }}%</span>
+              <span class="actual-value mono center" [ngClass]="getProfitClass(row)">
+                {{ getActualReturnPercent(row) }}
+              </span>
+            </div>
+          </td>
+
+          <!-- Profit: Target / Actual -->
+          <td class="dual-cell">
+            <div class="dual-value">
+              <span class="target-value mono">{{ formatCurrency(row.profit) }}</span>
+              <span class="actual-value mono" [ngClass]="getProfitClass(row)">
+                {{ getActualProfit(row) }}
+              </span>
+            </div>
+          </td>
+
+          <!-- Overall Profit -->
+          <td class="col-overall mono" [ngClass]="getOverallProfitClass(row)">
+            <span *ngIf="row.actualTotal !== null && row.actualInvestment !== null && row.actualAdded !== null">
+              {{ getOverallProfit(row) > 0 ? '+' : '' }}{{ formatCurrency(getOverallProfit(row)) }}
             </span>
-          </div>
-        </td>
+            <span class="no-data" *ngIf="row.actualTotal === null || row.actualInvestment === null || row.actualAdded === null">&mdash;</span>
+          </td>
 
-        <!-- Total Value EOM: Target / Actual (editable) -->
-        <td class="dual-cell">
-          <div class="dual-value">
-            <span class="target-value">{{ formatCurrency(row.total) }}</span>
-            <div class="actual-input-wrapper">
-              <p-inputNumber
-                [(ngModel)]="row.actualTotal"
-                mode="decimal"
-                [minFractionDigits]="0"
-                [maxFractionDigits]="0"
-                [allowEmpty]="true"
-                placeholder="-"
-                (onBlur)="onActualChange(row)"
-                styleClass="actual-input">
-              </p-inputNumber>
-            </div>
-          </div>
-        </td>
-
-        <!-- Return %: Target / Actual (calculated) -->
-        <td class="dual-cell">
-          <div class="dual-value">
-            <span class="target-value center">{{ row.return_percent }}%</span>
-            <span class="actual-value center" [ngClass]="getProfitClass(row)">
-              {{ getActualReturnPercent(row) }}
+          <!-- Variance -->
+          <td class="col-variance mono" [ngClass]="getVarianceClass(row.actualTotal, row.total)">
+            <span *ngIf="row.actualTotal !== null">
+              {{ getVariance(row.actualTotal, row.total) > 0 ? '+' : '' }}{{ formatCurrency(getVariance(row.actualTotal, row.total)) }}
             </span>
-          </div>
-        </td>
-
-        <!-- Profit: Target / Actual (calculated) -->
-        <td class="dual-cell">
-          <div class="dual-value">
-            <span class="target-value">{{ formatCurrency(row.profit) }}</span>
-            <span class="actual-value" [ngClass]="getProfitClass(row)">
-              {{ getActualProfit(row) }}
-            </span>
-          </div>
-        </td>
-        <!-- Overall Profit -->
-        <td class="text-right font-semibold"
-            [ngClass]="getOverallProfitClass(row)">
-          <span *ngIf="row.actualTotal !== null && row.actualInvestment !== null && row.actualAdded !== null">
-            {{ getOverallProfit(row) > 0 ? '+' : '' }}{{ formatCurrency(getOverallProfit(row)) }}
-          </span>
-          <span *ngIf="row.actualTotal === null || row.actualInvestment === null || row.actualAdded === null">-</span>
-        </td>
-        <!-- Variance From Goal -->
-        <td class="text-right font-semibold"
-            [ngClass]="getVarianceClass(row.actualTotal, row.total)">
-          <span *ngIf="row.actualTotal !== null">
-            {{ getVariance(row.actualTotal, row.total) > 0 ? '+' : '' }}{{ formatCurrency(getVariance(row.actualTotal, row.total)) }}
-          </span>
-          <span *ngIf="row.actualTotal === null">-</span>
-        </td>
-      </tr>
-    </ng-template>
-  </p-table>
-</div>
-
-  <div class="summary-footer">
-    <div class="summary-item">
-      <span class="label">Starting Investment:</span>
-      <span class="value">{{ getActualInitialContribution() }}</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Monthly Addition:</span>
-      <span class="value">$3,500</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Expected Monthly Return:</span>
-      <span class="value">1.6%</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Projection Period:</span>
-      <span class="value">2025 - 2034 (10 Years)</span>
-    </div>
+            <span class="no-data" *ngIf="row.actualTotal === null">&mdash;</span>
+          </td>
+        </tr>
+      </ng-template>
+    </p-table>
   </div>
 
-  <!-- Actual Performance Summary -->
-  <div class="actual-summary-compact" *ngIf="getFilledRowsCount() > 0">
-    <div class="summary-item">
-      <span class="label">Months:</span>
-      <span class="value">{{ getFilledRowsCount() }}</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Total Invested:</span>
-      <span class="value">{{ formatCurrency(getActualTotalInvested()) }}</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Portfolio Value:</span>
-      <span class="value highlight">{{ formatCurrency(getLatestActualTotal()) }}</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Profit/Loss:</span>
-      <span class="value" [ngClass]="getTotalProfitClass()">{{ formatCurrency(getTotalActualProfit()) }}</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Return:</span>
-      <span class="value" [ngClass]="getTotalProfitClass()">{{ getOverallReturnPercent() }}%</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">vs Target:</span>
-      <span class="value" [ngClass]="getOverallVarianceClass()">{{ getOverallVariance() > 0 ? '+' : '' }}{{ formatCurrency(getOverallVariance()) }}</span>
-    </div>
-    <div class="summary-item">
-      <span class="label">Avg Yearly:</span>
-      <span class="value" [ngClass]="getTotalProfitClass()">{{ getAverageYearlyReturn() }}%</span>
-    </div>
-  </div>
+  } <!-- end @if (!showSetup) -->
 </div>

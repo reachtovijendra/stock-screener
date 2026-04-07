@@ -7,12 +7,12 @@ import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { ToastModule } from 'primeng/toast';
-import { MultiSelectModule } from 'primeng/multiselect';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { MessageService } from 'primeng/api';
 
 import { PortfolioTargetEntry } from '../../core/models';
 import { PortfolioTrackerService } from '../../core/services';
+import { AuthService } from '../../core/services/auth.service';
 
 interface PortfolioRow extends PortfolioTargetEntry {
   actualId: string | null;
@@ -31,7 +31,6 @@ interface PortfolioRow extends PortfolioTargetEntry {
     ButtonModule,
     InputNumberModule,
     ToastModule,
-    MultiSelectModule,
     ProgressSpinnerModule
   ],
   providers: [MessageService],
@@ -41,6 +40,7 @@ interface PortfolioRow extends PortfolioTargetEntry {
 export class PortfolioTrackerComponent implements OnInit {
   private portfolioService = inject(PortfolioTrackerService);
   private messageService = inject(MessageService);
+  private authService = inject(AuthService);
 
   portfolioData: PortfolioRow[] = [];
   filteredData: PortfolioRow[] = [];
@@ -51,13 +51,42 @@ export class PortfolioTrackerComponent implements OnInit {
   selectedYears: number[] = [];
   isLoading = true;
 
-  targetInitialContribution: number = 100000;
+  targetInitialContribution: number | null = null;
   actualInitialContribution: number | null = null;
+  monthlyAddition: number | null = null;
+  expectedMonthlyReturn: number | null = null;
+  startYear: number = new Date().getFullYear();
+  startYearOptions: number[] = [];
+  showSetup = false;
 
   private dataLoaded = false;
+  private initialLoadDone = false;
+  private currentUserId: string | null = null;
+
+  private storageKey(key: string): string {
+    return `portfolio_${this.currentUserId}_${key}`;
+  }
 
   constructor() {
     effect(() => {
+      // Track user changes
+      const user = this.authService.user();
+      const userId = user?.id ?? null;
+
+      if (userId !== this.currentUserId) {
+        this.currentUserId = userId;
+        this.dataLoaded = false;
+        this.initialLoadDone = false;
+        this.portfolioData = [];
+        this.filteredData = [];
+        this.selectedYears = [];
+        this.showSetup = false;
+        this.loadInitialContributions();
+        if (userId) {
+          this.portfolioService.loadData();
+        }
+      }
+
       const loading = this.portfolioService.loading();
       this.isLoading = loading;
 
@@ -67,18 +96,81 @@ export class PortfolioTrackerComponent implements OnInit {
 
         if (!this.dataLoaded && targets.length === 0) {
           this.dataLoaded = true;
-          this.generateTenYearProjection();
+          if (!localStorage.getItem(this.storageKey('setupComplete'))) {
+            this.showSetup = true;
+          } else {
+            this.generateTenYearProjection();
+          }
         } else if (targets.length > 0) {
           this.dataLoaded = true;
-          this.loadPortfolioData(targets, actuals);
+          if (!this.initialLoadDone) {
+            this.initialLoadDone = true;
+            this.loadPortfolioData(targets, actuals);
+          }
         }
       }
     });
   }
 
   ngOnInit(): void {
+    this.buildStartYearOptions();
+    const user = this.authService.user();
+    this.currentUserId = user?.id ?? null;
     this.loadInitialContributions();
     this.portfolioService.loadData();
+  }
+
+  get setupValid(): boolean {
+    return this.targetInitialContribution !== null && this.targetInitialContribution > 0
+      && this.monthlyAddition !== null && this.monthlyAddition > 0
+      && this.expectedMonthlyReturn !== null && this.expectedMonthlyReturn > 0;
+  }
+
+  async completeSetup(): Promise<void> {
+    localStorage.setItem(this.storageKey('setupComplete'), 'true');
+    localStorage.setItem(this.storageKey('targetInitialContribution'), this.targetInitialContribution!.toString());
+    localStorage.setItem(this.storageKey('monthlyAddition'), this.monthlyAddition!.toString());
+    localStorage.setItem(this.storageKey('expectedMonthlyReturn'), this.expectedMonthlyReturn!.toString());
+    localStorage.setItem(this.storageKey('startYear'), this.startYear.toString());
+    if (this.actualInitialContribution !== null) {
+      localStorage.setItem(this.storageKey('actualInitialContribution'), this.actualInitialContribution.toString());
+    }
+    this.showSetup = false;
+    await this.generateTenYearProjection();
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Portfolio Created',
+      detail: `10-year projection generated from ${this.startYear}`,
+      life: 3000
+    });
+  }
+
+  showReconfigureModal = false;
+
+  openReconfigureConfirm(): void {
+    this.showReconfigureModal = true;
+  }
+
+  cancelReconfigure(): void {
+    this.showReconfigureModal = false;
+  }
+
+  async confirmReconfigure(): Promise<void> {
+    this.showReconfigureModal = false;
+    await this.portfolioService.clearAllData();
+    this.portfolioData = [];
+    this.filteredData = [];
+    this.selectedYears = [];
+    this.targetInitialContribution = null;
+    this.actualInitialContribution = null;
+    this.monthlyAddition = null;
+    this.expectedMonthlyReturn = null;
+    this.startYear = new Date().getFullYear();
+    this.dataLoaded = true;
+    this.initialLoadDone = false;
+    const prefix = `portfolio_${this.currentUserId}_`;
+    Object.keys(localStorage).filter(k => k.startsWith(prefix)).forEach(k => localStorage.removeItem(k));
+    this.showSetup = true;
   }
 
   openClearConfirm(): void {
@@ -107,14 +199,14 @@ export class PortfolioTrackerComponent implements OnInit {
   private async generateTenYearProjection(): Promise<void> {
     const targets: PortfolioTargetEntry[] = [];
 
-    const startingInvestment = this.targetInitialContribution;
-    const monthlyAddition = 3500;
-    const monthlyReturnPercent = 1.6;
+    const startingInvestment = this.targetInitialContribution ?? 100000;
+    const monthlyAddition = this.monthlyAddition ?? 3500;
+    const monthlyReturnPercent = this.expectedMonthlyReturn ?? 1.6;
 
     let previousTotal = startingInvestment;
     let previousPrincipal = startingInvestment;
 
-    const startYear = 2025;
+    const startYear = Number(this.startYear);
 
     for (let i = 1; i <= 120; i++) {
       const year = startYear + Math.floor((i - 1) / 12);
@@ -144,11 +236,13 @@ export class PortfolioTrackerComponent implements OnInit {
       previousPrincipal = principal;
     }
 
+    this.initialLoadDone = false;
     await this.portfolioService.setTargets(targets);
   }
 
   async onTargetInitialChange(): Promise<void> {
-    localStorage.setItem('portfolio_targetInitialContribution', this.targetInitialContribution.toString());
+    if (this.targetInitialContribution === null) return;
+    localStorage.setItem(this.storageKey('targetInitialContribution'), this.targetInitialContribution.toString());
     await this.generateTenYearProjection();
     this.messageService.add({
       severity: 'success',
@@ -160,9 +254,9 @@ export class PortfolioTrackerComponent implements OnInit {
 
   async onActualInitialChange(): Promise<void> {
     if (this.actualInitialContribution !== null) {
-      localStorage.setItem('portfolio_actualInitialContribution', this.actualInitialContribution.toString());
+      localStorage.setItem(this.storageKey('actualInitialContribution'), this.actualInitialContribution.toString());
     } else {
-      localStorage.removeItem('portfolio_actualInitialContribution');
+      localStorage.removeItem(this.storageKey('actualInitialContribution'));
     }
 
     if (this.portfolioData.length > 0) {
@@ -179,15 +273,72 @@ export class PortfolioTrackerComponent implements OnInit {
     });
   }
 
+  async onMonthlyAdditionChange(): Promise<void> {
+    if (this.monthlyAddition === null) return;
+    localStorage.setItem(this.storageKey('monthlyAddition'), this.monthlyAddition.toString());
+    await this.generateTenYearProjection();
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Updated',
+      detail: 'Monthly addition updated and projections recalculated',
+      life: 2000
+    });
+  }
+
+  async onExpectedReturnChange(): Promise<void> {
+    if (this.expectedMonthlyReturn === null) return;
+    localStorage.setItem(this.storageKey('expectedMonthlyReturn'), this.expectedMonthlyReturn.toString());
+    await this.generateTenYearProjection();
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Updated',
+      detail: 'Expected return updated and projections recalculated',
+      life: 2000
+    });
+  }
+
+  async onStartYearChange(): Promise<void> {
+    this.startYear = Number(this.startYear);
+    localStorage.setItem(this.storageKey('startYear'), this.startYear.toString());
+    await this.portfolioService.clearAllData();
+    await this.generateTenYearProjection();
+    this.messageService.add({
+      severity: 'success',
+      summary: 'Updated',
+      detail: `Projection recalculated for ${this.startYear} - ${this.startYear + 9}`,
+      life: 2000
+    });
+  }
+
+  private buildStartYearOptions(): void {
+    const currentYear = new Date().getFullYear();
+    this.startYearOptions = [];
+    for (let y = currentYear - 5; y <= currentYear + 5; y++) {
+      this.startYearOptions.push(y);
+    }
+  }
+
   private loadInitialContributions(): void {
-    const savedTarget = localStorage.getItem('portfolio_targetInitialContribution');
-    const savedActual = localStorage.getItem('portfolio_actualInitialContribution');
+    const savedTarget = localStorage.getItem(this.storageKey('targetInitialContribution'));
+    const savedActual = localStorage.getItem(this.storageKey('actualInitialContribution'));
+    const savedMonthly = localStorage.getItem(this.storageKey('monthlyAddition'));
+    const savedReturn = localStorage.getItem(this.storageKey('expectedMonthlyReturn'));
+    const savedStartYear = localStorage.getItem(this.storageKey('startYear'));
 
     if (savedTarget) {
       this.targetInitialContribution = parseFloat(savedTarget);
     }
     if (savedActual) {
       this.actualInitialContribution = parseFloat(savedActual);
+    }
+    if (savedMonthly) {
+      this.monthlyAddition = parseFloat(savedMonthly);
+    }
+    if (savedReturn) {
+      this.expectedMonthlyReturn = parseFloat(savedReturn);
+    }
+    if (savedStartYear) {
+      this.startYear = parseInt(savedStartYear, 10);
     }
   }
 
@@ -236,10 +387,20 @@ export class PortfolioTrackerComponent implements OnInit {
     const uniqueYears = [...new Set(this.portfolioData.map(row => row.year))].sort();
     this.yearOptions = uniqueYears.map(year => ({ label: String(year), value: year }));
 
-    if (this.selectedYears.length === 0 && uniqueYears.includes(2025)) {
-      this.selectedYears = [2025];
+    if (this.selectedYears.length === 0 && uniqueYears.includes(this.startYear)) {
+      this.selectedYears = [this.startYear];
     }
 
+    this.applyYearFilter();
+  }
+
+  toggleYear(year: number): void {
+    const idx = this.selectedYears.indexOf(year);
+    if (idx >= 0) {
+      this.selectedYears = this.selectedYears.filter(y => y !== year);
+    } else {
+      this.selectedYears = [...this.selectedYears, year];
+    }
     this.applyYearFilter();
   }
 
@@ -280,22 +441,18 @@ export class PortfolioTrackerComponent implements OnInit {
         await this.portfolioService.updateActual(actualEntry);
       } else {
         await this.portfolioService.addActual(actualEntry);
-        // After adding, reload to get the ID
-        await this.portfolioService.loadData();
+        // Get the ID from the service's actuals signal without full reload
+        const actuals = this.portfolioService.getActuals();
+        const saved = actuals.find(a => a.year === row.year && a.month === row.month);
+        if (saved?.id) {
+          row.actualId = saved.id;
+        }
       }
 
       if (row.actualTotal !== null) {
         await this.updateNextMonthInvestment(row);
       }
 
-      if (showToast) {
-        this.messageService.add({
-          severity: 'success',
-          summary: 'Saved',
-          detail: `Year ${row.year}, Month ${row.month} updated`,
-          life: 1500
-        });
-      }
     } catch (error) {
       console.error('Error saving actual:', error);
       this.messageService.add({
@@ -498,7 +655,7 @@ export class PortfolioTrackerComponent implements OnInit {
   }
 
   isFirstMonth(row: PortfolioRow): boolean {
-    return row.year === 2025 && row.month === 1;
+    return row.year === this.startYear && row.month === 1;
   }
 
   clearRowData(row: PortfolioRow): void {

@@ -681,13 +681,19 @@ export class RecommendationsComponent implements OnInit {
     // Use stored outcome from the evaluate-picks cron
     if (pick.outcome === 'hit-target') return 'hit-target';
     if (pick.outcome === 'hit-sl') return 'hit-sl';
-    if (pick.outcome === 'no-trigger') return 'hit-sl'; // no-trigger = didn't work out
+    // exit-at-close: determine by actual P&L
+    if (pick.outcome === 'exit-at-close') {
+      return (pick.pnl_percent != null && pick.pnl_percent > 0) ? 'hit-target' : 'hit-sl';
+    }
+    if (pick.outcome === 'no-trigger') return 'pending'; // no-trigger = trade never activated
 
-    // Not yet evaluated (cron hasn't run yet for this pick)
+    // Not yet evaluated
     return 'pending';
   }
 
   getOutcomeLabel(pick: DailyPick): string {
+    if (pick.outcome === 'exit-at-close') return 'Exit at Close';
+    if (pick.outcome === 'no-trigger') return 'No Trigger';
     const o = this.getOutcome(pick);
     if (o === 'hit-target') return 'Hit Target';
     if (o === 'hit-sl') return 'Stopped Out';

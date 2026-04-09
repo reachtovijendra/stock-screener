@@ -594,8 +594,8 @@ export function fullScore(input: FullScoreInput): FullScoreResult {
     : round2(prevDayHigh);
 
   const buyPrice = round2(entryTrigger);
-  const stopLoss = round2(buyPrice - 1.0 * atr);   // 1.0 ATR stop (V3/V4 backtested)
-  const sellPrice = round2(buyPrice + 2.0 * atr);   // 2.0 ATR target (let winners run)
+  const stopLoss = round2(buyPrice - 1.0 * atr);   // 1.0 ATR stop
+  const sellPrice = round2(buyPrice + 1.0 * atr);   // 1.0 ATR target (achievable in single day)
   const risk = buyPrice - stopLoss;
   const reward = sellPrice - buyPrice;
   const rewardRiskRatio = risk > 0 ? round2(reward / risk) : 0;

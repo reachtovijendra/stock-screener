@@ -41,6 +41,7 @@ export class WatchlistService {
     const { data, error } = await this.db
       .from('watchlists')
       .select('*, watchlist_items(count)')
+      .order('sort_order', { ascending: true })
       .order('created_at', { ascending: true });
 
     if (!error && data) {
@@ -140,6 +141,12 @@ export class WatchlistService {
       }));
     }
     return [];
+  }
+
+  async saveOrder(order: { id: string; sort_order: number }[]): Promise<void> {
+    for (const item of order) {
+      await this.db.from('watchlists').update({ sort_order: item.sort_order }).eq('id', item.id);
+    }
   }
 
   selectWatchlist(wl: Watchlist): void {

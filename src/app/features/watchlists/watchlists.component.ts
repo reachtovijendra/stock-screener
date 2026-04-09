@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal, computed } from '@angular/core';
+import { Component, inject, OnInit, signal, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
@@ -56,10 +56,18 @@ import { environment } from '../../../environments/environment';
         <!-- Watchlist sidebar -->
         <div class="wl-sidebar">
           <div
-            *ngFor="let wl of wlService.watchlists()"
+            *ngFor="let wl of wlService.watchlists(); let i = index"
             class="wl-item"
             [class.active]="wlService.selectedWatchlist()?.id === wl.id"
+            [class.dragging]="dragIndex === i"
+            [class.drag-over]="dragOverIndex === i"
+            draggable="true"
+            (dragstart)="onDragStart(i, $event)"
+            (dragover)="onDragOver(i, $event)"
+            (drop)="onDrop(i, $event)"
+            (dragend)="onDragEnd()"
             (click)="wlService.selectWatchlist(wl)">
+            <div class="wl-drag-handle"><i class="pi pi-bars"></i></div>
             <div class="wl-info">
               <span class="wl-name" *ngIf="editingId !== wl.id">{{ wl.name }}</span>
               <input
@@ -271,7 +279,7 @@ import { environment } from '../../../environments/environment';
     }
 
     .wl-sidebar {
-      width: 220px;
+      width: 260px;
       flex-shrink: 0;
       background: var(--surface-card);
       border: 1px solid var(--surface-border);
@@ -283,7 +291,7 @@ import { environment } from '../../../environments/environment';
     .wl-item {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 8px;
       padding: 10px 12px;
       border-radius: 8px;
       cursor: pointer;
@@ -293,7 +301,21 @@ import { environment } from '../../../environments/environment';
     .wl-item:hover { background: var(--surface-hover); }
     .wl-item.active { background: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.2); }
 
-    .wl-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .wl-drag-handle {
+      color: #475569;
+      cursor: grab;
+      padding: 2px;
+      font-size: 11px;
+      opacity: 0.4;
+      transition: opacity 0.15s;
+    }
+    .wl-item:hover .wl-drag-handle { opacity: 1; }
+    .wl-drag-handle:active { cursor: grabbing; }
+
+    .wl-item.dragging { opacity: 0.4; }
+    .wl-item.drag-over { border-top: 2px solid #3b82f6; }
+
+    .wl-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
     .wl-name { font-size: 13px; font-weight: 600; color: var(--text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wl-count { font-size: 11px; color: var(--text-color-secondary); }
 
@@ -421,7 +443,7 @@ import { environment } from '../../../environments/environment';
     .wl-table table { table-layout: fixed; }
 
     .col-ticker  { width: 160px; text-align: left; padding-left: 16px !important; }
-    .col-company { text-align: left; padding-left: 60px !important; padding-right: 32px !important; }
+    .col-company { text-align: left; padding-left: 20px !important; max-width: 200px; }
     .col-added   { width: 105px; text-align: center; padding-left: 16px !important; }
     .col-days    { width: 130px; text-align: center; }
     .col-cost    { width: 110px; text-align: right; padding-left: 16px !important; }
@@ -678,6 +700,10 @@ export class WatchlistsComponent implements OnInit {
   editingName = '';
   today = new Date();
 
+  // Drag-and-drop reorder
+  dragIndex: number | null = null;
+  dragOverIndex: number | null = null;
+
   // Stock search
   searchQuery: any = '';
   searchResults = signal<any[]>([]);
@@ -696,10 +722,19 @@ export class WatchlistsComponent implements OnInit {
 
   private currentPrices = signal<Record<string, number>>({});
 
-  ngOnInit() {
-    this.wlService.loadWatchlists().then(() => {
-      this.fetchPrices();
+  constructor() {
+    // Re-fetch prices whenever items change (e.g. switching watchlists)
+    effect(() => {
+      const items = this.wlService.items();
+      if (items.length > 0) {
+        this.currentPrices.set({}); // clear stale prices
+        this.fetchPrices();
+      }
     });
+  }
+
+  ngOnInit() {
+    this.wlService.loadWatchlists();
   }
 
   async createWatchlist() {
@@ -726,6 +761,43 @@ export class WatchlistsComponent implements OnInit {
     if (confirm(`Delete "${wl.name}" and all its stocks?`)) {
       await this.wlService.deleteWatchlist(wl.id);
     }
+  }
+
+  // --- Drag-and-drop reorder ---
+
+  onDragStart(index: number, event: DragEvent) {
+    this.dragIndex = index;
+    event.dataTransfer?.setData('text/plain', String(index));
+    if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move';
+  }
+
+  onDragOver(index: number, event: DragEvent) {
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+    this.dragOverIndex = index;
+  }
+
+  onDrop(index: number, event: DragEvent) {
+    event.preventDefault();
+    if (this.dragIndex === null || this.dragIndex === index) return;
+
+    const watchlists = [...this.wlService.watchlists()];
+    const [moved] = watchlists.splice(this.dragIndex, 1);
+    watchlists.splice(index, 0, moved);
+
+    // Update local state immediately for snappy UI
+    this.wlService.watchlists.set(watchlists);
+
+    // Persist new order to Supabase
+    this.wlService.saveOrder(watchlists.map((w, i) => ({ id: w.id, sort_order: i })));
+
+    this.dragIndex = null;
+    this.dragOverIndex = null;
+  }
+
+  onDragEnd() {
+    this.dragIndex = null;
+    this.dragOverIndex = null;
   }
 
   async removeItem(item: WatchlistItem) {

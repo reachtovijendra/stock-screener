@@ -97,17 +97,25 @@ interface MonthOption {
           <div class="summary-value">{{ totalPicks() }}</div>
           <div class="summary-label">Total Picks</div>
         </div>
-        <div class="summary-card high">
-          <div class="summary-value">{{ totalHigh() }}</div>
-          <div class="summary-label">High Priority</div>
+        <div class="summary-card hit-target">
+          <div class="summary-value">{{ totalTargetHit() }}</div>
+          <div class="summary-label">Target Hit</div>
         </div>
         <div class="summary-card hit-target">
-          <div class="summary-value">{{ totalHitTarget() }}</div>
-          <div class="summary-label">Hit Target</div>
+          <div class="summary-value">{{ totalClosedProfitable() }}</div>
+          <div class="summary-label">Closed Profitable</div>
         </div>
         <div class="summary-card hit-sl">
-          <div class="summary-value">{{ totalHitStopLoss() }}</div>
-          <div class="summary-label">Hit Stop Loss</div>
+          <div class="summary-value">{{ totalClosedAtLoss() }}</div>
+          <div class="summary-label">Closed at Loss</div>
+        </div>
+        <div class="summary-card hit-sl">
+          <div class="summary-value">{{ totalStoppedOut() }}</div>
+          <div class="summary-label">Stopped Out</div>
+        </div>
+        <div class="summary-card pending">
+          <div class="summary-value">{{ totalNotTraded() }}</div>
+          <div class="summary-label">Not Traded</div>
         </div>
         <div class="summary-card pending">
           <div class="summary-value">{{ totalPending() }}</div>
@@ -142,7 +150,7 @@ interface MonthOption {
             </div>
             <div class="date-stats">
               <span class="stat-badge hit-target" *ngIf="group.hitTargetCount > 0">
-                <i class="pi pi-check-circle"></i> {{ group.hitTargetCount }} hit target
+                <i class="pi pi-check-circle"></i> {{ group.hitTargetCount }} profitable
               </span>
               <span class="stat-badge hit-sl" *ngIf="group.hitStopLossCount > 0">
                 <i class="pi pi-times-circle"></i> {{ group.hitStopLossCount }} stopped out
@@ -588,8 +596,9 @@ export class RecommendationsComponent implements OnInit {
     }
 
     return Array.from(grouped.entries()).map(([date, picks]) => {
-      const hitTarget = picks.filter(p => this.getOutcome(p) === 'hit-target').length;
-      const hitSL = picks.filter(p => this.getOutcome(p) === 'hit-sl').length;
+      const wins = picks.filter(p => p.outcome === 'hit-target' || (p.outcome === 'exit-at-close' && p.pnl_percent != null && p.pnl_percent > 0)).length;
+      const losses = picks.filter(p => p.outcome === 'hit-sl' || (p.outcome === 'exit-at-close' && (p.pnl_percent == null || p.pnl_percent <= 0))).length;
+      const today = new Date().toISOString().slice(0, 10);
       return {
         date,
         displayDate: new Date(date + 'T00:00:00').toLocaleDateString('en-US', {
@@ -598,21 +607,28 @@ export class RecommendationsComponent implements OnInit {
         picks,
         highCount: picks.filter(p => p.priority === 'High').length,
         mediumCount: picks.filter(p => p.priority === 'Medium').length,
-        hitTargetCount: hitTarget,
-        hitStopLossCount: hitSL,
-        pendingCount: picks.length - hitTarget - hitSL,
+        hitTargetCount: wins,
+        hitStopLossCount: losses,
+        pendingCount: picks.filter(p => date >= today || p.outcome == null).length,
       };
     });
   });
 
   totalPicks = computed(() => this.picks().length);
-  totalHigh = computed(() => this.picks().filter(p => p.priority === 'High').length);
-  totalHitTarget = computed(() => this.picks().filter(p => this.getOutcome(p) === 'hit-target').length);
-  totalHitStopLoss = computed(() => this.picks().filter(p => this.getOutcome(p) === 'hit-sl').length);
-  totalPending = computed(() => this.picks().filter(p => this.getOutcome(p) === 'pending').length);
+  totalTargetHit = computed(() => this.picks().filter(p => p.outcome === 'hit-target').length);
+  totalClosedProfitable = computed(() => this.picks().filter(p => p.outcome === 'exit-at-close' && p.pnl_percent != null && p.pnl_percent > 0).length);
+  totalClosedAtLoss = computed(() => this.picks().filter(p => p.outcome === 'exit-at-close' && (p.pnl_percent == null || p.pnl_percent <= 0)).length);
+  totalStoppedOut = computed(() => this.picks().filter(p => p.outcome === 'hit-sl').length);
+  totalNotTraded = computed(() => this.picks().filter(p => p.outcome === 'no-trigger').length);
+  totalPending = computed(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return this.picks().filter(p => p.pick_date >= today || p.outcome == null).length;
+  });
   winRate = computed(() => {
-    const resolved = this.totalHitTarget() + this.totalHitStopLoss();
-    return resolved > 0 ? (this.totalHitTarget() / resolved) * 100 : -1;
+    const wins = this.totalTargetHit() + this.totalClosedProfitable();
+    const losses = this.totalStoppedOut() + this.totalClosedAtLoss();
+    const resolved = wins + losses;
+    return resolved > 0 ? (wins / resolved) * 100 : -1;
   });
 
   currencySymbol = computed(() => this.marketService.marketInfo().currencySymbol);
@@ -692,11 +708,12 @@ export class RecommendationsComponent implements OnInit {
   }
 
   getOutcomeLabel(pick: DailyPick): string {
-    if (pick.outcome === 'exit-at-close') return 'Exit at Close';
-    if (pick.outcome === 'no-trigger') return 'No Trigger';
-    const o = this.getOutcome(pick);
-    if (o === 'hit-target') return 'Hit Target';
-    if (o === 'hit-sl') return 'Stopped Out';
+    if (pick.outcome === 'hit-target') return 'Target Hit';
+    if (pick.outcome === 'hit-sl') return 'Stopped Out';
+    if (pick.outcome === 'exit-at-close') {
+      return (pick.pnl_percent != null && pick.pnl_percent > 0) ? 'Closed Profitable' : 'Closed at Loss';
+    }
+    if (pick.outcome === 'no-trigger') return 'Not Traded';
     return 'Pending';
   }
 

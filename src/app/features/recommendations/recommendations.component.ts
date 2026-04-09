@@ -196,8 +196,8 @@ interface MonthOption {
                   </td>
                   <td class="col-targets">
                     <div class="target buy">Buy: {{ currencySymbol() }}{{ pick.buy_price | number:'1.2-2' }}</div>
-                    <div class="target sell">Sell: {{ currencySymbol() }}{{ pick.sell_price | number:'1.2-2' }}</div>
-                    <div class="target stop">Stop: {{ currencySymbol() }}{{ pick.stop_loss | number:'1.2-2' }}</div>
+                    <div class="target sell">Sell: {{ currencySymbol() }}{{ pick.sell_price | number:'1.2-2' }} <span class="target-pct positive">(+{{ getTargetPct(pick) | number:'1.1-1' }}%)</span></div>
+                    <div class="target stop">Stop: {{ currencySymbol() }}{{ pick.stop_loss | number:'1.2-2' }} <span class="target-pct negative">(-{{ getStopPct(pick) | number:'1.1-1' }}%)</span></div>
                   </td>
                   <td class="col-outcome">
                     <span class="outcome-badge" [ngClass]="getOutcome(pick)">
@@ -396,7 +396,15 @@ interface MonthOption {
       width: 100%;
       border-collapse: collapse;
       font-size: 0.82rem;
+      table-layout: fixed;
     }
+
+    .col-score    { width: 60px; }
+    .col-stock    { width: 180px; }
+    .col-price    { width: 110px; }
+    .col-targets  { width: 160px; }
+    .col-outcome  { width: 140px; text-align: center; }
+    .col-signals  { }
 
     .picks-table thead th {
       padding: 0.6rem 0.6rem;
@@ -498,6 +506,9 @@ interface MonthOption {
     .target.buy { color: var(--green-400, #4ade80); }
     .target.sell { color: var(--red-400, #f87171); }
     .target.stop { color: var(--orange-400, #fbbf24); }
+    .target-pct { font-size: 0.7rem; opacity: 0.7; }
+    .target-pct.positive { color: var(--green-400, #4ade80); }
+    .target-pct.negative { color: var(--red-400, #f87171); }
 
     /* Outcome */
     .outcome-badge {
@@ -734,6 +745,14 @@ export class RecommendationsComponent implements OnInit {
       return ((pick.sell_price - pick.buy_price) / pick.buy_price) * 100;
     }
     return ((pick.stop_loss - pick.buy_price) / pick.buy_price) * 100;
+  }
+
+  getTargetPct(pick: DailyPick): number {
+    return pick.buy_price > 0 ? ((pick.sell_price - pick.buy_price) / pick.buy_price) * 100 : 0;
+  }
+
+  getStopPct(pick: DailyPick): number {
+    return pick.buy_price > 0 ? ((pick.buy_price - pick.stop_loss) / pick.buy_price) * 100 : 0;
   }
 
   formatSymbol(symbol: string): string {

@@ -170,7 +170,27 @@
     </div>
   </div>
 
-  <!-- Actual Performance Cards (below subtitle) -->
+  <!-- Summary Cards (config overview) -->
+  <div class="summary-strip">
+    <div class="summary-card">
+      <div class="summary-label">Starting Investment</div>
+      <div class="summary-value mono">{{ getActualInitialContribution() }}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Monthly Addition</div>
+      <div class="summary-value mono">${{ formatCurrency(monthlyAddition ?? 0) }}</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Target Monthly Return</div>
+      <div class="summary-value mono">{{ expectedMonthlyReturn ?? 0 }}%</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Projection</div>
+      <div class="summary-value mono">{{ startYear }} &ndash; {{ startYear + 9 }}</div>
+    </div>
+  </div>
+
+  <!-- Actual Performance Cards -->
   @if (getFilledRowsCount() > 0) {
     <div class="summary-strip performance-strip">
       <div class="summary-card perf-card">
@@ -203,26 +223,6 @@
       </div>
     </div>
   }
-
-  <!-- Summary Cards -->
-  <div class="summary-strip">
-    <div class="summary-card">
-      <div class="summary-label">Starting Investment</div>
-      <div class="summary-value mono">{{ getActualInitialContribution() }}</div>
-    </div>
-    <div class="summary-card">
-      <div class="summary-label">Monthly Addition</div>
-      <div class="summary-value mono">${{ formatCurrency(monthlyAddition ?? 0) }}</div>
-    </div>
-    <div class="summary-card">
-      <div class="summary-label">Target Monthly Return</div>
-      <div class="summary-value mono">{{ expectedMonthlyReturn ?? 0 }}%</div>
-    </div>
-    <div class="summary-card">
-      <div class="summary-label">Projection</div>
-      <div class="summary-value mono">{{ startYear }} &ndash; {{ startYear + 9 }}</div>
-    </div>
-  </div>
 
   <!-- Configuration Bar -->
   <div class="config-bar">
@@ -368,9 +368,9 @@
                (click)="clearRowData(row)"></i>
           </td>
 
-          <!-- Added -->
+          <!-- Added (neutral) -->
           <td class="val-cell target-cell mono">{{ formatCurrency(row.added) }}</td>
-          <td class="val-cell actual-cell">
+          <td class="val-cell actual-cell neutral">
             <p-inputNumber
               [(ngModel)]="row.actualAdded"
               mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
@@ -380,13 +380,13 @@
             </p-inputNumber>
           </td>
 
-          <!-- Start of Month -->
+          <!-- Start of Month (neutral) -->
           <td class="val-cell target-cell mono">{{ formatCurrency(row.principal) }}</td>
-          <td class="val-cell actual-cell mono" [ngClass]="getStartOfMonthClass(row)">{{ getStartOfMonthDisplay(row) }}</td>
+          <td class="val-cell actual-cell neutral mono" [ngClass]="getStartOfMonthClass(row)">{{ getStartOfMonthDisplay(row) }}</td>
 
-          <!-- End of Month -->
+          <!-- End of Month (neutral) -->
           <td class="val-cell target-cell mono">{{ formatCurrency(row.total) }}</td>
-          <td class="val-cell actual-cell">
+          <td class="val-cell actual-cell neutral">
             <p-inputNumber
               [(ngModel)]="row.actualTotal"
               mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
@@ -396,21 +396,21 @@
             </p-inputNumber>
           </td>
 
-          <!-- Monthly Return % -->
+          <!-- Monthly Return % (performance) -->
           <td class="val-cell target-cell mono center">{{ row.return_percent }}%</td>
-          <td class="val-cell actual-cell mono center" [ngClass]="getMonthlyReturnClass(row)">{{ getActualMonthlyReturn(row) }}</td>
+          <td class="val-cell actual-cell performance mono center" [ngClass]="getMonthlyReturnClass(row)">{{ getActualMonthlyReturn(row) }}</td>
 
-          <!-- Total Invested -->
+          <!-- Total Invested (neutral) -->
           <td class="val-cell target-cell mono">{{ formatCurrency(row.investment) }}</td>
-          <td class="val-cell actual-cell mono" [ngClass]="getActualPrincipalClass(row)">{{ getActualPrincipalDisplay(row) }}</td>
+          <td class="val-cell actual-cell neutral mono" [ngClass]="getActualPrincipalClass(row)">{{ getActualPrincipalDisplay(row) }}</td>
 
-          <!-- Profit / Loss -->
+          <!-- Profit / Loss (performance) -->
           <td class="val-cell target-cell mono">{{ formatCurrency(row.profit) }}</td>
-          <td class="val-cell actual-cell mono" [ngClass]="getProfitClass(row)">{{ getActualProfit(row) }}</td>
+          <td class="val-cell actual-cell performance mono" [ngClass]="getProfitClass(row)">{{ getActualProfit(row) }}</td>
 
-          <!-- Overall Return % -->
+          <!-- Overall Return % (performance) -->
           <td class="val-cell target-cell mono center">{{ getTargetOverallReturn(row) }}</td>
-          <td class="val-cell actual-cell mono center" [ngClass]="getProfitClass(row)">{{ getActualReturnPercent(row) }}</td>
+          <td class="val-cell actual-cell performance mono center" [ngClass]="getProfitClass(row)">{{ getActualReturnPercent(row) }}</td>
         </tr>
       </ng-template>
     </p-table>

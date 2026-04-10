@@ -635,7 +635,7 @@
       font-family: 'JetBrains Mono', monospace;
       border: 1px solid transparent;
       background: transparent;
-      color: var(--stock-positive, #10b981);
+      color: #e2e8f0;
       border-radius: 4px;
       transition: all 0.15s;
 
@@ -787,7 +787,7 @@
       background: transparent !important;
       border: none !important;
       box-shadow: none !important;
-      color: #34d399;
+      color: #e2e8f0;
       font-weight: 500;
     }
 
@@ -806,26 +806,26 @@
 }
 
 .val-cell.actual-cell {
-
-  &.has-data {
-    color: var(--stock-positive, #10b981);
+  // Neutral values: white/light — just facts (Added, Start/End of Month, Total Invested)
+  &.neutral {
+    color: #e2e8f0;
     font-weight: 500;
+
+    &.has-data { color: #e2e8f0; }
+    &.no-data { color: var(--text-color-secondary); opacity: 0.3; }
   }
 
-  &.no-data {
-    color: var(--text-color-secondary);
-    opacity: 0.3;
+  // Performance values: green/red based on direction (Monthly Return, P/L, Overall Return)
+  &.performance {
+    &.profit-positive { color: #10b981; font-weight: 600; }
+    &.profit-negative { color: #ef4444; font-weight: 600; }
+    &.has-data { color: #e2e8f0; font-weight: 500; }
+    &.no-data { color: var(--text-color-secondary); opacity: 0.3; }
   }
 
-  &.profit-positive {
-    color: var(--stock-positive, #10b981);
-    font-weight: 600;
-  }
-
-  &.profit-negative {
-    color: var(--stock-negative, #ef4444);
-    font-weight: 600;
-  }
+  // Fallback for cells without neutral/performance class
+  &.has-data { color: #e2e8f0; font-weight: 500; }
+  &.no-data { color: var(--text-color-secondary); opacity: 0.3; }
 }
 
 .val-cell.center {

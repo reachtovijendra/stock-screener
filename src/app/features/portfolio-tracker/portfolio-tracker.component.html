@@ -347,7 +347,16 @@
           </th>
           <th class="col-dual header-dual">
             <div class="dual-header">
-              <span>Return %</span>
+              <span>Monthly Return %</span>
+              <div class="sub-headers">
+                <span class="target-label">Target</span>
+                <span class="actual-label">Actual</span>
+              </div>
+            </div>
+          </th>
+          <th class="col-dual header-dual">
+            <div class="dual-header">
+              <span>Cumulative Return %</span>
               <div class="sub-headers">
                 <span class="target-label">Target</span>
                 <span class="actual-label">Actual</span>
@@ -435,7 +444,17 @@
             </div>
           </td>
 
-          <!-- Return %: Target / Actual -->
+          <!-- Monthly Return %: Target / Actual -->
+          <td class="dual-cell">
+            <div class="dual-value center-values">
+              <span class="target-value mono center">{{ row.return_percent }}%</span>
+              <span class="actual-value mono center" [ngClass]="getMonthlyReturnClass(row)">
+                {{ getActualMonthlyReturn(row) }}
+              </span>
+            </div>
+          </td>
+
+          <!-- Cumulative Return %: Target / Actual -->
           <td class="dual-cell">
             <div class="dual-value center-values">
               <span class="target-value mono center">{{ row.return_percent }}%</span>

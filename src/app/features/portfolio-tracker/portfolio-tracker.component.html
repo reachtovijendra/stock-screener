@@ -311,15 +311,6 @@
           <th class="col-month">Month</th>
           <th class="col-dual header-dual">
             <div class="dual-header">
-              <span>Contributions</span>
-              <div class="sub-headers">
-                <span class="target-label">Target</span>
-                <span class="actual-label">Actual</span>
-              </div>
-            </div>
-          </th>
-          <th class="col-dual header-dual">
-            <div class="dual-header">
               <span>Added</span>
               <div class="sub-headers">
                 <span class="target-label">Target</span>
@@ -329,7 +320,7 @@
           </th>
           <th class="col-dual header-dual">
             <div class="dual-header">
-              <span>Principal</span>
+              <span>Start of Month</span>
               <div class="sub-headers">
                 <span class="target-label">Target</span>
                 <span class="actual-label">Actual</span>
@@ -338,7 +329,7 @@
           </th>
           <th class="col-dual header-dual">
             <div class="dual-header">
-              <span>Total Value EOM</span>
+              <span>End of Month</span>
               <div class="sub-headers">
                 <span class="target-label">Target</span>
                 <span class="actual-label">Actual</span>
@@ -356,7 +347,7 @@
           </th>
           <th class="col-dual header-dual">
             <div class="dual-header">
-              <span>Cumulative Return %</span>
+              <span>Total Invested</span>
               <div class="sub-headers">
                 <span class="target-label">Target</span>
                 <span class="actual-label">Actual</span>
@@ -365,15 +356,22 @@
           </th>
           <th class="col-dual header-dual">
             <div class="dual-header">
-              <span>Profit</span>
+              <span>Profit / Loss</span>
               <div class="sub-headers">
                 <span class="target-label">Target</span>
                 <span class="actual-label">Actual</span>
               </div>
             </div>
           </th>
-          <th class="col-overall">Overall Profit</th>
-          <th class="col-variance">Variance</th>
+          <th class="col-dual header-dual">
+            <div class="dual-header">
+              <span>Overall Return %</span>
+              <div class="sub-headers">
+                <span class="target-label">Target</span>
+                <span class="actual-label">Actual</span>
+              </div>
+            </div>
+          </th>
         </tr>
       </ng-template>
 
@@ -385,21 +383,6 @@
             <i class="pi pi-times-circle clear-row-icon"
                title="Clear row data"
                (click)="clearRowData(row)"></i>
-          </td>
-
-          <!-- Contributions: Target / Actual -->
-          <td class="dual-cell">
-            <div class="dual-value">
-              <span class="target-value mono">{{ formatCurrency(row.investment) }}</span>
-              <div class="actual-input-wrapper">
-                <p-inputNumber
-                  [(ngModel)]="row.actualInvestment"
-                  mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
-                  [allowEmpty]="true" [disabled]="true" placeholder="-"
-                  styleClass="actual-input disabled-input">
-                </p-inputNumber>
-              </div>
-            </div>
           </td>
 
           <!-- Added: Target / Actual -->
@@ -418,17 +401,17 @@
             </div>
           </td>
 
-          <!-- Principal: Target / Actual -->
+          <!-- Start of Month: Target / Actual -->
           <td class="dual-cell">
             <div class="dual-value">
               <span class="target-value mono">{{ formatCurrency(row.principal) }}</span>
-              <span class="actual-value mono" [ngClass]="getActualPrincipalClass(row)">
-                {{ getActualPrincipalDisplay(row) }}
+              <span class="actual-value mono" [ngClass]="getStartOfMonthClass(row)">
+                {{ getStartOfMonthDisplay(row) }}
               </span>
             </div>
           </td>
 
-          <!-- Total Value EOM: Target / Actual -->
+          <!-- End of Month: Target / Actual -->
           <td class="dual-cell">
             <div class="dual-value">
               <span class="target-value mono">{{ formatCurrency(row.total) }}</span>
@@ -454,17 +437,17 @@
             </div>
           </td>
 
-          <!-- Cumulative Return %: Target / Actual -->
+          <!-- Total Invested: Target / Actual -->
           <td class="dual-cell">
-            <div class="dual-value center-values">
-              <span class="target-value mono center">{{ row.return_percent }}%</span>
-              <span class="actual-value mono center" [ngClass]="getProfitClass(row)">
-                {{ getActualReturnPercent(row) }}
+            <div class="dual-value">
+              <span class="target-value mono">{{ formatCurrency(row.investment) }}</span>
+              <span class="actual-value mono" [ngClass]="getActualPrincipalClass(row)">
+                {{ getActualPrincipalDisplay(row) }}
               </span>
             </div>
           </td>
 
-          <!-- Profit: Target / Actual -->
+          <!-- Profit / Loss: Target / Actual -->
           <td class="dual-cell">
             <div class="dual-value">
               <span class="target-value mono">{{ formatCurrency(row.profit) }}</span>
@@ -474,20 +457,14 @@
             </div>
           </td>
 
-          <!-- Overall Profit -->
-          <td class="col-overall mono" [ngClass]="getOverallProfitClass(row)">
-            <span *ngIf="row.actualTotal !== null && row.actualInvestment !== null && row.actualAdded !== null">
-              {{ getOverallProfit(row) > 0 ? '+' : '' }}{{ formatCurrency(getOverallProfit(row)) }}
-            </span>
-            <span class="no-data" *ngIf="row.actualTotal === null || row.actualInvestment === null || row.actualAdded === null">&mdash;</span>
-          </td>
-
-          <!-- Variance -->
-          <td class="col-variance mono" [ngClass]="getVarianceClass(row.actualTotal, row.total)">
-            <span *ngIf="row.actualTotal !== null">
-              {{ getVariance(row.actualTotal, row.total) > 0 ? '+' : '' }}{{ formatCurrency(getVariance(row.actualTotal, row.total)) }}
-            </span>
-            <span class="no-data" *ngIf="row.actualTotal === null">&mdash;</span>
+          <!-- Overall Return %: Target / Actual -->
+          <td class="dual-cell">
+            <div class="dual-value center-values">
+              <span class="target-value mono center">{{ getTargetOverallReturn(row) }}</span>
+              <span class="actual-value mono center" [ngClass]="getProfitClass(row)">
+                {{ getActualReturnPercent(row) }}
+              </span>
+            </div>
           </td>
         </tr>
       </ng-template>

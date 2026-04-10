@@ -576,44 +576,53 @@ export class PortfolioTrackerComponent implements OnInit {
     return this.formatCurrency(profit);
   }
 
+  /**
+   * Start of Month = previous month's actual total + this month's actual added.
+   * For first month: actual initial investment + actual added.
+   */
+  getStartOfMonth(row: PortfolioRow): number | null {
+    const rowIndex = this.portfolioData.findIndex(r => r.year === row.year && r.month === row.month);
+    if (rowIndex === -1) return null;
+
+    if (rowIndex === 0) {
+      if (this.portfolioData[0].actualInvestment === null || row.actualAdded === null) return null;
+      return this.portfolioData[0].actualInvestment + row.actualAdded;
+    } else {
+      const prevRow = this.portfolioData[rowIndex - 1];
+      if (prevRow.actualTotal === null || row.actualAdded === null) return null;
+      return prevRow.actualTotal + row.actualAdded;
+    }
+  }
+
+  getStartOfMonthDisplay(row: PortfolioRow): string {
+    const som = this.getStartOfMonth(row);
+    if (som === null) return '-';
+    return this.formatCurrency(som);
+  }
+
+  getStartOfMonthClass(row: PortfolioRow): string {
+    const som = this.getStartOfMonth(row);
+    return som === null ? 'no-data' : 'has-data';
+  }
+
+  getTargetOverallReturn(row: PortfolioRow): string {
+    if (row.investment === 0) return '-';
+    const returnPct = ((row.total - row.investment) / row.investment) * 100;
+    return returnPct.toFixed(1) + '%';
+  }
+
   getActualMonthlyReturn(row: PortfolioRow): string {
     if (row.actualTotal === null) return '-';
-    const rowIndex = this.portfolioData.findIndex(r => r.year === row.year && r.month === row.month);
-    if (rowIndex === -1) return '-';
-
-    let startOfMonth: number;
-    if (rowIndex === 0) {
-      // First month: start = actual initial investment + actual added
-      if (this.portfolioData[0].actualInvestment === null || row.actualAdded === null) return '-';
-      startOfMonth = this.portfolioData[0].actualInvestment + row.actualAdded;
-    } else {
-      // Other months: start = previous month's actual total + this month's actual added
-      const prevRow = this.portfolioData[rowIndex - 1];
-      if (prevRow.actualTotal === null || row.actualAdded === null) return '-';
-      startOfMonth = prevRow.actualTotal + row.actualAdded;
-    }
-
-    if (startOfMonth === 0) return '-';
+    const startOfMonth = this.getStartOfMonth(row);
+    if (startOfMonth === null || startOfMonth === 0) return '-';
     const monthlyReturn = ((row.actualTotal - startOfMonth) / startOfMonth) * 100;
     return (monthlyReturn >= 0 ? '+' : '') + monthlyReturn.toFixed(1) + '%';
   }
 
   getMonthlyReturnClass(row: PortfolioRow): string {
     if (row.actualTotal === null) return 'no-data';
-    const rowIndex = this.portfolioData.findIndex(r => r.year === row.year && r.month === row.month);
-    if (rowIndex === -1) return 'no-data';
-
-    let startOfMonth: number;
-    if (rowIndex === 0) {
-      if (this.portfolioData[0].actualInvestment === null || row.actualAdded === null) return 'no-data';
-      startOfMonth = this.portfolioData[0].actualInvestment + row.actualAdded;
-    } else {
-      const prevRow = this.portfolioData[rowIndex - 1];
-      if (prevRow.actualTotal === null || row.actualAdded === null) return 'no-data';
-      startOfMonth = prevRow.actualTotal + row.actualAdded;
-    }
-
-    if (startOfMonth === 0) return 'no-data';
+    const startOfMonth = this.getStartOfMonth(row);
+    if (startOfMonth === null || startOfMonth === 0) return 'no-data';
     const monthlyReturn = ((row.actualTotal - startOfMonth) / startOfMonth) * 100;
     if (monthlyReturn > 0) return 'profit-positive';
     if (monthlyReturn < 0) return 'profit-negative';

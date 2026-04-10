@@ -87,6 +87,15 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
             <div class="stock-identity">
               <div class="symbol-row">
                 <h1>{{ s.symbol }}</h1>
+                <a *ngIf="s.market === 'US'"
+                   class="robinhood-link"
+                   [href]="'https://robinhood.com/stocks/' + s.symbol + '?source=search'"
+                   target="_blank"
+                   rel="noopener noreferrer"
+                   pTooltip="Trade on Robinhood"
+                   tooltipPosition="right">
+                  <img src="robinhood.png" alt="Robinhood" class="robinhood-icon" />
+                </a>
               </div>
               <span class="stock-name">{{ s.name }}</span>
             </div>
@@ -539,6 +548,27 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       margin: 0;
       font-size: 1.75rem;
       font-weight: 700;
+    }
+
+    .robinhood-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.2s;
+    }
+    .robinhood-link:hover {
+      transform: scale(1.1);
+      box-shadow: 0 0 10px rgba(192, 255, 0, 0.4);
+    }
+    .robinhood-icon {
+      width: 32px;
+      height: 32px;
+      object-fit: cover;
+      display: block;
     }
 
     .stock-name {
@@ -1008,7 +1038,7 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
 
     @media (max-width: 768px) {
       .stock-detail-container {
-        padding: 0.75rem 1rem;
+        padding: 0.75rem;
       }
       .header-top {
         flex-direction: column;
@@ -1018,7 +1048,8 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
         text-align: left;
       }
       .key-stats-grid {
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
       }
       .gauges-row {
         flex-wrap: wrap;
@@ -1026,6 +1057,20 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       .breakdown-grid {
         grid-template-columns: 1fr;
       }
+      .week-range-container { display: none; }
+      .wl-dropdown { right: auto; left: 0; }
+      .symbol-row h1 { font-size: 1.3rem; }
+    }
+
+    @media (max-width: 480px) {
+      .stock-detail-container { padding: 0.5rem; }
+      .key-stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .stat-item { padding: 0.4rem; }
+      .stat-label { font-size: 0.6rem; }
+      .stat-value { font-size: 0.75rem; }
+      .symbol-row h1 { font-size: 1.1rem; }
+      .stock-price .price { font-size: 1.3rem; }
+      .stock-price .change { font-size: 0.8rem; }
     }
   `]
 })

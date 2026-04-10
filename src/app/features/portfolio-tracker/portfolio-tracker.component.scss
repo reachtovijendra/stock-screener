@@ -2,10 +2,11 @@
 .portfolio-container {
   position: relative;
   padding: 1.25rem 1.5rem;
-  height: calc(100vh - 56px);
+  min-height: calc(100vh - 56px);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-x: auto;
+  overflow-y: auto;
   animation: fadeIn 0.3s ease-out;
 }
 
@@ -248,6 +249,7 @@
 // ── Summary Cards ───────────────────────────────────────
 .summary-strip {
   display: flex;
+  flex-wrap: wrap;
   gap: 0.6rem;
   margin-bottom: 0.75rem;
   flex-wrap: wrap;
@@ -359,6 +361,7 @@
 .config-bar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 1rem;
   padding: 0.6rem 1rem;
   background: var(--surface-card);
@@ -501,7 +504,10 @@
   flex: 1;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
-  min-height: 200px;
+
+  @media (min-width: 769px) {
+    min-height: 200px;
+  }
   border-radius: 8px;
   border: 1px solid var(--surface-border);
 
@@ -720,7 +726,6 @@
 
   .sub-headers {
     display: flex;
-    justify-content: space-around;
     font-size: 0.6rem;
     font-weight: 500;
     width: 100%;
@@ -728,13 +733,15 @@
 
     .target-label {
       flex: 1;
-      text-align: center;
+      text-align: right;
+      padding-right: 0.35rem;
       color: #60a5fa;
     }
 
     .actual-label {
       flex: 1;
-      text-align: center;
+      text-align: right;
+      padding-right: 0.1rem;
       color: #34d399;
     }
   }
@@ -927,6 +934,15 @@
 @media (max-width: 768px) {
   .portfolio-container {
     padding: 0.75rem;
+    height: auto;
+    min-height: auto;
+    max-width: 100vw;
+    overflow-x: hidden;
+  }
+
+  .table-container {
+    flex: none;
+    min-height: 0;
   }
 
   .page-header {
@@ -950,11 +966,46 @@
   }
 
   .config-bar {
-    gap: 0.75rem;
+    gap: 0.5rem 0.75rem;
     padding: 0.5rem 0.75rem;
+    flex-wrap: wrap;
+    flex-direction: column;
+    align-items: stretch;
   }
 
-  .config-group label { font-size: 0.65rem; }
+  .config-group {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+
+    label {
+      font-size: 0.65rem;
+      min-width: 120px;
+      text-align: right;
+      padding-right: 0.5rem;
+    }
+
+    ::ng-deep .config-input,
+    ::ng-deep .config-input-sm {
+      width: 95px !important;
+    }
+
+    .start-year-select {
+      width: 95px;
+    }
+  }
+
+  .year-chips-group {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+
+    label { text-align: left; }
+  }
+
+  .year-chips {
+    flex-wrap: wrap;
+  }
 
   ::ng-deep .p-datatable-wrapper {
     overflow-x: auto !important;

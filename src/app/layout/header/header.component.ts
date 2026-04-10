@@ -186,6 +186,8 @@ interface MarketIndex {
       left: 0;
       right: 0;
       z-index: 1000;
+      overflow-x: auto;
+      overflow-y: hidden;
     }
 
     .header-content {
@@ -239,8 +241,8 @@ interface MarketIndex {
     }
 
     .header-search {
-      flex: 0 0 auto;
-      min-width: 180px;
+      flex: 1;
+      min-width: 100px;
       max-width: 220px;
     }
 
@@ -576,6 +578,30 @@ interface MarketIndex {
       }
       .auth-label {
         display: none;
+      }
+      .brand-name {
+        display: none;
+      }
+      .header-left {
+        gap: 0.4rem;
+      }
+      .header-search {
+        min-width: 0;
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .app-header {
+        padding: 0 0.3rem;
+        overflow-x: hidden;
+      }
+      .market-toggle {
+        gap: 2px;
+      }
+      .market-btn {
+        width: 22px;
+        height: 22px;
       }
     }
   `]

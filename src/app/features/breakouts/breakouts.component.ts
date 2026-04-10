@@ -3063,12 +3063,12 @@ interface AlertCategory {
 
     @media (max-width: 768px) {
       .breakouts-container {
-        padding: 1rem;
+        padding: 0.75rem;
       }
 
       .page-header {
         flex-direction: column;
-        gap: 1rem;
+        gap: 0.75rem;
       }
 
       .category-header {
@@ -3084,6 +3084,11 @@ interface AlertCategory {
       .stocks-grid {
         grid-template-columns: 1fr;
       }
+    }
+
+    @media (max-width: 480px) {
+      .breakouts-container { padding: 0.5rem; }
+      .page-header h1 { font-size: 1.1rem; }
     }
   `]
 })

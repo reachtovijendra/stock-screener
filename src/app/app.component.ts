@@ -165,6 +165,7 @@ import { ThemeService } from './core/services';
       flex: 1;
       min-width: 0;
       overflow-x: hidden;
+      padding-bottom: 2rem;
     }
 
     @media (max-width: 768px) {
@@ -181,6 +182,24 @@ import { ThemeService } from './core/services';
       .nav-label {
         display: none;
       }
+
+      .page-content {
+        padding-bottom: 4rem;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .nav-sidebar {
+        width: 40px;
+      }
+
+      .nav-item {
+        width: 34px;
+        height: 34px;
+        font-size: 0.65rem;
+      }
+
+      .nav-item i { font-size: 0.85rem; }
     }
   `]
 })

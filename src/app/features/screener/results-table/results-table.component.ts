@@ -801,6 +801,16 @@ import { SortConfig } from '../../../core/models/filter.model';
         display: none;
       }
     }
+
+    @media (max-width: 768px) {
+      :host ::ng-deep .p-datatable-wrapper {
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+      }
+      :host ::ng-deep .p-datatable table {
+        min-width: 800px;
+      }
+    }
   `]
 })
 export class ResultsTableComponent {

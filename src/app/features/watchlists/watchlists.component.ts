@@ -683,8 +683,26 @@ import { environment } from '../../../environments/environment';
     }
 
     @media (max-width: 768px) {
+      .watchlists-page { padding: 0.75rem; }
+      .page-header { margin-bottom: 0.75rem; }
+      .page-header h1 { font-size: 1.1rem; }
       .content { flex-direction: column; }
-      .wl-sidebar { width: 100%; max-height: 200px; }
+      .wl-sidebar { width: 100%; max-height: 160px; overflow-y: auto; }
+      .wl-main { padding: 12px; }
+      .wl-table { overflow-x: auto; }
+      .wl-table table { min-width: 600px; }
+      .table-header { flex-direction: column; align-items: flex-start; gap: 8px; }
+      .add-stock-search { min-width: 100%; }
+      .today-date { font-size: 11px; }
+      .btn-create { font-size: 12px; padding: 6px 12px; }
+    }
+
+    @media (max-width: 480px) {
+      .watchlists-page { padding: 0.5rem; }
+      .wl-sidebar { max-height: 120px; }
+      .wl-item { padding: 8px 10px; }
+      .ticker { font-size: 12px; }
+      .company-name { font-size: 11px; max-width: 120px; }
     }
   `]
 })

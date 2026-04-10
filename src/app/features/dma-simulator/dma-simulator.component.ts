@@ -596,6 +596,17 @@ interface DmaCrossoverResponse {
       background: rgba(99, 102, 241, 0.08);
       color: var(--primary-color);
     }
+
+    @media (max-width: 768px) {
+      :host { padding: 0.75rem !important; }
+      .dma-container, .simulator-container { padding: 0.75rem !important; }
+      .crossover-table-wrap, .results-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      table { min-width: 500px; }
+    }
+
+    @media (max-width: 480px) {
+      :host { padding: 0.5rem !important; }
+    }
   `]
 })
 export class DmaSimulatorComponent {

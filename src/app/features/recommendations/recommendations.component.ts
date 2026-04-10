@@ -146,7 +146,8 @@ interface MonthOption {
           <div class="date-header">
             <div class="date-title">
               <span class="date-text">{{ group.displayDate }}</span>
-              <span class="pick-count">{{ group.picks.length }} pick{{ group.picks.length > 1 ? 's' : '' }}</span>
+              <span class="pick-count" *ngIf="group.picks.length > 0">{{ group.picks.length }} pick{{ group.picks.length > 1 ? 's' : '' }}</span>
+              <span class="pick-count no-picks" *ngIf="group.picks.length === 0">No recommendations</span>
             </div>
             <div class="date-stats">
               <span class="stat-badge hit-target" *ngIf="group.hitTargetCount > 0">
@@ -161,7 +162,7 @@ interface MonthOption {
             </div>
           </div>
 
-          <div class="picks-table-wrap">
+          <div class="picks-table-wrap" *ngIf="group.picks.length > 0">
             <table class="picks-table">
               <thead>
                 <tr>
@@ -180,9 +181,26 @@ interface MonthOption {
                       {{ pick.score }}
                     </span>
                   </td>
-                  <td class="col-stock" (click)="navigateToStock(pick.symbol)">
-                    <div class="stock-symbol">{{ formatSymbol(pick.symbol) }}</div>
-                    <div class="stock-name">{{ pick.name | slice:0:30 }}</div>
+                  <td class="col-stock">
+                    <div class="stock-symbol-row">
+                      <span class="stock-symbol" (click)="navigateToStock(pick.symbol)">{{ formatSymbol(pick.symbol) }}</span>
+                      <a class="rh-icon"
+                         *ngIf="pick.market === 'US'"
+                         [href]="'https://robinhood.com/stocks/' + formatSymbol(pick.symbol) + '?source=search'"
+                         target="_blank" rel="noopener noreferrer"
+                         (click)="$event.stopPropagation()"
+                         pTooltip="Trade on Robinhood" tooltipPosition="top">
+                        <img src="robinhood.png" alt="RH" />
+                      </a>
+                      <a class="detail-icon-link"
+                         [href]="'/stock/' + pick.symbol"
+                         target="_blank"
+                         (click)="$event.stopPropagation()"
+                         pTooltip="Stock details" tooltipPosition="top">
+                        <img src="stock-detail.svg" alt="Details" />
+                      </a>
+                    </div>
+                    <div class="stock-name" (click)="navigateToStock(pick.symbol)">{{ pick.name | slice:0:30 }}</div>
                     <div class="stock-meta">{{ pick.sector }}</div>
                   </td>
                   <td class="col-price">
@@ -206,6 +224,9 @@ interface MonthOption {
                     </span>
                     <div class="outcome-pnl" *ngIf="getOutcome(pick) !== 'pending'">
                       {{ getOutcome(pick) === 'hit-target' ? '+' : '' }}{{ getPnlPercent(pick) | number:'1.1-1' }}%
+                    </div>
+                    <div class="outcome-high" *ngIf="pick.actual_high">
+                      Day High: {{ currencySymbol() }}{{ pick.actual_high | number:'1.2-2' }}
                     </div>
                   </td>
                   <td class="col-signals">
@@ -370,6 +391,11 @@ interface MonthOption {
       color: var(--text-color-secondary);
     }
 
+    .pick-count.no-picks {
+      color: #64748b;
+      font-style: italic;
+    }
+
     .date-stats {
       display: flex;
       gap: 0.75rem;
@@ -399,15 +425,15 @@ interface MonthOption {
       table-layout: fixed;
     }
 
-    .col-score    { width: 60px; }
-    .col-stock    { width: 180px; }
-    .col-price    { width: 110px; }
-    .col-targets  { width: 160px; }
-    .col-outcome  { width: 140px; text-align: center; }
+    .col-score    { width: 65px; padding-right: 16px !important; }
+    .col-stock    { width: 200px; padding-right: 20px !important; }
+    .col-price    { width: 120px; padding-right: 20px !important; }
+    .col-targets  { width: 190px; padding-right: 24px !important; }
+    .col-outcome  { width: 150px; text-align: center; padding-right: 20px !important; }
     .col-signals  { }
 
     .picks-table thead th {
-      padding: 0.6rem 0.6rem;
+      padding: 0.6rem 0.75rem;
       text-align: left;
       font-size: 0.7rem;
       font-weight: 600;
@@ -428,7 +454,7 @@ interface MonthOption {
     }
 
     .picks-table td {
-      padding: 0.65rem 0.6rem;
+      padding: 0.65rem 0.75rem;
       vertical-align: top;
     }
 
@@ -466,11 +492,41 @@ interface MonthOption {
     /* Stock cell */
     .col-stock { cursor: pointer; }
 
+    .stock-symbol-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
     .stock-symbol {
       font-weight: 700;
       color: var(--text-color);
       font-size: 0.85rem;
+      cursor: pointer;
     }
+
+    .stock-symbol:hover { color: #3b82f6; }
+
+    .rh-icon, .detail-icon-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 20px;
+      height: 20px;
+      border-radius: 4px;
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.2s;
+    }
+
+    .rh-icon img, .detail-icon-link img {
+      width: 20px;
+      height: 20px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .rh-icon:hover { transform: scale(1.1); box-shadow: 0 0 6px rgba(192, 255, 0, 0.4); }
+    .detail-icon-link:hover { transform: scale(1.1); box-shadow: 0 0 6px rgba(99, 102, 241, 0.5); }
 
     .stock-name {
       font-size: 0.72rem;
@@ -506,6 +562,13 @@ interface MonthOption {
     .target.buy { color: var(--green-400, #4ade80); }
     .target.sell { color: var(--red-400, #f87171); }
     .target.stop { color: var(--orange-400, #fbbf24); }
+    .outcome-high {
+      font-size: 0.7rem;
+      color: var(--text-color-secondary);
+      margin-top: 2px;
+      opacity: 0.7;
+    }
+
     .target-pct { font-size: 0.7rem; opacity: 0.7; }
     .target-pct.positive { color: var(--green-400, #4ade80); }
     .target-pct.negative { color: var(--red-400, #f87171); }
@@ -571,14 +634,32 @@ interface MonthOption {
     @media (max-width: 900px) {
       .reco-container { padding: 1rem; }
       .col-signals { display: none; }
-      .summary-strip { gap: 0.4rem; }
+      .summary-strip { gap: 0.4rem; flex-wrap: wrap; }
       .summary-card { min-width: 70px; padding: 0.6rem; }
       .summary-value { font-size: 1.15rem; }
     }
 
-    @media (max-width: 600px) {
-      .picks-table { font-size: 0.75rem; }
-      .col-outcome .outcome-badge { padding: 0.2rem 0.4rem; }
+    @media (max-width: 768px) {
+      .reco-container { padding: 0.75rem; }
+      .picks-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+      .picks-table { min-width: 700px; table-layout: auto; }
+      .summary-strip { gap: 0.35rem; }
+      .summary-card { min-width: 55px; padding: 0.5rem; }
+      .summary-value { font-size: 1rem; }
+      .summary-label { font-size: 0.55rem; }
+      .col-price { display: none; }
+      .date-header { flex-direction: column; gap: 0.4rem; }
+      .page-header h1 { font-size: 1.1rem; }
+      .month-nav .month-label { font-size: 0.85rem; }
+    }
+
+    @media (max-width: 480px) {
+      .reco-container { padding: 0.5rem; }
+      .picks-table { font-size: 0.7rem; min-width: 550px; }
+      .col-outcome .outcome-badge { padding: 0.15rem 0.35rem; font-size: 0.6rem; }
+      .score-badge { width: 30px; height: 30px; font-size: 0.75rem; }
+      .summary-card { min-width: 45px; }
+      .summary-value { font-size: 0.9rem; }
     }
   `]
 })
@@ -606,10 +687,26 @@ export class RecommendationsComponent implements OnInit {
       grouped.get(d)!.push(pick);
     }
 
-    return Array.from(grouped.entries()).map(([date, picks]) => {
+    // Fill in all weekdays in the month up to today
+    const [year, month] = this.selectedMonth().split('-').map(Number);
+    const today = new Date().toISOString().slice(0, 10);
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    for (let day = 1; day <= daysInMonth; day++) {
+      const d = new Date(year, month - 1, day);
+      const dateStr = d.toISOString().slice(0, 10);
+      if (dateStr > today) break; // don't show future dates
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue; // skip weekends
+      if (!grouped.has(dateStr)) grouped.set(dateStr, []);
+    }
+
+    // Sort descending by date
+    const sortedEntries = Array.from(grouped.entries()).sort((a, b) => b[0].localeCompare(a[0]));
+
+    return sortedEntries.map(([date, picks]) => {
       const wins = picks.filter(p => p.outcome === 'hit-target' || (p.outcome === 'exit-at-close' && p.pnl_percent != null && p.pnl_percent > 0)).length;
       const losses = picks.filter(p => p.outcome === 'hit-sl' || (p.outcome === 'exit-at-close' && (p.pnl_percent == null || p.pnl_percent <= 0))).length;
-      const today = new Date().toISOString().slice(0, 10);
       return {
         date,
         displayDate: new Date(date + 'T00:00:00').toLocaleDateString('en-US', {

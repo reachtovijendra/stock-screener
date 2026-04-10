@@ -302,76 +302,59 @@
       [scrollable]="true"
       scrollHeight="flex"
       styleClass="p-datatable-sm portfolio-table"
-      [tableStyle]="{'min-width': '1100px'}"
+      [tableStyle]="{'min-width': '1500px', 'table-layout': 'fixed'}"
       [rowHover]="true">
 
+      <ng-template pTemplate="colgroup">
+        <colgroup>
+          <col style="width: 50px">   <!-- Year -->
+          <col style="width: 55px">   <!-- Month -->
+          <col style="width: 75px">   <!-- Added Target -->
+          <col style="width: 75px">   <!-- Added Actual -->
+          <col style="width: 85px">   <!-- Start Target -->
+          <col style="width: 85px">   <!-- Start Actual -->
+          <col style="width: 85px">   <!-- End Target -->
+          <col style="width: 85px">   <!-- End Actual -->
+          <col style="width: 60px">   <!-- Monthly Ret Target -->
+          <col style="width: 65px">   <!-- Monthly Ret Actual -->
+          <col style="width: 85px">   <!-- Total Inv Target -->
+          <col style="width: 85px">   <!-- Total Inv Actual -->
+          <col style="width: 75px">   <!-- P/L Target -->
+          <col style="width: 80px">   <!-- P/L Actual -->
+          <col style="width: 60px">   <!-- Overall Ret Target -->
+          <col style="width: 65px">   <!-- Overall Ret Actual -->
+        </colgroup>
+      </ng-template>
+
       <ng-template pTemplate="header">
-        <tr>
-          <th class="col-year">Year</th>
-          <th class="col-month">Month</th>
-          <th class="col-dual header-dual">
-            <div class="dual-header">
-              <span>Added</span>
-              <div class="sub-headers">
-                <span class="target-label">Target</span>
-                <span class="actual-label">Actual</span>
-              </div>
-            </div>
-          </th>
-          <th class="col-dual header-dual">
-            <div class="dual-header">
-              <span>Start of Month</span>
-              <div class="sub-headers">
-                <span class="target-label">Target</span>
-                <span class="actual-label">Actual</span>
-              </div>
-            </div>
-          </th>
-          <th class="col-dual header-dual">
-            <div class="dual-header">
-              <span>End of Month</span>
-              <div class="sub-headers">
-                <span class="target-label">Target</span>
-                <span class="actual-label">Actual</span>
-              </div>
-            </div>
-          </th>
-          <th class="col-dual header-dual">
-            <div class="dual-header">
-              <span>Monthly Return %</span>
-              <div class="sub-headers">
-                <span class="target-label">Target</span>
-                <span class="actual-label">Actual</span>
-              </div>
-            </div>
-          </th>
-          <th class="col-dual header-dual">
-            <div class="dual-header">
-              <span>Total Invested</span>
-              <div class="sub-headers">
-                <span class="target-label">Target</span>
-                <span class="actual-label">Actual</span>
-              </div>
-            </div>
-          </th>
-          <th class="col-dual header-dual">
-            <div class="dual-header">
-              <span>Profit / Loss</span>
-              <div class="sub-headers">
-                <span class="target-label">Target</span>
-                <span class="actual-label">Actual</span>
-              </div>
-            </div>
-          </th>
-          <th class="col-dual header-dual">
-            <div class="dual-header">
-              <span>Overall Return %</span>
-              <div class="sub-headers">
-                <span class="target-label">Target</span>
-                <span class="actual-label">Actual</span>
-              </div>
-            </div>
-          </th>
+        <!-- Row 1: Group headers -->
+        <tr class="group-header-row">
+          <th rowspan="2" class="col-year">Year</th>
+          <th rowspan="2" class="col-month">Month</th>
+          <th colspan="2" class="group-th">Added</th>
+          <th colspan="2" class="group-th">Start of Month</th>
+          <th colspan="2" class="group-th">End of Month</th>
+          <th colspan="2" class="group-th">Monthly Return %</th>
+          <th colspan="2" class="group-th">Total Invested</th>
+          <th colspan="2" class="group-th">Profit / Loss</th>
+          <th colspan="2" class="group-th">Overall Return %</th>
+        </tr>
+        <!-- Row 2: Target / Actual sub-headers -->
+        <tr class="sub-header-row">
+          <th class="sub-th target-th">Target</th>
+          <th class="sub-th actual-th">Actual</th>
+          <th class="sub-th target-th">Target</th>
+          <th class="sub-th actual-th">Actual</th>
+          <th class="sub-th target-th">Target</th>
+          <th class="sub-th actual-th">Actual</th>
+          <th class="sub-th target-th">Target</th>
+          <th class="sub-th actual-th">Actual</th>
+          <th class="sub-th target-th">Target</th>
+          <th class="sub-th actual-th">Actual</th>
+          <th class="sub-th target-th">Target</th>
+          <th class="sub-th actual-th">Actual</th>
+          <th class="sub-th target-th">Target</th>
+          <th class="sub-th actual-th">Actual</th>
         </tr>
       </ng-template>
 
@@ -385,87 +368,49 @@
                (click)="clearRowData(row)"></i>
           </td>
 
-          <!-- Added: Target / Actual -->
-          <td class="dual-cell">
-            <div class="dual-value">
-              <span class="target-value mono">{{ formatCurrency(row.added) }}</span>
-              <div class="actual-input-wrapper">
-                <p-inputNumber
-                  [(ngModel)]="row.actualAdded"
-                  mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
-                  [allowEmpty]="true" placeholder="-"
-                  (onBlur)="onActualChange(row)"
-                  styleClass="actual-input">
-                </p-inputNumber>
-              </div>
-            </div>
+          <!-- Added -->
+          <td class="val-cell target-cell mono">{{ formatCurrency(row.added) }}</td>
+          <td class="val-cell actual-cell">
+            <p-inputNumber
+              [(ngModel)]="row.actualAdded"
+              mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
+              [allowEmpty]="true" placeholder="-"
+              (onBlur)="onActualChange(row)"
+              styleClass="actual-input">
+            </p-inputNumber>
           </td>
 
-          <!-- Start of Month: Target / Actual -->
-          <td class="dual-cell">
-            <div class="dual-value">
-              <span class="target-value mono">{{ formatCurrency(row.principal) }}</span>
-              <span class="actual-value mono" [ngClass]="getStartOfMonthClass(row)">
-                {{ getStartOfMonthDisplay(row) }}
-              </span>
-            </div>
+          <!-- Start of Month -->
+          <td class="val-cell target-cell mono">{{ formatCurrency(row.principal) }}</td>
+          <td class="val-cell actual-cell mono" [ngClass]="getStartOfMonthClass(row)">{{ getStartOfMonthDisplay(row) }}</td>
+
+          <!-- End of Month -->
+          <td class="val-cell target-cell mono">{{ formatCurrency(row.total) }}</td>
+          <td class="val-cell actual-cell">
+            <p-inputNumber
+              [(ngModel)]="row.actualTotal"
+              mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
+              [allowEmpty]="true" placeholder="-"
+              (onBlur)="onActualChange(row)"
+              styleClass="actual-input">
+            </p-inputNumber>
           </td>
 
-          <!-- End of Month: Target / Actual -->
-          <td class="dual-cell">
-            <div class="dual-value">
-              <span class="target-value mono">{{ formatCurrency(row.total) }}</span>
-              <div class="actual-input-wrapper">
-                <p-inputNumber
-                  [(ngModel)]="row.actualTotal"
-                  mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
-                  [allowEmpty]="true" placeholder="-"
-                  (onBlur)="onActualChange(row)"
-                  styleClass="actual-input">
-                </p-inputNumber>
-              </div>
-            </div>
-          </td>
+          <!-- Monthly Return % -->
+          <td class="val-cell target-cell mono center">{{ row.return_percent }}%</td>
+          <td class="val-cell actual-cell mono center" [ngClass]="getMonthlyReturnClass(row)">{{ getActualMonthlyReturn(row) }}</td>
 
-          <!-- Monthly Return %: Target / Actual -->
-          <td class="dual-cell">
-            <div class="dual-value center-values">
-              <span class="target-value mono center">{{ row.return_percent }}%</span>
-              <span class="actual-value mono center" [ngClass]="getMonthlyReturnClass(row)">
-                {{ getActualMonthlyReturn(row) }}
-              </span>
-            </div>
-          </td>
+          <!-- Total Invested -->
+          <td class="val-cell target-cell mono">{{ formatCurrency(row.investment) }}</td>
+          <td class="val-cell actual-cell mono" [ngClass]="getActualPrincipalClass(row)">{{ getActualPrincipalDisplay(row) }}</td>
 
-          <!-- Total Invested: Target / Actual -->
-          <td class="dual-cell">
-            <div class="dual-value">
-              <span class="target-value mono">{{ formatCurrency(row.investment) }}</span>
-              <span class="actual-value mono" [ngClass]="getActualPrincipalClass(row)">
-                {{ getActualPrincipalDisplay(row) }}
-              </span>
-            </div>
-          </td>
+          <!-- Profit / Loss -->
+          <td class="val-cell target-cell mono">{{ formatCurrency(row.profit) }}</td>
+          <td class="val-cell actual-cell mono" [ngClass]="getProfitClass(row)">{{ getActualProfit(row) }}</td>
 
-          <!-- Profit / Loss: Target / Actual -->
-          <td class="dual-cell">
-            <div class="dual-value">
-              <span class="target-value mono">{{ formatCurrency(row.profit) }}</span>
-              <span class="actual-value mono" [ngClass]="getProfitClass(row)">
-                {{ getActualProfit(row) }}
-              </span>
-            </div>
-          </td>
-
-          <!-- Overall Return %: Target / Actual -->
-          <td class="dual-cell">
-            <div class="dual-value center-values">
-              <span class="target-value mono center">{{ getTargetOverallReturn(row) }}</span>
-              <span class="actual-value mono center" [ngClass]="getProfitClass(row)">
-                {{ getActualReturnPercent(row) }}
-              </span>
-            </div>
-          </td>
+          <!-- Overall Return % -->
+          <td class="val-cell target-cell mono center">{{ getTargetOverallReturn(row) }}</td>
+          <td class="val-cell actual-cell mono center" [ngClass]="getProfitClass(row)">{{ getActualReturnPercent(row) }}</td>
         </tr>
       </ng-template>
     </p-table>

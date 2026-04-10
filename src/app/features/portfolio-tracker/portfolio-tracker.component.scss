@@ -547,8 +547,8 @@
       vertical-align: top;
       text-align: center;
 
-      &.header-dual {
-        padding: 0.35rem 0.4rem;
+      &.group-th, &.sub-th {
+        // Handled by .group-th and .sub-th styles
       }
 
       &.col-overall {
@@ -588,8 +588,8 @@
         color: var(--text-color);
         font-size: 0.82rem;
 
-        &.dual-cell {
-          padding: 0.2rem 0.3rem;
+        &.val-cell {
+          padding: 0.5rem 0.5rem;
         }
 
         &.col-year {
@@ -605,13 +605,13 @@
         }
 
         &.col-overall {
-          text-align: right;
+          text-align: center;
           font-weight: 600;
           width: 110px;
         }
 
         &.col-variance {
-          text-align: right;
+          text-align: center;
           font-weight: 600;
           width: 110px;
         }
@@ -629,7 +629,7 @@
     // Inputs inside table
     .p-inputnumber .p-inputtext {
       width: 100%;
-      text-align: right;
+      text-align: center;
       padding: 0.2rem 0.35rem;
       font-size: 0.78rem;
       font-family: 'JetBrains Mono', monospace;
@@ -709,107 +709,127 @@
   }
 }
 
-// ── Dual Header ─────────────────────────────────────────
-.dual-header {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
-  width: 100%;
+// ── Two-Row Header ──────────────────────────────────────
+.group-header-row .group-th {
+  text-align: center;
+  font-weight: 700;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.5rem 0.4rem 0.35rem;
+  color: var(--text-color-secondary);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12) !important;
+}
 
-  > span {
-    font-weight: 600;
-    font-size: 0.7rem;
-    text-align: center;
-    width: 100%;
+.sub-header-row .sub-th {
+  font-size: 0.58rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: center;
+  padding: 0.25rem 0.4rem;
+  white-space: nowrap;
+}
+
+.sub-th.target-th {
+  color: #60a5fa;
+}
+
+.sub-th.actual-th {
+  color: #34d399;
+}
+
+// Alternating group backgrounds for visual grouping
+// Groups: Added(3-4), Start(5-6), End(7-8), Monthly(9-10), TotalInv(11-12), PL(13-14), Overall(15-16)
+// Odd groups get a subtle tint, even groups stay default
+.group-header-row .group-th:nth-of-type(odd) {
+  background: rgba(148, 163, 184, 0.08);
+}
+.group-header-row .group-th:nth-of-type(even) {
+  background: rgba(148, 163, 184, 0.03);
+}
+
+// Apply same alternating tint to sub-headers
+.sub-header-row .sub-th:nth-child(4n+1),
+.sub-header-row .sub-th:nth-child(4n+2) {
+  background: rgba(148, 163, 184, 0.04);
+}
+
+// Apply to body rows: cols 3-4, 7-8, 11-12, 15-16 get tint
+::ng-deep .portfolio-table .p-datatable-tbody > tr {
+  > td:nth-child(3), > td:nth-child(4),
+  > td:nth-child(7), > td:nth-child(8),
+  > td:nth-child(11), > td:nth-child(12),
+  > td:nth-child(15), > td:nth-child(16) {
+    background: rgba(148, 163, 184, 0.03);
   }
+}
 
-  .sub-headers {
-    display: flex;
-    font-size: 0.6rem;
-    font-weight: 500;
-    width: 100%;
-    opacity: 0.8;
+// ── Body Value Cells ────────────────────────────────────
+.val-cell {
+  font-size: 0.78rem;
+  text-align: center;
+  padding: 0.45rem 0.4rem;
+  vertical-align: middle;
+  overflow: hidden;
 
-    .target-label {
-      flex: 1;
-      text-align: right;
-      padding-right: 0.35rem;
-      color: #60a5fa;
+  ::ng-deep .actual-input {
+    width: 100% !important;
+    max-width: 100%;
+    display: block;
+
+    .p-inputnumber-input {
+      width: 100% !important;
+      text-align: center;
+      padding: 0.25rem 0;
+      font-size: 0.78rem;
+      font-family: 'JetBrains Mono', monospace;
+      background: transparent !important;
+      border: none !important;
+      box-shadow: none !important;
+      color: #34d399;
+      font-weight: 500;
     }
 
-    .actual-label {
-      flex: 1;
-      text-align: right;
-      padding-right: 0.1rem;
-      color: #34d399;
+    .p-inputnumber-input:focus {
+      background: var(--surface-ground) !important;
+      border: 1px solid var(--primary-color) !important;
+      padding: 0.25rem 0.3rem;
+      border-radius: 4px;
     }
   }
 }
 
-// ── Dual Value Cells ────────────────────────────────────
-.dual-value {
-  display: flex;
-  align-items: center;
-  gap: 0;
+.val-cell.target-cell {
+  color: #60a5fa;
+  opacity: 0.7;
+}
 
-  .target-value {
-    flex: 1;
-    text-align: right;
-    font-size: 0.78rem;
-    color: #60a5fa;
-    padding-right: 0.35rem;
-    border-right: 1px solid var(--surface-border);
-    opacity: 0.7;
+.val-cell.actual-cell {
+
+  &.has-data {
+    color: var(--stock-positive, #10b981);
+    font-weight: 500;
   }
 
-  .actual-input-wrapper {
-    flex: 1;
-    min-width: 65px;
-    padding-left: 0.15rem;
+  &.no-data {
+    color: var(--text-color-secondary);
+    opacity: 0.3;
   }
 
-  .actual-value {
-    flex: 1;
-    text-align: right;
-    font-size: 0.78rem;
-    padding-left: 0.35rem;
-
-    &.has-data {
-      color: var(--stock-positive, #10b981);
-      font-weight: 500;
-    }
-
-    &.no-data {
-      color: var(--text-color-secondary);
-      text-align: center;
-      opacity: 0.3;
-    }
-
-    &.profit-positive {
-      color: var(--stock-positive, #10b981);
-      font-weight: 600;
-    }
-
-    &.profit-negative {
-      color: var(--stock-negative, #ef4444);
-      font-weight: 600;
-    }
-
-    &.center {
-      text-align: center;
-    }
+  &.profit-positive {
+    color: var(--stock-positive, #10b981);
+    font-weight: 600;
   }
 
-  .target-value.center {
-    text-align: center;
+  &.profit-negative {
+    color: var(--stock-negative, #ef4444);
+    font-weight: 600;
   }
+}
 
-  &.center-values {
-    .target-value, .actual-value {
-      text-align: center;
-    }
-  }
+.val-cell.center {
+  text-align: center;
 }
 
 // ── Confirm Dialog ──────────────────────────────────────

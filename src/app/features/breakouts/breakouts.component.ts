@@ -282,12 +282,25 @@ interface AlertCategory {
                       <div class="pick-metric">
                         <span class="pm-label">Analyst</span>
                         <span class="pm-value analyst-rating"
-                              [class.strong-buy]="$any(pick.stock).analystRatingScore != null && $any(pick.stock).analystRatingScore <= 1.5"
-                              [class.buy]="$any(pick.stock).analystRatingScore != null && $any(pick.stock).analystRatingScore > 1.5 && $any(pick.stock).analystRatingScore <= 2.2"
-                              [class.hold]="$any(pick.stock).analystRatingScore != null && $any(pick.stock).analystRatingScore > 2.2 && $any(pick.stock).analystRatingScore < 3.5"
-                              [class.sell]="$any(pick.stock).analystRatingScore != null && $any(pick.stock).analystRatingScore >= 3.5">
-                          {{ getAnalystLabel($any(pick.stock).analystRatingScore) }}
+                              [class.strong-buy]="pick.stock.recommendationMean != null && pick.stock.recommendationMean <= 1.5"
+                              [class.buy]="pick.stock.recommendationMean != null && pick.stock.recommendationMean > 1.5 && pick.stock.recommendationMean <= 2.2"
+                              [class.hold]="pick.stock.recommendationMean != null && pick.stock.recommendationMean > 2.2 && pick.stock.recommendationMean < 3.5"
+                              [class.sell]="pick.stock.recommendationMean != null && pick.stock.recommendationMean >= 3.5">
+                          {{ getAnalystLabel(pick.stock.recommendationMean) }}
                         </span>
+                      </div>
+                      <div class="pick-metric" *ngIf="pick.stock.targetMeanPrice">
+                        <span class="pm-label">Target</span>
+                        <span class="pm-value"
+                              [class.positive]="pick.stock.targetMeanPrice > pick.stock.price"
+                              [class.negative]="pick.stock.targetMeanPrice <= pick.stock.price">
+                          {{ pick.stock.targetMeanPrice | number:'1.0-0' }}
+                          ({{ pick.stock.targetMeanPrice > pick.stock.price ? '+' : '' }}{{ ((pick.stock.targetMeanPrice - pick.stock.price) / pick.stock.price * 100) | number:'1.0-0' }}%)
+                        </span>
+                      </div>
+                      <div class="pick-metric" *ngIf="pick.stock.heldPercentInstitutions != null">
+                        <span class="pm-label">Inst. %</span>
+                        <span class="pm-value">{{ (pick.stock.heldPercentInstitutions * 100) | number:'1.0-0' }}%</span>
                       </div>
                     </div>
                   </div>
@@ -532,12 +545,25 @@ interface AlertCategory {
                       <div class="mom-metric">
                         <span class="mm-label">Analyst</span>
                         <span class="mm-value analyst-rating"
-                              [class.strong-buy]="$any(pick.stock).analystRatingScore != null && $any(pick.stock).analystRatingScore <= 1.5"
-                              [class.buy]="$any(pick.stock).analystRatingScore != null && $any(pick.stock).analystRatingScore > 1.5 && $any(pick.stock).analystRatingScore <= 2.2"
-                              [class.hold]="$any(pick.stock).analystRatingScore != null && $any(pick.stock).analystRatingScore > 2.2 && $any(pick.stock).analystRatingScore < 3.5"
-                              [class.sell]="$any(pick.stock).analystRatingScore != null && $any(pick.stock).analystRatingScore >= 3.5">
-                          {{ getAnalystLabel($any(pick.stock).analystRatingScore) }}
+                              [class.strong-buy]="pick.stock.recommendationMean != null && pick.stock.recommendationMean <= 1.5"
+                              [class.buy]="pick.stock.recommendationMean != null && pick.stock.recommendationMean > 1.5 && pick.stock.recommendationMean <= 2.2"
+                              [class.hold]="pick.stock.recommendationMean != null && pick.stock.recommendationMean > 2.2 && pick.stock.recommendationMean < 3.5"
+                              [class.sell]="pick.stock.recommendationMean != null && pick.stock.recommendationMean >= 3.5">
+                          {{ getAnalystLabel(pick.stock.recommendationMean) }}
                         </span>
+                      </div>
+                      <div class="mom-metric" *ngIf="pick.stock.targetMeanPrice">
+                        <span class="mm-label">Target</span>
+                        <span class="mm-value"
+                              [class.positive]="pick.stock.targetMeanPrice > pick.stock.price"
+                              [class.negative]="pick.stock.targetMeanPrice <= pick.stock.price">
+                          {{ pick.stock.targetMeanPrice | number:'1.0-0' }}
+                          ({{ pick.stock.targetMeanPrice > pick.stock.price ? '+' : '' }}{{ ((pick.stock.targetMeanPrice - pick.stock.price) / pick.stock.price * 100) | number:'1.0-0' }}%)
+                        </span>
+                      </div>
+                      <div class="mom-metric" *ngIf="pick.stock.heldPercentInstitutions != null">
+                        <span class="mm-label">Inst. %</span>
+                        <span class="mm-value">{{ (pick.stock.heldPercentInstitutions * 100) | number:'1.0-0' }}%</span>
                       </div>
                     </div>
                   </div>

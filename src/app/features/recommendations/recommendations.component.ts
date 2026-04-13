@@ -232,6 +232,8 @@ interface MonthOption {
                   <td class="col-signals">
                     <div class="signal-list">
                       <span class="signal-chip" *ngFor="let s of pick.signals | slice:0:3">{{ s }}</span>
+                      <span class="signal-chip analyst-chip" *ngIf="getPickTarget(pick)" [ngClass]="getPickTargetClass(pick)">{{ getPickTarget(pick) }}</span>
+                      <span class="signal-chip earnings-chip" *ngIf="getPickEarnings(pick)">{{ getPickEarnings(pick) }}</span>
                     </div>
                     <div class="tech-meta">
                       <span *ngIf="pick.relative_volume">RVOL: {{ pick.relative_volume | number:'1.1-1' }}x</span>
@@ -623,6 +625,18 @@ interface MonthOption {
       white-space: nowrap;
     }
 
+    .signal-chip.analyst-chip {
+      background: rgba(59, 130, 246, 0.1);
+      color: #93c5fd;
+      &.positive { color: #34d399; background: rgba(52, 211, 153, 0.1); }
+      &.negative { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+    }
+
+    .signal-chip.earnings-chip {
+      background: rgba(251, 191, 36, 0.1);
+      color: #fbbf24;
+    }
+
     .tech-meta {
       font-size: 0.65rem;
       color: var(--text-color-secondary);
@@ -671,6 +685,7 @@ export class RecommendationsComponent implements OnInit {
   loading = signal(false);
   picks = signal<DailyPick[]>([]);
   selectedMonth = signal(this.getCurrentMonth());
+  stockExtras = signal<Record<string, { targetMeanPrice?: number; earningsTimestamp?: number; heldPercentInstitutions?: number }>>({});
 
   selectedMonthLabel = computed(() => {
     const [y, m] = this.selectedMonth().split('-').map(Number);
@@ -784,6 +799,7 @@ export class RecommendationsComponent implements OnInit {
         next: (res) => {
           this.picks.set(res.picks || []);
           this.loading.set(false);
+          this.enrichWithExtras(res.picks || [], market);
         },
         error: (err) => {
           console.error('Failed to fetch picks:', err);
@@ -791,6 +807,51 @@ export class RecommendationsComponent implements OnInit {
           this.loading.set(false);
         },
       });
+  }
+
+  private enrichWithExtras(picks: DailyPick[], market: string): void {
+    const symbols = [...new Set(picks.map(p => p.symbol))];
+    if (symbols.length === 0) return;
+
+    this.http.get<any>(`/api/stocks?action=search&q=${symbols.join(',')}&market=${market}`)
+      .subscribe({
+        next: (res) => {
+          const extras: Record<string, any> = {};
+          for (const s of (res.stocks || [])) {
+            extras[s.symbol] = {
+              targetMeanPrice: s.targetMeanPrice || null,
+              earningsTimestamp: s.earningsTimestamp || null,
+              heldPercentInstitutions: s.heldPercentInstitutions || null,
+            };
+          }
+          this.stockExtras.set(extras);
+        },
+        error: () => {},
+      });
+  }
+
+  getPickTarget(pick: DailyPick): string | null {
+    const ext = this.stockExtras()[pick.symbol];
+    if (!ext?.targetMeanPrice || !pick.price) return null;
+    const pct = ((ext.targetMeanPrice - pick.price) / pick.price) * 100;
+    const sign = pct >= 0 ? '+' : '';
+    return `Target: $${ext.targetMeanPrice.toFixed(0)} (${sign}${pct.toFixed(0)}%)`;
+  }
+
+  getPickTargetClass(pick: DailyPick): string {
+    const ext = this.stockExtras()[pick.symbol];
+    if (!ext?.targetMeanPrice || !pick.price) return '';
+    return ext.targetMeanPrice > pick.price ? 'positive' : 'negative';
+  }
+
+  getPickEarnings(pick: DailyPick): string | null {
+    const ext = this.stockExtras()[pick.symbol];
+    if (!ext?.earningsTimestamp) return null;
+    const d = new Date(ext.earningsTimestamp * 1000);
+    const now = new Date();
+    const diffDays = Math.round((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays >= 0 && diffDays <= 7) return `Earnings in ${diffDays}d`;
+    return null; // Only show if within 7 days (catalyst)
   }
 
   /**

@@ -215,6 +215,15 @@ import { SortConfig } from '../../../core/models/filter.model';
               <th pSortableColumn="macdHistogram" class="col-macd text-right">
                 MACD <p-sortIcon field="macdHistogram"></p-sortIcon>
               </th>
+              <th class="col-earnings text-center">
+                Earnings
+              </th>
+              <th pSortableColumn="targetMeanPrice" class="col-target text-right">
+                Target <p-sortIcon field="targetMeanPrice"></p-sortIcon>
+              </th>
+              <th pSortableColumn="heldPercentInstitutions" class="col-inst text-right">
+                Inst. % <p-sortIcon field="heldPercentInstitutions"></p-sortIcon>
+              </th>
               <th pSortableColumn="sector" class="col-sector">
                 Sector <p-sortIcon field="sector"></p-sortIcon>
               </th>
@@ -303,13 +312,36 @@ import { SortConfig } from '../../../core/models/filter.model';
                 }
               </td>
               
+              <!-- Earnings -->
+              <td class="col-earnings text-center">
+                <span *ngIf="stock.earningsTimestamp" class="earnings-text">{{ formatEarnings(stock.earningsTimestamp) }}</span>
+                <span *ngIf="!stock.earningsTimestamp" class="muted">—</span>
+              </td>
+
+              <!-- Analyst Target -->
+              <td class="col-target text-right">
+                <span *ngIf="stock.targetMeanPrice" class="target-text">
+                  {{ marketService.formatCurrency(stock.targetMeanPrice, stock.market) }}
+                  <span class="target-pct" [class.positive]="stock.targetMeanPrice > stock.price" [class.negative]="stock.targetMeanPrice < stock.price">
+                    {{ stock.targetMeanPrice > stock.price ? '+' : '' }}{{ ((stock.targetMeanPrice - stock.price) / stock.price * 100) | number:'1.0-0' }}%
+                  </span>
+                </span>
+                <span *ngIf="!stock.targetMeanPrice" class="muted">—</span>
+              </td>
+
+              <!-- Institutional % -->
+              <td class="col-inst text-right">
+                <span *ngIf="stock.heldPercentInstitutions != null">{{ (stock.heldPercentInstitutions * 100) | number:'1.0-0' }}%</span>
+                <span *ngIf="stock.heldPercentInstitutions == null" class="muted">—</span>
+              </td>
+
               <!-- Sector -->
               <td class="col-sector">
                 <span class="sector-badge" [attr.data-sector]="stock.sector">
                   {{ stock.sector }}
                 </span>
               </td>
-              
+
               <!-- Industry -->
               <td class="col-industry">
                 <span class="industry-text">{{ stock.industry }}</span>
@@ -631,8 +663,18 @@ import { SortConfig } from '../../../core/models/filter.model';
     .col-vol { width: 60px; max-width: 60px; }
     .col-rsi { width: 38px; max-width: 38px; }
     .col-macd { width: 45px; max-width: 45px; }
+    .col-earnings { width: 80px; max-width: 80px; }
+    .col-target { width: 110px; max-width: 110px; }
+    .col-inst { width: 65px; max-width: 65px; }
     .col-sector { width: 115px; max-width: 115px; }
     .col-industry { width: 135px; max-width: 135px; }
+
+    .earnings-text { font-size: 0.75rem; color: var(--text-color-secondary); }
+    .target-text { font-size: 0.78rem; }
+    .target-pct { font-size: 0.7rem; margin-left: 2px; }
+    .target-pct.positive { color: var(--green-500, #10b981); }
+    .target-pct.negative { color: var(--red-500, #ef4444); }
+    .muted { color: var(--text-color-secondary); opacity: 0.3; }
 
     .header-with-filter {
       display: flex;
@@ -885,6 +927,14 @@ export class ResultsTableComponent {
 
   onIndustryFilterChange(): void {
     this.screenerService.setIndustryFilter(this.selectedIndustries);
+  }
+
+  formatEarnings(timestamp: number): string {
+    const d = new Date(timestamp * 1000);
+    const now = new Date();
+    const diffDays = Math.round((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    if (diffDays >= 0 && diffDays <= 14) return `in ${diffDays}d`;
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   }
 
   openStockDetail(symbol: string): void {

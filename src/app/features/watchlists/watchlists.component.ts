@@ -142,6 +142,8 @@ import { environment } from '../../../environments/environment';
                   <th class="col-last">LAST PRICE</th>
                   <th class="col-pnl">CHANGE SINCE</th>
                   <th class="col-return">CHANGE SINCE %</th>
+                  <th class="col-target-wl">ANALYST TARGET</th>
+                  <th class="col-earnings-wl">EARNINGS</th>
                   <th class="col-x"></th>
                 </tr>
               </thead>
@@ -201,6 +203,14 @@ import { environment } from '../../../environments/environment';
                     <span *ngIf="item.changePercent != null" class="return-badge" [class.up]="item.changePercent > 0" [class.down]="item.changePercent < 0">
                       {{ item.changePercent >= 0 ? '+' : '' }}{{ item.changePercent | number:'1.2-2' }}%
                     </span>
+                  </td>
+                  <td class="col-target-wl">
+                    <span *ngIf="getAnalystTargetDisplay(item)" class="target-text" [innerHTML]="getAnalystTargetDisplay(item)"></span>
+                    <span *ngIf="!getAnalystTargetDisplay(item)" class="muted-text">—</span>
+                  </td>
+                  <td class="col-earnings-wl">
+                    <span *ngIf="getEarningsDate(item)" class="earnings-text">{{ getEarningsDate(item) }}</span>
+                    <span *ngIf="!getEarningsDate(item)" class="muted-text">—</span>
                   </td>
                   <td class="col-x">
                     <button class="remove-btn" (click)="removeItem(item); $event.stopPropagation()" pTooltip="Remove" tooltipPosition="left">
@@ -450,6 +460,11 @@ import { environment } from '../../../environments/environment';
     .col-last    { width: 110px; text-align: right; padding-left: 16px !important; }
     .col-pnl     { width: 115px; text-align: right; padding-left: 16px !important; }
     .col-return  { width: 130px; text-align: right; padding-left: 16px !important; }
+    .col-target-wl { width: 110px; text-align: center; }
+    .col-earnings-wl { width: 90px; text-align: center; }
+    .muted-text { color: #475569; opacity: 0.3; }
+    .earnings-text { font-size: 12px; color: #94a3b8; }
+    .target-text { font-size: 12px; color: #e2e8f0; }
     .col-x       { width: 40px; text-align: center; }
 
     .stock-row {
@@ -739,6 +754,7 @@ export class WatchlistsComponent implements OnInit {
   });
 
   private currentPrices = signal<Record<string, number>>({});
+  private stockExtras = signal<Record<string, { targetMeanPrice?: number; earningsTimestamp?: number }>>({});
 
   constructor() {
     // Re-fetch prices whenever items change (e.g. switching watchlists)
@@ -874,11 +890,37 @@ export class WatchlistsComponent implements OnInit {
     this.fetchPrices();
   }
 
+  getAnalystTarget(item: any): number | null {
+    const extras = this.stockExtras();
+    return extras[item.symbol]?.targetMeanPrice || null;
+  }
+
+  getAnalystTargetDisplay(item: any): string | null {
+    const target = this.getAnalystTarget(item);
+    if (!target || !item.currentPrice) return null;
+    const curr = this.getCurrency(item.market);
+    const pct = ((target - item.currentPrice) / item.currentPrice * 100);
+    const sign = pct >= 0 ? '+' : '';
+    const color = pct >= 0 ? '#34d399' : '#f87171';
+    return `${curr}${target.toFixed(0)} <span style="color:${color};font-size:10px">(${sign}${pct.toFixed(0)}%)</span>`;
+  }
+
+  getEarningsDate(item: any): string | null {
+    const extras = this.stockExtras();
+    const ts = extras[item.symbol]?.earningsTimestamp;
+    if (!ts) return null;
+    const d = new Date(ts * 1000);
+    const now = new Date();
+    const diffDays = Math.round((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    if (diffDays >= 0 && diffDays <= 14) return `${dateStr} (${diffDays}d)`;
+    return dateStr;
+  }
+
   private async fetchPrices() {
     const items = this.wlService.items();
     if (items.length === 0) return;
 
-    // Group by market since API needs market param
     const byMarket: Record<string, string[]> = {};
     for (const item of items) {
       const m = item.market || 'US';
@@ -887,6 +929,7 @@ export class WatchlistsComponent implements OnInit {
     }
 
     const prices: Record<string, number> = {};
+    const extras: Record<string, { targetMeanPrice?: number; earningsTimestamp?: number }> = {};
 
     try {
       const fetches = Object.entries(byMarket).map(async ([market, symbols]) => {
@@ -895,11 +938,16 @@ export class WatchlistsComponent implements OnInit {
         if (data?.stocks) {
           for (const s of data.stocks) {
             prices[s.symbol] = s.price;
+            extras[s.symbol] = {
+              targetMeanPrice: s.targetMeanPrice || null,
+              earningsTimestamp: s.earningsTimestamp || null,
+            };
           }
         }
       });
       await Promise.all(fetches);
       this.currentPrices.set(prices);
+      this.stockExtras.set(extras);
     } catch {
       // Prices will show as "..." — not critical
     }

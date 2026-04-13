@@ -196,6 +196,31 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
               <span class="stat-label">Exchange</span>
               <span class="stat-value small">{{ s.exchange }}</span>
             </div>
+            <div class="stat-item" *ngIf="s.earningsTimestamp">
+              <span class="stat-label">Earnings Date</span>
+              <span class="stat-value small">{{ formatEarningsDate(s.earningsTimestamp) }}</span>
+            </div>
+            <div class="stat-item" *ngIf="s.targetMeanPrice">
+              <span class="stat-label">Analyst Target</span>
+              <span class="stat-value">
+                {{ marketService.formatCurrency(s.targetMeanPrice, s.market) }}
+                <span class="target-upside" [class.positive]="s.targetMeanPrice > s.price" [class.negative]="s.targetMeanPrice < s.price">
+                  ({{ s.targetMeanPrice > s.price ? '+' : '' }}{{ ((s.targetMeanPrice - s.price) / s.price * 100) | number:'1.1-1' }}%)
+                </span>
+              </span>
+            </div>
+            <div class="stat-item" *ngIf="s.numberOfAnalystOpinions">
+              <span class="stat-label">Analyst Rating</span>
+              <span class="stat-value small">{{ getRecommendationLabel(s.recommendationMean) }} ({{ s.numberOfAnalystOpinions }} analysts)</span>
+            </div>
+            <div class="stat-item" *ngIf="s.heldPercentInstitutions != null">
+              <span class="stat-label">Institutional %</span>
+              <span class="stat-value">{{ (s.heldPercentInstitutions * 100) | number:'1.1-1' }}%</span>
+            </div>
+            <div class="stat-item" *ngIf="s.heldPercentInsiders != null">
+              <span class="stat-label">Insider %</span>
+              <span class="stat-value">{{ (s.heldPercentInsiders * 100) | number:'1.1-1' }}%</span>
+            </div>
           </div>
         </div>
 
@@ -617,6 +642,10 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
     }
     .wl-option:hover { background: var(--surface-hover); }
     .wl-option.new { color: #3b82f6; border-top: 1px solid var(--surface-border); margin-top: 4px; padding-top: 10px; }
+
+    .target-upside { font-size: 0.75rem; font-weight: 500; }
+    .target-upside.positive { color: var(--green-500); }
+    .target-upside.negative { color: var(--red-500); }
 
     /* Key Stats - horizontal layout */
     .key-stats-grid {
@@ -1376,6 +1405,25 @@ export class StockDetailComponent implements OnInit {
     if (signalType.includes('bullish')) return 'Buy';
     if (signalType.includes('bearish')) return 'Sell';
     return 'Neutral';
+  }
+
+  formatEarningsDate(timestamp: number): string {
+    const d = new Date(timestamp * 1000);
+    const now = new Date();
+    const diffDays = Math.round((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    const dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    if (diffDays > 0 && diffDays <= 30) return `${dateStr} (in ${diffDays}d)`;
+    if (diffDays === 0) return `${dateStr} (Today)`;
+    return dateStr;
+  }
+
+  getRecommendationLabel(mean: number | null): string {
+    if (mean == null) return '—';
+    if (mean <= 1.5) return 'Strong Buy';
+    if (mean <= 2.5) return 'Buy';
+    if (mean <= 3.5) return 'Hold';
+    if (mean <= 4.5) return 'Sell';
+    return 'Strong Sell';
   }
 
   // --- Watchlist methods ---

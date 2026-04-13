@@ -115,7 +115,31 @@ export interface Stock {
   
   /** MACD Signal type for filtering */
   macdSignalType: 'bullish' | 'bearish' | 'bullish_crossover' | 'bearish_crossover' | 'strong_bullish' | 'strong_bearish' | null;
-  
+
+  /** Analyst consensus target price */
+  targetMeanPrice: number | null;
+
+  /** Highest analyst target */
+  targetHighPrice: number | null;
+
+  /** Lowest analyst target */
+  targetLowPrice: number | null;
+
+  /** Number of analysts covering this stock */
+  numberOfAnalystOpinions: number | null;
+
+  /** Analyst recommendation mean (1=Strong Buy, 2=Buy, 3=Hold, 4=Sell, 5=Strong Sell) */
+  recommendationMean: number | null;
+
+  /** Percentage held by institutions (0-1 range) */
+  heldPercentInstitutions: number | null;
+
+  /** Percentage held by insiders (0-1 range) */
+  heldPercentInsiders: number | null;
+
+  /** Next earnings date (Unix timestamp) */
+  earningsTimestamp: number | null;
+
   /** Timestamp of last quote update */
   lastUpdated: Date;
 }

@@ -55,6 +55,13 @@ export interface StockQuote {
   earningsTimestamp: number | null;      // Unix timestamp of next/recent earnings
   earningsTimestampStart: number | null; // Earnings window start
   earningsTimestampEnd: number | null;   // Earnings window end
+  targetMeanPrice: number | null;        // Analyst consensus target price
+  targetHighPrice: number | null;        // Highest analyst target
+  targetLowPrice: number | null;         // Lowest analyst target
+  numberOfAnalystOpinions: number | null;// Number of analysts covering
+  recommendationMean: number | null;     // 1=Strong Buy, 2=Buy, 3=Hold, 4=Sell, 5=Strong Sell
+  heldPercentInstitutions: number | null;// % held by institutions (0-1 range)
+  heldPercentInsiders: number | null;    // % held by insiders (0-1 range)
   lastUpdated: Date;
 }
 
@@ -281,7 +288,7 @@ async function fetchYahooQuotes(symbols: string[]): Promise<any[]> {
 
   // Build URL with all symbols
   const symbolsParam = symbols.join(',');
-  const fields = 'symbol,shortName,longName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,marketCap,fiftyTwoWeekHigh,fiftyTwoWeekLow,fiftyDayAverage,twoHundredDayAverage,trailingPE,forwardPE,priceToBook,priceToSalesTrailing12Months,epsTrailingTwelveMonths,epsForward,trailingAnnualDividendYield,earningsQuarterlyGrowth,revenueGrowth,averageDailyVolume3Month,averageVolume,beta,exchange,fullExchangeName,currency,sector,industry,sectorDisp,industryDisp,preMarketPrice,preMarketChange,preMarketChangePercent,preMarketVolume,earningsTimestamp,earningsTimestampStart,earningsTimestampEnd';
+  const fields = 'symbol,shortName,longName,regularMarketPrice,regularMarketChange,regularMarketChangePercent,regularMarketVolume,marketCap,fiftyTwoWeekHigh,fiftyTwoWeekLow,fiftyDayAverage,twoHundredDayAverage,trailingPE,forwardPE,priceToBook,priceToSalesTrailing12Months,epsTrailingTwelveMonths,epsForward,trailingAnnualDividendYield,earningsQuarterlyGrowth,revenueGrowth,averageDailyVolume3Month,averageVolume,beta,exchange,fullExchangeName,currency,sector,industry,sectorDisp,industryDisp,preMarketPrice,preMarketChange,preMarketChangePercent,preMarketVolume,earningsTimestamp,earningsTimestampStart,earningsTimestampEnd,targetMeanPrice,targetHighPrice,targetLowPrice,numberOfAnalystOpinions,recommendationMean,heldPercentInstitutions,heldPercentInsiders';
   let url = `/v7/finance/quote?symbols=${encodeURIComponent(symbolsParam)}&fields=${encodeURIComponent(fields)}`;
   if (auth.crumb) {
     url += `&crumb=${encodeURIComponent(auth.crumb)}`;
@@ -446,6 +453,13 @@ function transformQuote(data: any, market: Market): StockQuote {
     earningsTimestamp: data.earningsTimestamp || null,
     earningsTimestampStart: data.earningsTimestampStart || null,
     earningsTimestampEnd: data.earningsTimestampEnd || null,
+    targetMeanPrice: data.targetMeanPrice || null,
+    targetHighPrice: data.targetHighPrice || null,
+    targetLowPrice: data.targetLowPrice || null,
+    numberOfAnalystOpinions: data.numberOfAnalystOpinions || null,
+    recommendationMean: data.recommendationMean || null,
+    heldPercentInstitutions: data.heldPercentInstitutions != null ? data.heldPercentInstitutions : null,
+    heldPercentInsiders: data.heldPercentInsiders != null ? data.heldPercentInsiders : null,
     lastUpdated: new Date()
   };
 }
@@ -960,6 +974,13 @@ async function fetchScreenerRange(
         earningsTimestamp: q.earningsTimestamp || null,
         earningsTimestampStart: q.earningsTimestampStart || null,
         earningsTimestampEnd: q.earningsTimestampEnd || null,
+        targetMeanPrice: q.targetMeanPrice || null,
+        targetHighPrice: q.targetHighPrice || null,
+        targetLowPrice: q.targetLowPrice || null,
+        numberOfAnalystOpinions: q.numberOfAnalystOpinions || null,
+        recommendationMean: q.recommendationMean || null,
+        heldPercentInstitutions: q.heldPercentInstitutions != null ? q.heldPercentInstitutions : null,
+        heldPercentInsiders: q.heldPercentInsiders != null ? q.heldPercentInsiders : null,
         lastUpdated: new Date()
       });
     }

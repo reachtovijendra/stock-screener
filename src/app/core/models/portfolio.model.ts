@@ -1,6 +1,9 @@
+import { Market } from './stock.model';
+
 export interface PortfolioTargetEntry {
   id?: string;
   user_id?: string;
+  market?: Market;
   year: number;
   month: number;
   investment: number;
@@ -15,6 +18,7 @@ export interface PortfolioTargetEntry {
 export interface PortfolioActualEntry {
   id?: string;
   user_id?: string;
+  market?: Market;
   year: number;
   month: number;
   investment: number;

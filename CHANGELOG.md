@@ -29,6 +29,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Portfolio tracker table now shows Starting Balance before monthly additions, with additions counted separately in target and actual return calculations.
+- Portfolio tracker main view now locks projection-defining setup fields after generation, requiring Reconfigure to update target initial investment, monthly addition, expected monthly return, or start date.
+- Portfolio tracker setup now captures a start month and year, and generates the 10-year projection from that selected month.
+- Portfolio tracker persistence is now market-specific, with separate Supabase target and actual records for US and India portfolios.
+- Portfolio tracker currency inputs and generated projection displays now follow the selected market, using USD formatting for US and INR formatting for India.
+- Updated the portfolio tracker setup screen to remove the actual starting investment field and show a compounded annual expected return label below the monthly return input.
 - Refactored `api/_lib/handlers/market-breakouts.ts` to import stock lists from the shared `stock-lists.ts` module instead of defining them inline
 - Consolidated 12 Vercel serverless functions into 4 using a router pattern to stay within the Hobby plan limit and free up 8 slots for future features
 - `api/stocks.ts` router now dispatches to 7 handler functions (quote, search, screen, list, indices, technicals, dma-crossovers) based on `?action=` query parameter
@@ -55,6 +61,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed the portfolio tracker actual-side calculations so changing Actual Initial updates the first actual starting/principal value without generating user-entered actual added or ending values.
+- Fixed transient Supabase auth lock errors during local development by skipping immediate auto-refresh ticks when another browser tab or reload already holds the auth lock.
+- Fixed portfolio target and actual uniqueness constraints to include market, allowing US and India portfolios to have rows for the same user/month without insert failures.
+- Fixed portfolio setup values carrying over when switching to a market that has no saved setup yet.
+- Fixed portfolio tracker target overall return percentage to calculate profit over contributed principal instead of treating monthly contributions as investment gains.
 - Fixed Market News page showing 0 articles for non-market categories (Price Target, Rating, etc.) by implementing category-aware article selection in both `api/market/news.ts` and `mock-server.js`: reserves up to 10 slots per non-market category before filling remaining slots with newest articles, ensuring all categories with articles are represented in the 150-article response; updated Angular component to use API-provided category counts instead of recalculating from the limited response
 - Fixed stock detail page returning "Stock not found" for every stock on Vercel by rewriting `api/stocks/search.ts` to fetch full stock quotes (price, fundamentals, volume) via `getQuote()` instead of returning only basic symbol/name from the search API; added `technicals=true` parameter support with RSI and MACD calculation from historical prices; response format now returns `{ stocks: [...] }` matching the mock server contract expected by the Angular frontend
 - Fixed news article count mismatch between local (mock-server) and Vercel deployments by aligning RSS feed sources: added the missing Yahoo Finance `rssindex` general market feed to the mock server's US feeds, and aligned the stock-specific RSS endpoint URL (`finance.yahoo.com/rss/headline`) to match Vercel

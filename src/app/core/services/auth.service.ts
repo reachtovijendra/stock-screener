@@ -2,6 +2,28 @@ import { Injectable, signal, computed } from '@angular/core';
 import { createClient, SupabaseClient, User, Session } from '@supabase/supabase-js';
 import { environment } from '../../../environments/environment';
 
+export type SupabaseAuthLock = <R>(name: string, acquireTimeout: number, fn: () => Promise<R>) => Promise<R>;
+
+export function createSupabaseAuthLock(): SupabaseAuthLock {
+  return async <R>(name: string, acquireTimeout: number, fn: () => Promise<R>): Promise<R> => {
+    const lockManager = globalThis.navigator?.locks;
+    if (!lockManager) {
+      return fn();
+    }
+
+    if (acquireTimeout === 0) {
+      const result = await lockManager.request(name, { mode: 'exclusive', ifAvailable: true }, async lock => {
+        if (!lock) return undefined;
+        return fn();
+      });
+
+      return result as R;
+    }
+
+    return lockManager.request(name, { mode: 'exclusive' }, fn);
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class AuthService {
   private supabase: SupabaseClient;
@@ -26,6 +48,7 @@ export class AuthService {
       auth: {
         storageKey: 'stockscreen-auth',
         flowType: 'pkce',
+        lock: createSupabaseAuthLock(),
       },
     });
 

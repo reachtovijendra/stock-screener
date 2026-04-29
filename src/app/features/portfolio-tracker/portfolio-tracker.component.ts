@@ -10,8 +10,8 @@ import { ToastModule } from 'primeng/toast';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { MessageService } from 'primeng/api';
 
-import { PortfolioTargetEntry } from '../../core/models';
-import { PortfolioTrackerService } from '../../core/services';
+import { Market, PortfolioActualEntry, PortfolioTargetEntry } from '../../core/models';
+import { MarketService, PortfolioTrackerService } from '../../core/services';
 import { AuthService } from '../../core/services/auth.service';
 
 interface PortfolioRow extends PortfolioTargetEntry {
@@ -39,6 +39,7 @@ interface PortfolioRow extends PortfolioTargetEntry {
 })
 export class PortfolioTrackerComponent implements OnInit {
   private portfolioService = inject(PortfolioTrackerService);
+  private marketService = inject(MarketService);
   private messageService = inject(MessageService);
   private authService = inject(AuthService);
 
@@ -56,15 +57,31 @@ export class PortfolioTrackerComponent implements OnInit {
   monthlyAddition: number | null = null;
   expectedMonthlyReturn: number | null = null;
   startYear: number = new Date().getFullYear();
+  startMonth: number = new Date().getMonth() + 1;
   startYearOptions: number[] = [];
+  startMonthOptions: { label: string; value: number }[] = [
+    { label: 'Jan', value: 1 },
+    { label: 'Feb', value: 2 },
+    { label: 'Mar', value: 3 },
+    { label: 'Apr', value: 4 },
+    { label: 'May', value: 5 },
+    { label: 'Jun', value: 6 },
+    { label: 'Jul', value: 7 },
+    { label: 'Aug', value: 8 },
+    { label: 'Sep', value: 9 },
+    { label: 'Oct', value: 10 },
+    { label: 'Nov', value: 11 },
+    { label: 'Dec', value: 12 },
+  ];
   showSetup = false;
 
   private dataLoaded = false;
   private initialLoadDone = false;
   private currentUserId: string | null = null;
+  private currentPortfolioMarket: Market | null = null;
 
   private storageKey(key: string): string {
-    return `portfolio_${this.currentUserId}_${key}`;
+    return `portfolio_${this.currentUserId}_${this.marketService.currentMarket()}_${key}`;
   }
 
   constructor() {
@@ -72,9 +89,11 @@ export class PortfolioTrackerComponent implements OnInit {
       // Track user changes
       const user = this.authService.user();
       const userId = user?.id ?? null;
+      const market = this.marketService.currentMarket();
 
-      if (userId !== this.currentUserId) {
+      if (userId !== this.currentUserId || market !== this.currentPortfolioMarket) {
         this.currentUserId = userId;
+        this.currentPortfolioMarket = market;
         this.dataLoaded = false;
         this.initialLoadDone = false;
         this.portfolioData = [];
@@ -96,7 +115,7 @@ export class PortfolioTrackerComponent implements OnInit {
 
         if (!this.dataLoaded && targets.length === 0) {
           this.dataLoaded = true;
-          if (!localStorage.getItem(this.storageKey('setupComplete'))) {
+          if (!this.getStoredSetupValue('setupComplete')) {
             this.showSetup = true;
           } else {
             this.generateTenYearProjection();
@@ -116,6 +135,7 @@ export class PortfolioTrackerComponent implements OnInit {
     this.buildStartYearOptions();
     const user = this.authService.user();
     this.currentUserId = user?.id ?? null;
+    this.currentPortfolioMarket = this.marketService.currentMarket();
     this.loadInitialContributions();
     this.portfolioService.loadData();
   }
@@ -126,12 +146,35 @@ export class PortfolioTrackerComponent implements OnInit {
       && this.expectedMonthlyReturn !== null && this.expectedMonthlyReturn > 0;
   }
 
+  get annualExpectedReturn(): string {
+    if (this.expectedMonthlyReturn === null) return '-';
+    const annualReturn = (Math.pow(1 + this.expectedMonthlyReturn / 100, 12) - 1) * 100;
+    return annualReturn.toFixed(2);
+  }
+
+  get portfolioCurrency(): string {
+    return this.marketService.marketInfo().currency;
+  }
+
+  get portfolioLocale(): string {
+    return this.marketService.currentMarket() === 'IN' ? 'en-IN' : 'en-US';
+  }
+
+  get startingInvestmentPlaceholder(): string {
+    return this.marketService.currentMarket() === 'IN' ? 'e.g. 1,00,000' : 'e.g. 100,000';
+  }
+
+  get monthlyContributionPlaceholder(): string {
+    return this.marketService.currentMarket() === 'IN' ? 'e.g. 3,500' : 'e.g. 3,500';
+  }
+
   async completeSetup(): Promise<void> {
     localStorage.setItem(this.storageKey('setupComplete'), 'true');
     localStorage.setItem(this.storageKey('targetInitialContribution'), this.targetInitialContribution!.toString());
     localStorage.setItem(this.storageKey('monthlyAddition'), this.monthlyAddition!.toString());
     localStorage.setItem(this.storageKey('expectedMonthlyReturn'), this.expectedMonthlyReturn!.toString());
     localStorage.setItem(this.storageKey('startYear'), this.startYear.toString());
+    localStorage.setItem(this.storageKey('startMonth'), this.startMonth.toString());
     if (this.actualInitialContribution !== null) {
       localStorage.setItem(this.storageKey('actualInitialContribution'), this.actualInitialContribution.toString());
     }
@@ -166,10 +209,17 @@ export class PortfolioTrackerComponent implements OnInit {
     this.monthlyAddition = null;
     this.expectedMonthlyReturn = null;
     this.startYear = new Date().getFullYear();
+    this.startMonth = new Date().getMonth() + 1;
     this.dataLoaded = true;
     this.initialLoadDone = false;
-    const prefix = `portfolio_${this.currentUserId}_`;
+    const prefix = `portfolio_${this.currentUserId}_${this.marketService.currentMarket()}_`;
     Object.keys(localStorage).filter(k => k.startsWith(prefix)).forEach(k => localStorage.removeItem(k));
+    if (this.marketService.currentMarket() === 'US') {
+      const legacyPrefix = `portfolio_${this.currentUserId}_`;
+      Object.keys(localStorage)
+        .filter(k => k.startsWith(legacyPrefix) && !k.startsWith(prefix))
+        .forEach(k => localStorage.removeItem(k));
+    }
     this.showSetup = true;
   }
 
@@ -207,10 +257,12 @@ export class PortfolioTrackerComponent implements OnInit {
     let previousPrincipal = startingInvestment;
 
     const startYear = Number(this.startYear);
+    const startMonth = Number(this.startMonth);
 
     for (let i = 1; i <= 120; i++) {
-      const year = startYear + Math.floor((i - 1) / 12);
-      const monthNumber = ((i - 1) % 12) + 1;
+      const monthOffset = startMonth - 1 + (i - 1);
+      const year = startYear + Math.floor(monthOffset / 12);
+      const monthNumber = (monthOffset % 12) + 1;
 
       const investment = previousTotal;
       const added = monthlyAddition;
@@ -260,9 +312,24 @@ export class PortfolioTrackerComponent implements OnInit {
     }
 
     if (this.portfolioData.length > 0) {
-      const firstRow = this.portfolioData[0];
-      firstRow.actualInvestment = this.actualInitialContribution;
-      await this.onActualChange(firstRow, false);
+      try {
+        const firstRow = this.portfolioData[0];
+        firstRow.actualInvestment = this.actualInitialContribution;
+
+        if (firstRow.actualId || firstRow.actualAdded !== null || firstRow.actualTotal !== null) {
+          await this.saveActualRow(firstRow);
+        }
+        this.applyYearFilter();
+      } catch (error) {
+        console.error('Error updating actual initial:', error);
+        this.messageService.add({
+          severity: 'error',
+          summary: 'Error',
+          detail: 'Failed to update actual initial. Please try again.',
+          life: 3000
+        });
+        return;
+      }
     }
 
     this.messageService.add({
@@ -297,15 +364,17 @@ export class PortfolioTrackerComponent implements OnInit {
     });
   }
 
-  async onStartYearChange(): Promise<void> {
+  async onStartDateChange(): Promise<void> {
     this.startYear = Number(this.startYear);
+    this.startMonth = Number(this.startMonth);
     localStorage.setItem(this.storageKey('startYear'), this.startYear.toString());
+    localStorage.setItem(this.storageKey('startMonth'), this.startMonth.toString());
     await this.portfolioService.clearAllData();
     await this.generateTenYearProjection();
     this.messageService.add({
       severity: 'success',
       summary: 'Updated',
-      detail: `Projection recalculated for ${this.startYear} - ${this.startYear + 9}`,
+      detail: `Projection recalculated for ${this.getProjectionRangeLabel()}`,
       life: 2000
     });
   }
@@ -319,11 +388,14 @@ export class PortfolioTrackerComponent implements OnInit {
   }
 
   private loadInitialContributions(): void {
-    const savedTarget = localStorage.getItem(this.storageKey('targetInitialContribution'));
-    const savedActual = localStorage.getItem(this.storageKey('actualInitialContribution'));
-    const savedMonthly = localStorage.getItem(this.storageKey('monthlyAddition'));
-    const savedReturn = localStorage.getItem(this.storageKey('expectedMonthlyReturn'));
-    const savedStartYear = localStorage.getItem(this.storageKey('startYear'));
+    this.resetSetupFields();
+
+    const savedTarget = this.getStoredSetupValue('targetInitialContribution');
+    const savedActual = this.getStoredSetupValue('actualInitialContribution');
+    const savedMonthly = this.getStoredSetupValue('monthlyAddition');
+    const savedReturn = this.getStoredSetupValue('expectedMonthlyReturn');
+    const savedStartYear = this.getStoredSetupValue('startYear');
+    const savedStartMonth = this.getStoredSetupValue('startMonth');
 
     if (savedTarget) {
       this.targetInitialContribution = parseFloat(savedTarget);
@@ -340,6 +412,37 @@ export class PortfolioTrackerComponent implements OnInit {
     if (savedStartYear) {
       this.startYear = parseInt(savedStartYear, 10);
     }
+    if (savedStartMonth) {
+      this.startMonth = parseInt(savedStartMonth, 10);
+    } else if (this.hasLegacySetupComplete()) {
+      this.startMonth = 1;
+    }
+  }
+
+  private resetSetupFields(): void {
+    this.targetInitialContribution = null;
+    this.actualInitialContribution = null;
+    this.monthlyAddition = null;
+    this.expectedMonthlyReturn = null;
+    this.startYear = new Date().getFullYear();
+    this.startMonth = new Date().getMonth() + 1;
+  }
+
+  private getStoredSetupValue(key: string): string | null {
+    const marketScopedValue = localStorage.getItem(this.storageKey(key));
+    if (marketScopedValue !== null) return marketScopedValue;
+
+    // Legacy setup keys were user-scoped only when the tracker supported USD only.
+    if (this.hasLegacySetupComplete()) {
+      return localStorage.getItem(`portfolio_${this.currentUserId}_${key}`);
+    }
+
+    return null;
+  }
+
+  private hasLegacySetupComplete(): boolean {
+    return this.marketService.currentMarket() === 'US'
+      && localStorage.getItem(`portfolio_${this.currentUserId}_setupComplete`) === 'true';
   }
 
   private loadPortfolioData(targets: PortfolioTargetEntry[], actuals: any[]): void {
@@ -377,6 +480,12 @@ export class PortfolioTrackerComponent implements OnInit {
 
     if (this.portfolioData.length > 0) {
       const firstRow = this.portfolioData[0];
+      this.targetInitialContribution ??= firstRow.investment;
+      this.monthlyAddition ??= firstRow.added;
+      this.expectedMonthlyReturn ??= firstRow.return_percent;
+      this.startYear = firstRow.year;
+      this.startMonth = firstRow.month;
+
       if (this.actualInitialContribution !== null) {
         firstRow.actualInvestment = this.actualInitialContribution;
       } else if (firstRow.actualInvestment !== null) {
@@ -417,37 +526,8 @@ export class PortfolioTrackerComponent implements OnInit {
   }
 
   async onActualChange(row: PortfolioRow, showToast: boolean = true): Promise<void> {
-    const actualTotalInvestment = (row.actualInvestment ?? 0) + (row.actualAdded ?? 0);
-    const actualProfit = row.actualTotal ? row.actualTotal - actualTotalInvestment : 0;
-    const actualReturnPercent = actualTotalInvestment > 0 && row.actualTotal
-      ? ((row.actualTotal - actualTotalInvestment) / actualTotalInvestment) * 100
-      : 0;
-
-    const actualEntry = {
-      id: row.actualId ?? undefined,
-      year: row.year,
-      month: row.month,
-      investment: row.actualInvestment ?? 0,
-      added: row.actualAdded ?? 0,
-      principal: actualTotalInvestment,
-      total_investment: actualTotalInvestment,
-      return_percent: Number(actualReturnPercent.toFixed(2)),
-      profit: actualProfit,
-      total: row.actualTotal ?? 0
-    };
-
     try {
-      if (row.actualId) {
-        await this.portfolioService.updateActual(actualEntry);
-      } else {
-        await this.portfolioService.addActual(actualEntry);
-        // Get the ID from the service's actuals signal without full reload
-        const actuals = this.portfolioService.getActuals();
-        const saved = actuals.find(a => a.year === row.year && a.month === row.month);
-        if (saved?.id) {
-          row.actualId = saved.id;
-        }
-      }
+      await this.saveActualRow(row);
 
       if (row.actualTotal !== null) {
         await this.updateNextMonthInvestment(row);
@@ -461,6 +541,39 @@ export class PortfolioTrackerComponent implements OnInit {
         detail: 'Failed to save data. Please try again.',
         life: 3000
       });
+    }
+  }
+
+  private async saveActualRow(row: PortfolioRow): Promise<void> {
+    const actualTotalInvestment = (row.actualInvestment ?? 0) + (row.actualAdded ?? 0);
+    const actualProfit = row.actualTotal ? row.actualTotal - actualTotalInvestment : 0;
+    const actualReturnPercent = actualTotalInvestment > 0 && row.actualTotal
+      ? ((row.actualTotal - actualTotalInvestment) / actualTotalInvestment) * 100
+      : 0;
+
+    const actualEntry: PortfolioActualEntry = {
+      id: row.actualId ?? undefined,
+      year: row.year,
+      month: row.month,
+      investment: row.actualInvestment ?? 0,
+      added: row.actualAdded ?? 0,
+      principal: actualTotalInvestment,
+      total_investment: actualTotalInvestment,
+      return_percent: Number(actualReturnPercent.toFixed(2)),
+      profit: actualProfit,
+      total: row.actualTotal ?? 0
+    };
+
+    if (row.actualId) {
+      await this.portfolioService.updateActual(actualEntry);
+    } else {
+      await this.portfolioService.addActual(actualEntry);
+      // Get the ID from the service's actuals signal without full reload
+      const actuals = this.portfolioService.getActuals();
+      const saved = actuals.find(a => a.year === row.year && a.month === row.month);
+      if (saved?.id) {
+        row.actualId = saved.id;
+      }
     }
   }
 
@@ -478,8 +591,9 @@ export class PortfolioTrackerComponent implements OnInit {
 
   formatCurrency(value: number | null): string {
     if (value === null) return '-';
-    return new Intl.NumberFormat('en-US', {
-      style: 'decimal',
+    return new Intl.NumberFormat(this.portfolioLocale, {
+      style: 'currency',
+      currency: this.portfolioCurrency,
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
     }).format(value);
@@ -487,15 +601,24 @@ export class PortfolioTrackerComponent implements OnInit {
 
   getActualInitialContribution(): string {
     if (this.actualInitialContribution !== null) {
-      return '$' + this.formatCurrency(this.actualInitialContribution);
+      return this.formatCurrency(this.actualInitialContribution);
     }
-    return '$' + this.formatCurrency(this.targetInitialContribution);
+    return this.formatCurrency(this.targetInitialContribution);
   }
 
   getMonthName(month: number): string {
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     return months[(month - 1) % 12] || '';
+  }
+
+  getProjectionRangeLabel(): string {
+    const startYear = Number(this.startYear);
+    const startMonth = Number(this.startMonth);
+    const endMonthOffset = startMonth - 1 + 119;
+    const endYear = startYear + Math.floor(endMonthOffset / 12);
+    const endMonth = (endMonthOffset % 12) + 1;
+    return `${this.getMonthName(startMonth)} ${startYear} - ${this.getMonthName(endMonth)} ${endYear}`;
   }
 
   getVariance(actual: number | null, target: number): number {
@@ -539,7 +662,10 @@ export class PortfolioTrackerComponent implements OnInit {
 
     for (let i = 0; i <= rowIndex; i++) {
       const currentRow = this.portfolioData[i];
-      if (currentRow.actualAdded === null) return null;
+      if (currentRow.actualAdded === null) {
+        if (i === 0 && rowIndex === 0) continue;
+        return null;
+      }
       cumulativePrincipal += currentRow.actualAdded;
     }
 
@@ -550,6 +676,10 @@ export class PortfolioTrackerComponent implements OnInit {
     const principal = this.getCumulativeActualPrincipal(row);
     if (principal === null) return '-';
     return this.formatCurrency(principal);
+  }
+
+  getTargetStartingBalance(row: PortfolioRow): number {
+    return row.investment;
   }
 
   getActualTotalInvestment(actualInvestment: number | null, actualAdded: number | null): string {
@@ -577,20 +707,20 @@ export class PortfolioTrackerComponent implements OnInit {
   }
 
   /**
-   * Start of Month = previous month's actual total + this month's actual added.
-   * For first month: actual initial investment + actual added.
+   * Starting balance before the current month's contribution.
+   * First month starts from Actual Initial; later months start from the previous actual ending value.
    */
   getStartOfMonth(row: PortfolioRow): number | null {
     const rowIndex = this.portfolioData.findIndex(r => r.year === row.year && r.month === row.month);
     if (rowIndex === -1) return null;
 
     if (rowIndex === 0) {
-      if (this.portfolioData[0].actualInvestment === null || row.actualAdded === null) return null;
-      return this.portfolioData[0].actualInvestment + row.actualAdded;
+      if (this.portfolioData[0].actualInvestment === null) return null;
+      return this.portfolioData[0].actualInvestment;
     } else {
       const prevRow = this.portfolioData[rowIndex - 1];
-      if (prevRow.actualTotal === null || row.actualAdded === null) return null;
-      return prevRow.actualTotal + row.actualAdded;
+      if (prevRow.actualTotal === null) return null;
+      return prevRow.actualTotal;
     }
   }
 
@@ -606,24 +736,28 @@ export class PortfolioTrackerComponent implements OnInit {
   }
 
   getTargetOverallReturn(row: PortfolioRow): string {
-    if (row.investment === 0) return '-';
-    const returnPct = ((row.total - row.investment) / row.investment) * 100;
+    if (row.principal === 0) return '-';
+    const returnPct = ((row.total - row.principal) / row.principal) * 100;
     return returnPct.toFixed(1) + '%';
   }
 
   getActualMonthlyReturn(row: PortfolioRow): string {
     if (row.actualTotal === null) return '-';
     const startOfMonth = this.getStartOfMonth(row);
-    if (startOfMonth === null || startOfMonth === 0) return '-';
-    const monthlyReturn = ((row.actualTotal - startOfMonth) / startOfMonth) * 100;
+    if (startOfMonth === null || row.actualAdded === null) return '-';
+    const investedThisMonth = startOfMonth + row.actualAdded;
+    if (investedThisMonth === 0) return '-';
+    const monthlyReturn = ((row.actualTotal - investedThisMonth) / investedThisMonth) * 100;
     return (monthlyReturn >= 0 ? '+' : '') + monthlyReturn.toFixed(1) + '%';
   }
 
   getMonthlyReturnClass(row: PortfolioRow): string {
     if (row.actualTotal === null) return 'no-data';
     const startOfMonth = this.getStartOfMonth(row);
-    if (startOfMonth === null || startOfMonth === 0) return 'no-data';
-    const monthlyReturn = ((row.actualTotal - startOfMonth) / startOfMonth) * 100;
+    if (startOfMonth === null || row.actualAdded === null) return 'no-data';
+    const investedThisMonth = startOfMonth + row.actualAdded;
+    if (investedThisMonth === 0) return 'no-data';
+    const monthlyReturn = ((row.actualTotal - investedThisMonth) / investedThisMonth) * 100;
     if (monthlyReturn > 0) return 'profit-positive';
     if (monthlyReturn < 0) return 'profit-negative';
     return 'has-data';
@@ -708,7 +842,7 @@ export class PortfolioTrackerComponent implements OnInit {
   }
 
   isFirstMonth(row: PortfolioRow): boolean {
-    return row.year === this.startYear && row.month === 1;
+    return row.year === this.startYear && row.month === this.startMonth;
   }
 
   clearRowData(row: PortfolioRow): void {

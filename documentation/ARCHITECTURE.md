@@ -110,6 +110,7 @@ The application uses Angular Signals for reactive state management:
 
 - `ScreenerService`: Manages filter state, results, pagination, and sorting
 - `MarketService`: Handles market selection (US/India) with localStorage persistence
+- `PortfolioTrackerService`: Persists market-specific portfolio targets and actuals in Supabase
 - `ThemeService`: Manages dark/light theme with persistence
 
 ### Data Flow
@@ -146,6 +147,10 @@ Yahoo Finance has unofficial rate limits. Mitigations:
 - Request queuing in yahoo-finance2
 
 ## Data Models
+
+### Portfolio Tracker
+
+Portfolio tracker data is user-specific and market-specific. The `portfolio_targets` and `portfolio_actuals` tables include a `market` field (`US` or `IN`) so users can maintain separate US and India portfolios without overwriting projections or actual values. Projections contain 120 monthly rows and start from the user-selected start month and year. The tracker displays starting balance before monthly additions, then counts monthly additions separately when calculating target and actual returns.
 
 ### Stock Quote
 
@@ -204,4 +209,4 @@ interface ScreenerFilters {
 - Frontend: Vercel static hosting
 - Backend: Vercel serverless functions
 - CDN: Vercel Edge Network
-- No database required (data from Yahoo Finance)
+- Supabase stores authenticated user data such as watchlists and market-specific portfolio tracker records

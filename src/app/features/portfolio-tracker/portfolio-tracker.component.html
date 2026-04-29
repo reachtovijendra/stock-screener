@@ -76,9 +76,9 @@
             <p class="setup-hint">How much are you starting with?</p>
             <p-inputNumber
               [(ngModel)]="targetInitialContribution"
-              mode="currency" currency="USD" locale="en-US"
+              mode="currency" [currency]="portfolioCurrency" [locale]="portfolioLocale"
               [minFractionDigits]="0" [maxFractionDigits]="0"
-              placeholder="e.g. 100,000"
+              [placeholder]="startingInvestmentPlaceholder"
               styleClass="setup-input">
             </p-inputNumber>
           </div>
@@ -88,21 +88,9 @@
             <p class="setup-hint">How much will you invest each month?</p>
             <p-inputNumber
               [(ngModel)]="monthlyAddition"
-              mode="currency" currency="USD" locale="en-US"
+              mode="currency" [currency]="portfolioCurrency" [locale]="portfolioLocale"
               [minFractionDigits]="0" [maxFractionDigits]="0"
-              placeholder="e.g. 3,500"
-              styleClass="setup-input">
-            </p-inputNumber>
-          </div>
-
-          <div class="setup-field">
-            <label>Actual Starting Investment</label>
-            <p class="setup-hint">Your real starting amount (optional)</p>
-            <p-inputNumber
-              [(ngModel)]="actualInitialContribution"
-              mode="currency" currency="USD" locale="en-US"
-              [minFractionDigits]="0" [maxFractionDigits]="0"
-              placeholder="e.g. 100,000"
+              [placeholder]="monthlyContributionPlaceholder"
               styleClass="setup-input">
             </p-inputNumber>
           </div>
@@ -119,21 +107,33 @@
               placeholder="e.g. 1.6"
               styleClass="setup-input">
             </p-inputNumber>
+            @if (expectedMonthlyReturn !== null) {
+              <p class="annual-return-label">
+                Annual expected return: <strong>{{ annualExpectedReturn }}%</strong>
+              </p>
+            }
           </div>
 
           <div class="setup-field">
-            <label>Start Year</label>
+            <label>Start Month</label>
             <p class="setup-hint">When does your tracking begin?</p>
-            <select class="start-year-select setup-select" [(ngModel)]="startYear">
-              @for (y of startYearOptions; track y) {
-                <option [value]="y">{{ y }}</option>
-              }
-            </select>
+            <div class="start-date-selects">
+              <select class="start-year-select setup-select" [(ngModel)]="startMonth">
+                @for (m of startMonthOptions; track m.value) {
+                  <option [value]="m.value">{{ m.label }}</option>
+                }
+              </select>
+              <select class="start-year-select setup-select" [(ngModel)]="startYear">
+                @for (y of startYearOptions; track y) {
+                  <option [value]="y">{{ y }}</option>
+                }
+              </select>
+            </div>
           </div>
         </div>
 
         <div class="setup-summary">
-          <span>Projection: <strong>{{ startYear }} &ndash; {{ startYear + 9 }}</strong></span>
+          <span>Projection: <strong>{{ getProjectionRangeLabel() }}</strong></span>
           <span>Expected return: <strong>{{ expectedMonthlyReturn ?? '–' }}% / month</strong></span>
         </div>
 
@@ -178,7 +178,7 @@
     </div>
     <div class="summary-card">
       <div class="summary-label">Monthly Addition</div>
-      <div class="summary-value mono">${{ formatCurrency(monthlyAddition ?? 0) }}</div>
+      <div class="summary-value mono">{{ formatCurrency(monthlyAddition ?? 0) }}</div>
     </div>
     <div class="summary-card">
       <div class="summary-label">Target Monthly Return</div>
@@ -186,7 +186,7 @@
     </div>
     <div class="summary-card">
       <div class="summary-label">Projection</div>
-      <div class="summary-value mono">{{ startYear }} &ndash; {{ startYear + 9 }}</div>
+      <div class="summary-value mono">{{ getProjectionRangeLabel() }}</div>
     </div>
   </div>
 
@@ -228,19 +228,17 @@
   <div class="config-bar">
     <div class="config-group">
       <label>Target Initial</label>
-      <p-inputNumber
-        [(ngModel)]="targetInitialContribution"
-        mode="currency" currency="USD" locale="en-US"
-        [minFractionDigits]="0" [maxFractionDigits]="0"
-        (onBlur)="onTargetInitialChange()"
-        styleClass="config-input">
-      </p-inputNumber>
+      <input
+        class="locked-config-input"
+        [value]="formatCurrency(targetInitialContribution ?? 0)"
+        aria-label="Target initial investment"
+        disabled>
     </div>
     <div class="config-group">
       <label>Actual Initial</label>
       <p-inputNumber
         [(ngModel)]="actualInitialContribution"
-        mode="currency" currency="USD" locale="en-US"
+        mode="currency" [currency]="portfolioCurrency" [locale]="portfolioLocale"
         [minFractionDigits]="0" [maxFractionDigits]="0"
         (onBlur)="onActualInitialChange()"
         styleClass="config-input">
@@ -248,32 +246,34 @@
     </div>
     <div class="config-group">
       <label>Monthly Addition</label>
-      <p-inputNumber
-        [(ngModel)]="monthlyAddition"
-        mode="currency" currency="USD" locale="en-US"
-        [minFractionDigits]="0" [maxFractionDigits]="0"
-        (onBlur)="onMonthlyAdditionChange()"
-        styleClass="config-input">
-      </p-inputNumber>
+      <input
+        class="locked-config-input"
+        [value]="formatCurrency(monthlyAddition ?? 0)"
+        aria-label="Monthly addition"
+        disabled>
     </div>
     <div class="config-group">
       <label>Monthly Return %</label>
-      <p-inputNumber
-        [(ngModel)]="expectedMonthlyReturn"
-        mode="decimal"
-        [minFractionDigits]="1" [maxFractionDigits]="2"
-        suffix="%"
-        (onBlur)="onExpectedReturnChange()"
-        styleClass="config-input-sm">
-      </p-inputNumber>
+      <input
+        class="locked-config-input locked-config-input-sm"
+        [value]="(expectedMonthlyReturn ?? 0) + '%'"
+        aria-label="Expected monthly return"
+        disabled>
     </div>
     <div class="config-group">
-      <label>Start Year</label>
-      <select class="start-year-select" [(ngModel)]="startYear" (change)="onStartYearChange()">
-        @for (y of startYearOptions; track y) {
-          <option [value]="y">{{ y }}</option>
-        }
-      </select>
+      <label>Start</label>
+      <div class="start-date-selects compact">
+        <select class="start-year-select" [value]="startMonth" disabled aria-label="Start month">
+          @for (m of startMonthOptions; track m.value) {
+            <option [value]="m.value">{{ m.label }}</option>
+          }
+        </select>
+        <select class="start-year-select" [value]="startYear" disabled aria-label="Start year">
+          @for (y of startYearOptions; track y) {
+            <option [value]="y">{{ y }}</option>
+          }
+        </select>
+      </div>
     </div>
     <div class="config-spacer"></div>
     <div class="config-group year-chips-group">
@@ -332,7 +332,7 @@
           <th rowspan="2" class="col-year">Year</th>
           <th rowspan="2" class="col-month">Month</th>
           <th colspan="2" class="group-th">Added</th>
-          <th colspan="2" class="group-th">Start of Month</th>
+          <th colspan="2" class="group-th">Starting Balance</th>
           <th colspan="2" class="group-th">End of Month</th>
           <th colspan="2" class="group-th">Monthly Return %</th>
           <th colspan="2" class="group-th">Total Invested</th>
@@ -373,15 +373,16 @@
           <td class="val-cell actual-cell neutral">
             <p-inputNumber
               [(ngModel)]="row.actualAdded"
-              mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
+              mode="currency" [currency]="portfolioCurrency" [locale]="portfolioLocale"
+              [minFractionDigits]="0" [maxFractionDigits]="0"
               [allowEmpty]="true" placeholder="-"
               (onBlur)="onActualChange(row)"
               styleClass="actual-input">
             </p-inputNumber>
           </td>
 
-          <!-- Start of Month (neutral) -->
-          <td class="val-cell target-cell mono">{{ formatCurrency(row.principal) }}</td>
+          <!-- Starting Balance (neutral) -->
+          <td class="val-cell target-cell mono">{{ formatCurrency(getTargetStartingBalance(row)) }}</td>
           <td class="val-cell actual-cell neutral mono" [ngClass]="getStartOfMonthClass(row)">{{ getStartOfMonthDisplay(row) }}</td>
 
           <!-- End of Month (neutral) -->
@@ -389,7 +390,8 @@
           <td class="val-cell actual-cell neutral">
             <p-inputNumber
               [(ngModel)]="row.actualTotal"
-              mode="decimal" [minFractionDigits]="0" [maxFractionDigits]="0"
+              mode="currency" [currency]="portfolioCurrency" [locale]="portfolioLocale"
+              [minFractionDigits]="0" [maxFractionDigits]="0"
               [allowEmpty]="true" placeholder="-"
               (onBlur)="onActualChange(row)"
               styleClass="actual-input">

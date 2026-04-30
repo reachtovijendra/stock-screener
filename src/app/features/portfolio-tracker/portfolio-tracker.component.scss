@@ -552,12 +552,12 @@
   flex: 1;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  border-radius: 8px;
+  border: 1px solid var(--surface-border);
 
   @media (min-width: 769px) {
     min-height: 200px;
   }
-  border-radius: 8px;
-  border: 1px solid var(--surface-border);
 
   ::ng-deep p-table {
     flex: 1;

@@ -51,6 +51,8 @@ interface MarketIndex {
               [showEmptyMessage]="true"
               emptyMessage="No stocks found"
               [forceSelection]="false"
+              [appendTo]="'body'"
+              panelStyleClass="header-stock-search-panel"
               styleClass="header-stock-search"
               inputStyleClass="search-input">
               <ng-template let-stock pTemplate="item">
@@ -263,8 +265,21 @@ interface MarketIndex {
         }
       }
 
-      .p-autocomplete-panel {
-        min-width: 350px;
+    }
+
+    :host ::ng-deep .header-stock-search-panel {
+      min-width: 420px;
+      max-width: min(520px, calc(100vw - 24px));
+      z-index: 1200 !important;
+
+      .p-autocomplete-items {
+        padding: 0.25rem;
+      }
+
+      .p-autocomplete-option {
+        min-height: 40px;
+        padding: 0.45rem 0.65rem;
+        cursor: pointer;
       }
     }
 

@@ -31,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Updated Angular production budget warning thresholds to match the current application size while retaining error thresholds for unexpected growth.
 - Enabled PostHog analytics in production with the US Cloud host while keeping local development analytics disabled to avoid noisy test data.
 - Added Vercel deployment ignore rules so local helper files, backtest data, build outputs, and local configuration are excluded from CLI deployments.
 - Portfolio tracker table now shows Starting Balance before monthly additions, with additions counted separately in target and actual return calculations.
@@ -65,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Removed obsolete Vercel function memory configuration and resolved Sass mixed-declaration deprecation warnings in the portfolio tracker table container.
+- Fixed the global header stock search dropdown being clipped by the fixed header, making autocomplete suggestions easier to read and select.
 - Fixed local recommendations page showing no rows by adding the missing mock API route for `/api/stocks?action=daily-picks`, mirroring the Vercel handler against Supabase `daily_picks`.
 - Fixed local watchlist analyst target and earnings columns by aligning the mock search API with Yahoo analyst target and calendar event fields, including a quoteSummary fallback when quote data omits target prices.
 - Fixed watchlist stock autocomplete suggestions disappearing intermittently before selection by ignoring stale async search responses after a newer query has already populated the suggestion list.

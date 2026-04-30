@@ -34,7 +34,7 @@ interface DailyPick {
   signals: string[];
   rsi: number | null;
   beta: number | null;
-  outcome: string | null;       // 'hit-target' | 'hit-sl' | 'no-trigger' | null
+  outcome: string | null;       // 'hit-target' | 'hit-sl' | 'exit-at-close' | 'no-trigger' | null
   actual_high: number | null;
   actual_low: number | null;
   actual_close: number | null;
@@ -56,6 +56,8 @@ interface MonthOption {
   label: string;
   value: string;
 }
+
+type DisplayOutcome = 'hit-target' | 'hit-sl' | 'no-trigger' | 'pending';
 
 @Component({
   selector: 'app-recommendations',
@@ -222,7 +224,7 @@ interface MonthOption {
                       <i [class]="getOutcomeIcon(pick)"></i>
                       {{ getOutcomeLabel(pick) }}
                     </span>
-                    <div class="outcome-pnl" *ngIf="getOutcome(pick) !== 'pending'">
+                    <div class="outcome-pnl" *ngIf="shouldShowPnl(pick)">
                       {{ getOutcome(pick) === 'hit-target' ? '+' : '' }}{{ getPnlPercent(pick) | number:'1.1-1' }}%
                     </div>
                     <div class="outcome-high" *ngIf="pick.actual_high">
@@ -601,6 +603,11 @@ interface MonthOption {
       color: var(--blue-400, #60a5fa);
     }
 
+    .outcome-badge.no-trigger {
+      background: rgba(148, 163, 184, 0.14);
+      color: var(--text-color-secondary);
+    }
+
     .outcome-pnl {
       font-size: 0.75rem;
       font-weight: 700;
@@ -732,7 +739,7 @@ export class RecommendationsComponent implements OnInit {
         mediumCount: picks.filter(p => p.priority === 'Medium').length,
         hitTargetCount: wins,
         hitStopLossCount: losses,
-        pendingCount: picks.filter(p => date >= today || p.outcome == null).length,
+        pendingCount: picks.filter(p => this.isPickPending(p)).length,
       };
     });
   });
@@ -742,10 +749,11 @@ export class RecommendationsComponent implements OnInit {
   totalClosedProfitable = computed(() => this.picks().filter(p => p.outcome === 'exit-at-close' && p.pnl_percent != null && p.pnl_percent > 0).length);
   totalClosedAtLoss = computed(() => this.picks().filter(p => p.outcome === 'exit-at-close' && (p.pnl_percent == null || p.pnl_percent <= 0)).length);
   totalStoppedOut = computed(() => this.picks().filter(p => p.outcome === 'hit-sl').length);
-  totalNotTraded = computed(() => this.picks().filter(p => p.outcome === 'no-trigger').length);
+  totalNotTraded = computed(() => {
+    return this.picks().filter(p => p.outcome === 'no-trigger' || (p.outcome == null && !this.isPickPending(p))).length;
+  });
   totalPending = computed(() => {
-    const today = new Date().toISOString().slice(0, 10);
-    return this.picks().filter(p => p.pick_date >= today || p.outcome == null).length;
+    return this.picks().filter(p => this.isPickPending(p)).length;
   });
   winRate = computed(() => {
     const wins = this.totalTargetHit() + this.totalClosedProfitable();
@@ -859,9 +867,8 @@ export class RecommendationsComponent implements OnInit {
    * The evaluate-picks cron runs each morning and updates outcomes
    * based on actual intraday price data from Yahoo Finance.
    */
-  getOutcome(pick: DailyPick): 'hit-target' | 'hit-sl' | 'pending' {
-    const today = new Date().toISOString().slice(0, 10);
-    if (pick.pick_date >= today) return 'pending';
+  getOutcome(pick: DailyPick): DisplayOutcome {
+    if (this.isPickPending(pick)) return 'pending';
 
     // Use stored outcome from the evaluate-picks cron
     if (pick.outcome === 'hit-target') return 'hit-target';
@@ -870,19 +877,28 @@ export class RecommendationsComponent implements OnInit {
     if (pick.outcome === 'exit-at-close') {
       return (pick.pnl_percent != null && pick.pnl_percent > 0) ? 'hit-target' : 'hit-sl';
     }
-    if (pick.outcome === 'no-trigger') return 'pending'; // no-trigger = trade never activated
+    if (pick.outcome === 'no-trigger') return 'no-trigger';
 
-    // Not yet evaluated
-    return 'pending';
+    // Past picks with missing evaluations are treated as not traded so stale rows do not remain pending.
+    return 'no-trigger';
+  }
+
+  private isPickPending(pick: DailyPick): boolean {
+    if (pick.outcome != null) return false;
+
+    const today = new Date().toISOString().slice(0, 10);
+    return pick.pick_date > today;
   }
 
   getOutcomeLabel(pick: DailyPick): string {
-    if (pick.outcome === 'hit-target') return 'Target Hit';
-    if (pick.outcome === 'hit-sl') return 'Stopped Out';
-    if (pick.outcome === 'exit-at-close') {
+    const outcome = this.getOutcome(pick);
+    if (outcome === 'hit-target' && pick.outcome === 'exit-at-close') {
       return (pick.pnl_percent != null && pick.pnl_percent > 0) ? 'Closed Profitable' : 'Closed at Loss';
     }
-    if (pick.outcome === 'no-trigger') return 'Not Traded';
+    if (outcome === 'hit-target') return 'Target Hit';
+    if (outcome === 'hit-sl' && pick.outcome === 'exit-at-close') return 'Closed at Loss';
+    if (outcome === 'hit-sl') return 'Stopped Out';
+    if (outcome === 'no-trigger') return 'Not Traded';
     return 'Pending';
   }
 
@@ -890,7 +906,13 @@ export class RecommendationsComponent implements OnInit {
     const o = this.getOutcome(pick);
     if (o === 'hit-target') return 'pi pi-check-circle';
     if (o === 'hit-sl') return 'pi pi-times-circle';
+    if (o === 'no-trigger') return 'pi pi-ban';
     return 'pi pi-clock';
+  }
+
+  shouldShowPnl(pick: DailyPick): boolean {
+    const outcome = this.getOutcome(pick);
+    return outcome === 'hit-target' || outcome === 'hit-sl';
   }
 
   getPnlPercent(pick: DailyPick): number {
@@ -902,6 +924,7 @@ export class RecommendationsComponent implements OnInit {
     if (o === 'hit-target') {
       return ((pick.sell_price - pick.buy_price) / pick.buy_price) * 100;
     }
+    if (o === 'no-trigger') return 0;
     return ((pick.stop_loss - pick.buy_price) / pick.buy_price) * 100;
   }
 

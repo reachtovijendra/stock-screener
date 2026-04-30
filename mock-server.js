@@ -7,6 +7,8 @@ const http = require('http');
 const https = require('https');
 
 const PORT = 3000;
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://cbvfjicmcwuwmcchwwbw.supabase.co';
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNidmZqaWNtY3d1d21jY2h3d2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDA2NzcsImV4cCI6MjA5MDU3NjY3N30.xYvt9FmnhaXWQkQVPWqYkVTQa067oG04t0W373L4WyM';
 
 // Cache for API responses
 const cache = new Map();
@@ -393,8 +395,50 @@ async function searchYahooSymbols(query) {
 async function fetchYahooQuote(symbol) {
   const auth = await getYahooCrumb();
   
+  const fields = [
+    'symbol',
+    'shortName',
+    'longName',
+    'regularMarketPrice',
+    'regularMarketChange',
+    'regularMarketChangePercent',
+    'regularMarketVolume',
+    'marketCap',
+    'fiftyTwoWeekHigh',
+    'fiftyTwoWeekLow',
+    'fiftyDayAverage',
+    'twoHundredDayAverage',
+    'trailingPE',
+    'forwardPE',
+    'priceToBook',
+    'epsTrailingTwelveMonths',
+    'epsForward',
+    'trailingAnnualDividendYield',
+    'averageDailyVolume3Month',
+    'averageDailyVolume10Day',
+    'beta',
+    'exchange',
+    'currency',
+    'sector',
+    'industry',
+    'preMarketPrice',
+    'preMarketChange',
+    'preMarketChangePercent',
+    'postMarketPrice',
+    'postMarketChange',
+    'earningsTimestamp',
+    'earningsTimestampStart',
+    'earningsTimestampEnd',
+    'targetMeanPrice',
+    'targetHighPrice',
+    'targetLowPrice',
+    'numberOfAnalystOpinions',
+    'recommendationMean',
+    'averageAnalystRating'
+  ].join(',');
+
   // Build URL with crumb if available
-  let url = `/v7/finance/quote?symbols=${encodeURIComponent(symbol)}`;
+  let url = `/v7/finance/quote?symbols=${encodeURIComponent(symbol)}&fields=${encodeURIComponent(fields)}`;
   if (auth.crumb) {
     url += `&crumb=${encodeURIComponent(auth.crumb)}`;
   }
@@ -488,9 +532,10 @@ async function fetchChartQuote(symbol) {
  */
 async function fetchHistoricalPrices(symbol, days = 50) {
   try {
+    const range = days > 70 ? '1y' : '3mo';
     const response = await httpsRequest({
       hostname: 'query1.finance.yahoo.com',
-      path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=3mo`,
+      path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`,
       method: 'GET',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -1145,6 +1190,14 @@ function transformQuote(q, symbol) {
     macdHistogram: null,
     macdSignalType: null,
     // Analyst data
+    targetMeanPrice: q.targetMeanPrice || null,
+    targetHighPrice: q.targetHighPrice || null,
+    targetLowPrice: q.targetLowPrice || null,
+    numberOfAnalystOpinions: q.numberOfAnalystOpinions || null,
+    recommendationMean: q.recommendationMean || null,
+    earningsTimestamp: q.earningsTimestamp || null,
+    earningsTimestampStart: q.earningsTimestampStart || null,
+    earningsTimestampEnd: q.earningsTimestampEnd || null,
     averageAnalystRating: q.averageAnalystRating || null,  // e.g., "2.0 - Buy", "1.2 - Strong Buy"
     analystRatingScore: parseAnalystRating(q.averageAnalystRating),  // Numeric: 1.0 (Strong Buy) to 5.0 (Sell)
     lastUpdated: new Date()
@@ -1159,6 +1212,83 @@ function parseAnalystRating(ratingStr) {
   if (!ratingStr) return null;
   const match = ratingStr.match(/^([\d.]+)/);
   return match ? parseFloat(match[1]) : null;
+}
+
+function yahooRawNumber(value) {
+  if (value == null) return null;
+  if (typeof value === 'number') return value;
+  if (typeof value.raw === 'number') return value.raw;
+  return null;
+}
+
+async function fetchAnalystData(symbol) {
+  const empty = {
+    targetMeanPrice: null,
+    targetHighPrice: null,
+    targetLowPrice: null,
+    numberOfAnalystOpinions: null,
+    recommendationMean: null,
+    earningsTimestamp: null,
+    earningsTimestampStart: null,
+    earningsTimestampEnd: null,
+  };
+
+  const auth = await getYahooCrumb();
+  if (!auth.crumb) return empty;
+
+  try {
+    const response = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      path: `/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=financialData,calendarEvents&crumb=${encodeURIComponent(auth.crumb)}`,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        ...(auth.cookies ? { 'Cookie': auth.cookies } : {}),
+      },
+    });
+
+    if (response.statusCode !== 200) return empty;
+
+    const data = JSON.parse(response.body);
+    const result = data.quoteSummary?.result?.[0];
+    if (!result) return empty;
+
+    const financialData = result.financialData || {};
+    const earnings = result.calendarEvents?.earnings || {};
+    const earningsDates = earnings.earningsDate || [];
+    const start = yahooRawNumber(earningsDates[0]);
+    const end = yahooRawNumber(earningsDates[1]);
+
+    return {
+      targetMeanPrice: yahooRawNumber(financialData.targetMeanPrice),
+      targetHighPrice: yahooRawNumber(financialData.targetHighPrice),
+      targetLowPrice: yahooRawNumber(financialData.targetLowPrice),
+      numberOfAnalystOpinions: yahooRawNumber(financialData.numberOfAnalystOpinions),
+      recommendationMean: yahooRawNumber(financialData.recommendationMean),
+      earningsTimestamp: start,
+      earningsTimestampStart: start,
+      earningsTimestampEnd: end,
+    };
+  } catch (error) {
+    console.error(`[Analyst] Error fetching ${symbol}:`, error.message);
+    return empty;
+  }
+}
+
+async function enrichWithAnalystData(stock) {
+  const analystData = await fetchAnalystData(stock.symbol);
+
+  stock.targetMeanPrice = stock.targetMeanPrice ?? analystData.targetMeanPrice;
+  stock.targetHighPrice = stock.targetHighPrice ?? analystData.targetHighPrice;
+  stock.targetLowPrice = stock.targetLowPrice ?? analystData.targetLowPrice;
+  stock.numberOfAnalystOpinions = stock.numberOfAnalystOpinions ?? analystData.numberOfAnalystOpinions;
+  stock.recommendationMean = stock.recommendationMean ?? analystData.recommendationMean;
+  stock.earningsTimestamp = stock.earningsTimestamp ?? analystData.earningsTimestamp;
+  stock.earningsTimestampStart = stock.earningsTimestampStart ?? analystData.earningsTimestampStart;
+  stock.earningsTimestampEnd = stock.earningsTimestampEnd ?? analystData.earningsTimestampEnd;
+
+  return stock;
 }
 
 function categorizeMarketCap(marketCap, currency) {
@@ -1531,6 +1661,14 @@ function transformScreenerQuote(q) {
     macdHistogram: null,
     macdSignalType: null,
     // Analyst data
+    targetMeanPrice: q.targetMeanPrice || null,
+    targetHighPrice: q.targetHighPrice || null,
+    targetLowPrice: q.targetLowPrice || null,
+    numberOfAnalystOpinions: q.numberOfAnalystOpinions || null,
+    recommendationMean: q.recommendationMean || null,
+    earningsTimestamp: q.earningsTimestamp || null,
+    earningsTimestampStart: q.earningsTimestampStart || null,
+    earningsTimestampEnd: q.earningsTimestampEnd || null,
     averageAnalystRating: q.averageAnalystRating || null,
     analystRatingScore: parseAnalystRating(q.averageAnalystRating),
     lastUpdated: new Date()
@@ -1561,6 +1699,70 @@ async function enrichWithTechnicals(stock) {
     // Silently fail - indicators stay null
   }
   return stock;
+}
+
+function calculatePeriodChangePercent(prices, currentPrice, tradingDays) {
+  if (!prices || !prices.length || currentPrice <= 0 || prices.length <= tradingDays) return null;
+
+  const previousClose = prices[prices.length - 1 - tradingDays];
+  if (!previousClose || previousClose <= 0) return null;
+
+  return Math.round(((currentPrice - previousClose) / previousClose) * 10000) / 100;
+}
+
+async function enrichWithPerformance(stock) {
+  try {
+    const prices = await fetchHistoricalPrices(stock.symbol, 127);
+    const currentPrice = stock.price || prices?.[prices.length - 1] || 0;
+
+    stock.oneMonthChangePercent = calculatePeriodChangePercent(prices, currentPrice, 21);
+    stock.threeMonthChangePercent = calculatePeriodChangePercent(prices, currentPrice, 63);
+    stock.sixMonthChangePercent = calculatePeriodChangePercent(prices, currentPrice, 126);
+  } catch (error) {
+    console.error(`[Performance] Error enriching ${stock.symbol}:`, error.message);
+    stock.oneMonthChangePercent = null;
+    stock.threeMonthChangePercent = null;
+    stock.sixMonthChangePercent = null;
+  }
+
+  return stock;
+}
+
+async function fetchDailyPicksList(market, month) {
+  const targetMonth = month || new Date().toISOString().slice(0, 7);
+  const [year, monthNumber] = targetMonth.split('-').map(Number);
+  const startDate = `${targetMonth}-01`;
+  const endDate = monthNumber === 12
+    ? `${year + 1}-01-01`
+    : `${year}-${String(monthNumber + 1).padStart(2, '0')}-01`;
+
+  const params = new URLSearchParams({
+    select: '*',
+    market: `eq.${market}`,
+    pick_date: `gte.${startDate}`,
+    order: 'pick_date.desc,score.desc',
+  });
+  params.append('pick_date', `lt.${endDate}`);
+
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/daily_picks?${params.toString()}`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(`Supabase daily picks query failed (${response.status}): ${message}`);
+  }
+
+  const picks = await response.json();
+  return {
+    market,
+    month: targetMonth,
+    count: picks.length,
+    picks,
+  };
 }
 
 /**
@@ -1867,11 +2069,29 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (path === '/api/stocks' && action === 'daily-picks' && req.method === 'GET') {
+      try {
+        const market = (url.searchParams.get('market') || 'US').toUpperCase();
+        const month = url.searchParams.get('month');
+        const payload = await fetchDailyPicksList(market, month);
+
+        res.writeHead(200);
+        res.end(JSON.stringify(payload));
+      } catch (error) {
+        console.error('[DailyPicks] Error:', error.message);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: 'Failed to fetch picks', message: error.message }));
+      }
+      return;
+    }
+
     // Search for symbols directly (for autocomplete when stock not in cache)
     if (path === '/api/stocks' && action === 'search' && req.method === 'GET') {
       const query = url.searchParams.get('q');
       const includeTechnicals = url.searchParams.get('technicals') === 'true';
+      const includePerformance = url.searchParams.get('performance') === 'true';
       const fuzzy = url.searchParams.get('fuzzy') === 'true';
+      const includeAnalystData = includeTechnicals || includePerformance || (query && query.includes(','));
       
       if (!query || query.length < 1) {
         res.writeHead(400);
@@ -1895,6 +2115,12 @@ const server = http.createServer(async (req, res) => {
               if (includeTechnicals) {
                 await enrichWithTechnicals(transformed);
               }
+              if (includePerformance) {
+                await enrichWithPerformance(transformed);
+              }
+              if (includeAnalystData) {
+                await enrichWithAnalystData(transformed);
+              }
               quotes.push(transformed);
               seenSymbols.add(exactSymbol);
               console.log(`[Search] Found exact match for: ${exactSymbol}`);
@@ -1909,6 +2135,12 @@ const server = http.createServer(async (req, res) => {
                 if (transformed) {
                   if (includeTechnicals) {
                     await enrichWithTechnicals(transformed);
+                  }
+                  if (includePerformance) {
+                    await enrichWithPerformance(transformed);
+                  }
+                  if (includeAnalystData) {
+                    await enrichWithAnalystData(transformed);
                   }
                   quotes.push(transformed);
                   seenSymbols.add(exactSymbol);
@@ -1935,6 +2167,12 @@ const server = http.createServer(async (req, res) => {
                 if (includeTechnicals) {
                   await enrichWithTechnicals(transformed);
                 }
+                if (includePerformance) {
+                  await enrichWithPerformance(transformed);
+                }
+                if (includeAnalystData) {
+                  await enrichWithAnalystData(transformed);
+                }
                 quotes.push(transformed);
                 seenSymbols.add(result.symbol);
               }
@@ -1953,6 +2191,12 @@ const server = http.createServer(async (req, res) => {
               if (transformed) {
                 if (includeTechnicals) {
                   await enrichWithTechnicals(transformed);
+                }
+                if (includePerformance) {
+                  await enrichWithPerformance(transformed);
+                }
+                if (includeAnalystData) {
+                  await enrichWithAnalystData(transformed);
                 }
                 quotes.push(transformed);
                 seenSymbols.add(sym);

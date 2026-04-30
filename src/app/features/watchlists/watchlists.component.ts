@@ -11,6 +11,14 @@ import { WatchlistService, Watchlist, WatchlistItem } from '../../core/services/
 import { MarketService } from '../../core/services';
 import { environment } from '../../../environments/environment';
 
+type WatchlistStockExtras = {
+  targetMeanPrice?: number | null;
+  earningsTimestamp?: number | null;
+  oneMonthChangePercent?: number | null;
+  threeMonthChangePercent?: number | null;
+  sixMonthChangePercent?: number | null;
+};
+
 @Component({
   selector: 'app-watchlists',
   standalone: true,
@@ -142,6 +150,9 @@ import { environment } from '../../../environments/environment';
                   <th class="col-last">LAST PRICE</th>
                   <th class="col-pnl">CHANGE SINCE</th>
                   <th class="col-return">CHANGE SINCE %</th>
+                  <th class="col-period">1M % CHANGE</th>
+                  <th class="col-period">3M % CHANGE</th>
+                  <th class="col-period">6M % CHANGE</th>
                   <th class="col-target-wl">ANALYST TARGET</th>
                   <th class="col-earnings-wl">EARNINGS</th>
                   <th class="col-x"></th>
@@ -203,6 +214,24 @@ import { environment } from '../../../environments/environment';
                     <span *ngIf="item.changePercent != null" class="return-badge" [class.up]="item.changePercent > 0" [class.down]="item.changePercent < 0">
                       {{ item.changePercent >= 0 ? '+' : '' }}{{ item.changePercent | number:'1.2-2' }}%
                     </span>
+                  </td>
+                  <td class="col-period">
+                    <span *ngIf="item.oneMonthChangePercent != null" class="period-change" [class.up]="item.oneMonthChangePercent > 0" [class.down]="item.oneMonthChangePercent < 0">
+                      {{ item.oneMonthChangePercent >= 0 ? '+' : '' }}{{ item.oneMonthChangePercent | number:'1.2-2' }}%
+                    </span>
+                    <span *ngIf="item.oneMonthChangePercent == null" class="muted-text">—</span>
+                  </td>
+                  <td class="col-period">
+                    <span *ngIf="item.threeMonthChangePercent != null" class="period-change" [class.up]="item.threeMonthChangePercent > 0" [class.down]="item.threeMonthChangePercent < 0">
+                      {{ item.threeMonthChangePercent >= 0 ? '+' : '' }}{{ item.threeMonthChangePercent | number:'1.2-2' }}%
+                    </span>
+                    <span *ngIf="item.threeMonthChangePercent == null" class="muted-text">—</span>
+                  </td>
+                  <td class="col-period">
+                    <span *ngIf="item.sixMonthChangePercent != null" class="period-change" [class.up]="item.sixMonthChangePercent > 0" [class.down]="item.sixMonthChangePercent < 0">
+                      {{ item.sixMonthChangePercent >= 0 ? '+' : '' }}{{ item.sixMonthChangePercent | number:'1.2-2' }}%
+                    </span>
+                    <span *ngIf="item.sixMonthChangePercent == null" class="muted-text">—</span>
                   </td>
                   <td class="col-target-wl">
                     <span *ngIf="getAnalystTargetDisplay(item)" class="target-text" [innerHTML]="getAnalystTargetDisplay(item)"></span>
@@ -409,6 +438,11 @@ import { environment } from '../../../environments/environment';
     .sr-symbol { font-weight: 700; color: var(--text-color); min-width: 60px; }
     .sr-name { color: var(--text-color-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .sr-price { color: var(--text-color); font-weight: 500; }
+
+    .col-period {
+      text-align: right;
+      white-space: nowrap;
+    }
 
     .empty-wl, .empty-state {
       display: flex;
@@ -634,6 +668,15 @@ import { environment } from '../../../environments/environment';
       background: rgba(248, 113, 113, 0.1);
     }
 
+    .period-change {
+      font-size: 12px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .period-change.up { color: #34d399; }
+    .period-change.down { color: #f87171; }
+
     .remove-btn {
       background: none;
       border: none;
@@ -740,21 +783,32 @@ export class WatchlistsComponent implements OnInit {
   // Stock search
   searchQuery: any = '';
   searchResults = signal<any[]>([]);
+  private stockSearchRequestId = 0;
 
   enrichedItems = computed(() => {
     const items = this.wlService.items();
     const prices = this.currentPrices();
+    const extras = this.stockExtras();
     return items.map(item => {
       const cp = prices[item.symbol];
+      const ext = extras[item.symbol] ?? {};
       const changeDollar = cp != null ? cp - item.price_when_added : null;
       const changePercent = cp != null && item.price_when_added > 0
         ? ((cp - item.price_when_added) / item.price_when_added) * 100 : null;
-      return { ...item, currentPrice: cp ?? null, changeDollar, changePercent };
+      return {
+        ...item,
+        currentPrice: cp ?? null,
+        changeDollar,
+        changePercent,
+        oneMonthChangePercent: ext.oneMonthChangePercent ?? null,
+        threeMonthChangePercent: ext.threeMonthChangePercent ?? null,
+        sixMonthChangePercent: ext.sixMonthChangePercent ?? null,
+      };
     });
   });
 
   private currentPrices = signal<Record<string, number>>({});
-  private stockExtras = signal<Record<string, { targetMeanPrice?: number; earningsTimestamp?: number }>>({});
+  private stockExtras = signal<Record<string, WatchlistStockExtras>>({});
 
   constructor() {
     // Re-fetch prices whenever items change (e.g. switching watchlists)
@@ -859,7 +913,11 @@ export class WatchlistsComponent implements OnInit {
 
   async searchStocks(event: AutoCompleteCompleteEvent) {
     const query = event.query.trim();
-    if (query.length < 1) return;
+    const requestId = ++this.stockSearchRequestId;
+    if (query.length < 1) {
+      this.searchResults.set([]);
+      return;
+    }
 
     try {
       // Search both markets so users can mix US and India stocks in any watchlist
@@ -873,9 +931,13 @@ export class WatchlistsComponent implements OnInit {
         ...(inRes?.stocks || []),
       ].slice(0, 8);
 
-      this.searchResults.set(combined);
+      if (requestId === this.stockSearchRequestId) {
+        this.searchResults.set(combined);
+      }
     } catch {
-      this.searchResults.set([]);
+      if (requestId === this.stockSearchRequestId) {
+        this.searchResults.set([]);
+      }
     }
   }
 
@@ -929,11 +991,11 @@ export class WatchlistsComponent implements OnInit {
     }
 
     const prices: Record<string, number> = {};
-    const extras: Record<string, { targetMeanPrice?: number; earningsTimestamp?: number }> = {};
+    const extras: Record<string, WatchlistStockExtras> = {};
 
     try {
       const fetches = Object.entries(byMarket).map(async ([market, symbols]) => {
-        const url = `${environment.apiBaseUrl}/api/stocks?action=search&q=${symbols.join(',')}&market=${market}`;
+        const url = `${environment.apiBaseUrl}/api/stocks?action=search&q=${encodeURIComponent(symbols.join(','))}&market=${market}&performance=true`;
         const data: any = await this.http.get(url).toPromise();
         if (data?.stocks) {
           for (const s of data.stocks) {
@@ -941,6 +1003,9 @@ export class WatchlistsComponent implements OnInit {
             extras[s.symbol] = {
               targetMeanPrice: s.targetMeanPrice || null,
               earningsTimestamp: s.earningsTimestamp || null,
+              oneMonthChangePercent: s.oneMonthChangePercent ?? null,
+              threeMonthChangePercent: s.threeMonthChangePercent ?? null,
+              sixMonthChangePercent: s.sixMonthChangePercent ?? null,
             };
           }
         }

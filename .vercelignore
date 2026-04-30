@@ -1,0 +1,17 @@
+# Local development helpers
+.claude/
+scripts/
+
+# Build and dependency artifacts
+.angular/
+coverage/
+dist/
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Local configuration and secrets
+.env
+.env.local
+.env.*.local
+.npmrc.local

@@ -26,4 +26,11 @@ export const environment = {
   /** Supabase (public keys — safe for frontend) */
   supabaseUrl: 'https://cbvfjicmcwuwmcchwwbw.supabase.co',
   supabaseAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNidmZqaWNtY3d1d21jY2h3d2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDA2NzcsImV4cCI6MjA5MDU3NjY3N30.xYvt9FmnhaXWQkQVPWqYkVTQa067oG04t0W373L4WyM',
+
+  /** PostHog analytics (public project key; safe for frontend) */
+  analytics: {
+    enabled: true,
+    posthogKey: 'phc_xd8SqdPaqdiCgpHDLvjYH4kJCaVNCVnhc4cMUdhFcR3',
+    posthogHost: 'https://us.i.posthog.com',
+  },
 };

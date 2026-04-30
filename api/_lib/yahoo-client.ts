@@ -65,6 +65,17 @@ export interface StockQuote {
   lastUpdated: Date;
 }
 
+export interface AnalystData {
+  targetMeanPrice: number | null;
+  targetHighPrice: number | null;
+  targetLowPrice: number | null;
+  numberOfAnalystOpinions: number | null;
+  recommendationMean: number | null;
+  earningsTimestamp: number | null;
+  earningsTimestampStart: number | null;
+  earningsTimestampEnd: number | null;
+}
+
 /**
  * Market index interface
  */
@@ -396,6 +407,74 @@ function categorizeMarketCap(marketCap: number, market: Market): string {
     if (marketCap >= 50_000_000_000) return 'mid';
     if (marketCap >= 5_000_000_000) return 'small';
     return 'micro';
+  }
+}
+
+function yahooRawNumber(value: any): number | null {
+  if (value == null) return null;
+  if (typeof value === 'number') return value;
+  if (typeof value.raw === 'number') return value.raw;
+  return null;
+}
+
+/**
+ * Fetch analyst target and earnings data from quoteSummary when quote fields are sparse.
+ */
+export async function getAnalystData(symbol: string): Promise<AnalystData> {
+  const empty: AnalystData = {
+    targetMeanPrice: null,
+    targetHighPrice: null,
+    targetLowPrice: null,
+    numberOfAnalystOpinions: null,
+    recommendationMean: null,
+    earningsTimestamp: null,
+    earningsTimestampStart: null,
+    earningsTimestampEnd: null,
+  };
+
+  const auth = await getYahooCrumb();
+  if (!auth.crumb) return empty;
+
+  const path = `/v10/finance/quoteSummary/${encodeURIComponent(symbol)}?modules=financialData,calendarEvents&crumb=${encodeURIComponent(auth.crumb)}`;
+
+  try {
+    const response = await httpsRequest({
+      hostname: 'query1.finance.yahoo.com',
+      port: 443,
+      path,
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'Accept': 'application/json',
+        ...(auth.cookies ? { 'Cookie': auth.cookies } : {}),
+      },
+    });
+
+    if (response.statusCode !== 200) return empty;
+
+    const data = JSON.parse(response.body);
+    const result = data.quoteSummary?.result?.[0];
+    if (!result) return empty;
+
+    const financialData = result.financialData || {};
+    const earnings = result.calendarEvents?.earnings || {};
+    const earningsDates = earnings.earningsDate || [];
+    const start = yahooRawNumber(earningsDates[0]);
+    const end = yahooRawNumber(earningsDates[1]);
+
+    return {
+      targetMeanPrice: yahooRawNumber(financialData.targetMeanPrice),
+      targetHighPrice: yahooRawNumber(financialData.targetHighPrice),
+      targetLowPrice: yahooRawNumber(financialData.targetLowPrice),
+      numberOfAnalystOpinions: yahooRawNumber(financialData.numberOfAnalystOpinions),
+      recommendationMean: yahooRawNumber(financialData.recommendationMean),
+      earningsTimestamp: start,
+      earningsTimestampStart: start,
+      earningsTimestampEnd: end,
+    };
+  } catch (error: any) {
+    console.error(`[Yahoo] Error fetching analyst data for ${symbol}:`, error.message);
+    return empty;
   }
 }
 

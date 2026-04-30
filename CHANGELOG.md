@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Watchlist table now includes 1M, 3M, and 6M percentage change columns populated from Yahoo daily historical closes through the stock search API.
+- PostHog-ready analytics foundation with a typed Angular `AnalyticsService`, SPA route pageview tracking, authenticated user identity sync, and conservative defaults that disable autocapture, session replay, and feature flag requests until explicitly configured.
 - New luxury-themed Market News V2 page accessible at `/v2/news` with editorial card grid layout, category filter chips, and animated news cards
 - New luxury-themed Breakouts V2 page accessible at `/v2/breakouts` with Top Picks section, signal filtering (bullish/bearish), and refined breakout cards
 - New luxury-themed DMA Simulator V2 page accessible at `/v2/dma-simulator` with elegant timeline visualization, state banners, and quick search chips
@@ -29,6 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Enabled PostHog analytics in production with the US Cloud host while keeping local development analytics disabled to avoid noisy test data.
+- Added Vercel deployment ignore rules so local helper files, backtest data, build outputs, and local configuration are excluded from CLI deployments.
 - Portfolio tracker table now shows Starting Balance before monthly additions, with additions counted separately in target and actual return calculations.
 - Portfolio tracker main view now locks projection-defining setup fields after generation, requiring Reconfigure to update target initial investment, monthly addition, expected monthly return, or start date.
 - Portfolio tracker setup now captures a start month and year, and generates the 10-year projection from that selected month.
@@ -61,6 +65,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed local recommendations page showing no rows by adding the missing mock API route for `/api/stocks?action=daily-picks`, mirroring the Vercel handler against Supabase `daily_picks`.
+- Fixed local watchlist analyst target and earnings columns by aligning the mock search API with Yahoo analyst target and calendar event fields, including a quoteSummary fallback when quote data omits target prices.
+- Fixed watchlist stock autocomplete suggestions disappearing intermittently before selection by ignoring stale async search responses after a newer query has already populated the suggestion list.
+- Fixed day-trade recommendations remaining in `Pending` state when Yahoo Finance does not return OHLC data for an evaluation-ready pick date; the evaluation cron now resolves missing-data picks as `no-trigger`, and the recommendations UI displays unevaluated non-future rows as `Not Traded`.
 - Fixed the portfolio tracker actual-side calculations so changing Actual Initial updates the first actual starting/principal value without generating user-entered actual added or ending values.
 - Fixed transient Supabase auth lock errors during local development by skipping immediate auto-refresh ticks when another browser tab or reload already holds the auth lock.
 - Fixed portfolio target and actual uniqueness constraints to include market, allowing US and India portfolios to have rows for the same user/month without insert failures.

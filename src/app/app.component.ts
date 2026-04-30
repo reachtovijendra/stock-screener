@@ -1,9 +1,10 @@
-import { Component, inject, OnInit } from '@angular/core';
+import { Component, effect, inject, OnInit } from '@angular/core';
 import { RouterOutlet, RouterModule } from '@angular/router';
 import { CommonModule } from '@angular/common';
 
 import { HeaderComponent } from './layout/header/header.component';
-import { ThemeService } from './core/services';
+import { AnalyticsService, ThemeService } from './core/services';
+import { AuthService } from './core/services/auth.service';
 
 @Component({
   selector: 'app-root',
@@ -205,8 +206,30 @@ import { ThemeService } from './core/services';
 })
 export class AppComponent implements OnInit {
   private themeService = inject(ThemeService);
+  private analytics = inject(AnalyticsService);
+  private authService = inject(AuthService);
+
+  private analyticsIdentitySync = effect(() => {
+    this.syncAnalyticsUser();
+  });
 
   ngOnInit(): void {
     // Theme service initializes itself in constructor
+    this.analytics.init();
+    this.syncAnalyticsUser();
+  }
+
+  private syncAnalyticsUser(): void {
+    const user = this.authService.user();
+    if (user) {
+      this.analytics.identifyUser({
+        id: user.id,
+        email: user.email,
+        provider: user.app_metadata?.['provider'] as string | undefined,
+      });
+      return;
+    }
+
+    this.analytics.resetIdentity();
   }
 }

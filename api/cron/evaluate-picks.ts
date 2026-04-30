@@ -89,15 +89,36 @@ async function fetchOHLCForDate(symbol: string, pickDate: string): Promise<{
   }
 }
 
-type Outcome = 'hit-target' | 'hit-sl' | 'exit-at-close' | 'no-trigger';
+export type Outcome = 'hit-target' | 'hit-sl' | 'exit-at-close' | 'no-trigger';
+
+interface EvaluationResult {
+  outcome: Outcome;
+  pnlPercent: number;
+  entryPrice: number;
+  exitPrice: number;
+}
+
+const MARKET_CLOSE_BUFFER_UTC_HOUR: Record<string, number> = {
+  IN: 11, // NSE closes at 10:00 UTC; wait until 11:00 UTC for data availability.
+  US: 22, // US closes at 20:00/21:00 UTC depending on DST; wait until 22:00 UTC.
+};
+
+export function isPickReadyForEvaluation(pick: PendingPick, now = new Date()): boolean {
+  const today = now.toISOString().slice(0, 10);
+  if (pick.pick_date < today) return true;
+  if (pick.pick_date > today) return false;
+
+  const closeBufferHour = MARKET_CLOSE_BUFFER_UTC_HOUR[pick.market] ?? MARKET_CLOSE_BUFFER_UTC_HOUR.US;
+  return now.getUTCHours() >= closeBufferHour;
+}
 
 /**
  * Evaluate a single pick against actual OHLC for the pick date.
  */
-function evaluatePick(
+export function evaluatePick(
   pick: PendingPick,
   ohlc: { open: number; high: number; low: number; close: number }
-): { outcome: Outcome; pnlPercent: number; entryPrice: number; exitPrice: number } {
+): EvaluationResult {
   const buyPrice = Number(pick.buy_price);
   const sellPrice = Number(pick.sell_price);
   const stopLoss = Number(pick.stop_loss);
@@ -137,8 +158,36 @@ function evaluatePick(
   return { outcome: 'exit-at-close', pnlPercent: round2(pnl), entryPrice, exitPrice: ohlc.close };
 }
 
+export function createNoDataEvaluation(): EvaluationResult {
+  return { outcome: 'no-trigger', pnlPercent: 0, entryPrice: 0, exitPrice: 0 };
+}
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+async function updatePickEvaluation(
+  supabase: ReturnType<typeof getSupabaseClient>,
+  pick: PendingPick,
+  result: EvaluationResult,
+  ohlc: { open: number; high: number; low: number; close: number } | null
+): Promise<string | null> {
+  if (!supabase) return 'Supabase not configured';
+
+  const { error } = await supabase
+    .from('daily_picks')
+    .update({
+      outcome: result.outcome,
+      actual_high: ohlc?.high ?? null,
+      actual_low: ohlc?.low ?? null,
+      actual_close: ohlc?.close ?? null,
+      actual_open: ohlc?.open ?? null,
+      pnl_percent: result.pnlPercent,
+      evaluated_at: new Date().toISOString(),
+    })
+    .eq('id', pick.id);
+
+  return error?.message ?? null;
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -156,12 +205,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: 'Supabase not configured' });
   }
 
-  // Get all unevaluated picks from past dates
+  // Get all unevaluated picks that are old enough to evaluate.
   const today = new Date().toISOString().slice(0, 10);
-  const { data: pendingPicks, error: fetchError } = await supabase
+  const { data: unevaluatedPicks, error: fetchError } = await supabase
     .from('daily_picks')
     .select('id, symbol, market, pick_date, buy_price, sell_price, stop_loss')
-    .lt('pick_date', today)
+    .lte('pick_date', today)
     .is('outcome', null)
     .order('pick_date', { ascending: false })
     .limit(50);
@@ -171,7 +220,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ error: fetchError.message });
   }
 
-  if (!pendingPicks || pendingPicks.length === 0) {
+  const pendingPicks = (unevaluatedPicks || []).filter((pick: PendingPick) => isPickReadyForEvaluation(pick));
+
+  if (pendingPicks.length === 0) {
     console.log('[Evaluate] No pending picks to evaluate');
     return res.status(200).json({ success: true, evaluated: 0 });
   }
@@ -192,29 +243,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Fetch OHLC specifically for the pick date
         const ohlc = await fetchOHLCForDate(pick.symbol, pick.pick_date);
 
+        const result = ohlc ? evaluatePick(pick, ohlc) : createNoDataEvaluation();
         if (!ohlc) {
-          console.log(`[Evaluate] No data for ${pick.symbol} on ${pick.pick_date}, skipping`);
-          return;
+          console.log(`[Evaluate] No OHLC data for ${pick.symbol} on ${pick.pick_date}; marking no-trigger`);
         }
 
-        const result = evaluatePick(pick, ohlc);
-
         // Update Supabase
-        const { error: updateError } = await supabase
-          .from('daily_picks')
-          .update({
-            outcome: result.outcome,
-            actual_high: ohlc.high,
-            actual_low: ohlc.low,
-            actual_close: ohlc.close,
-            actual_open: ohlc.open,
-            pnl_percent: result.pnlPercent,
-            evaluated_at: new Date().toISOString(),
-          })
-          .eq('id', pick.id);
+        const updateError = await updatePickEvaluation(supabase, pick, result, ohlc);
 
         if (updateError) {
-          console.error(`[Evaluate] Failed to update ${pick.symbol}: ${updateError.message}`);
+          console.error(`[Evaluate] Failed to update ${pick.symbol}: ${updateError}`);
           return;
         }
 

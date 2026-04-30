@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
-import { searchStocks, getQuote, getMarketFromSymbol, Market } from '../yahoo-client';
+import { searchStocks, getQuote, getMarketFromSymbol, getAnalystData, Market } from '../yahoo-client';
 import https from 'https';
 
 function httpsRequest(options: https.RequestOptions): Promise<{ statusCode: number; body: string }> {
@@ -126,6 +126,15 @@ function getMacdSignalType(macd: number | null, signal: number | null, histogram
   return histogram > 0 ? 'bullish' : 'bearish';
 }
 
+function calculatePeriodChangePercent(closes: number[], currentPrice: number, tradingDays: number): number | null {
+  if (!closes.length || currentPrice <= 0 || closes.length <= tradingDays) return null;
+
+  const previousClose = closes[closes.length - 1 - tradingDays];
+  if (!previousClose || previousClose <= 0) return null;
+
+  return Math.round(((currentPrice - previousClose) / previousClose) * 10000) / 100;
+}
+
 async function enrichWithTechnicals(stock: any): Promise<void> {
   try {
     const closes = await fetchHistoricalPrices(stock.symbol);
@@ -153,15 +162,68 @@ async function enrichWithTechnicals(stock: any): Promise<void> {
   }
 }
 
+async function enrichWithPerformance(stock: any): Promise<void> {
+  try {
+    const closes = await fetchHistoricalPrices(stock.symbol);
+    const currentPrice = stock.price || closes[closes.length - 1] || 0;
+
+    stock.oneMonthChangePercent = calculatePeriodChangePercent(closes, currentPrice, 21);
+    stock.threeMonthChangePercent = calculatePeriodChangePercent(closes, currentPrice, 63);
+    stock.sixMonthChangePercent = calculatePeriodChangePercent(closes, currentPrice, 126);
+  } catch (error) {
+    console.error(`Error enriching performance for ${stock.symbol}:`, error);
+    stock.oneMonthChangePercent = null;
+    stock.threeMonthChangePercent = null;
+    stock.sixMonthChangePercent = null;
+  }
+}
+
+async function enrichWithAnalystData(stock: any): Promise<void> {
+  try {
+    const analystData = await getAnalystData(stock.symbol);
+
+    stock.targetMeanPrice = stock.targetMeanPrice ?? analystData.targetMeanPrice;
+    stock.targetHighPrice = stock.targetHighPrice ?? analystData.targetHighPrice;
+    stock.targetLowPrice = stock.targetLowPrice ?? analystData.targetLowPrice;
+    stock.numberOfAnalystOpinions = stock.numberOfAnalystOpinions ?? analystData.numberOfAnalystOpinions;
+    stock.recommendationMean = stock.recommendationMean ?? analystData.recommendationMean;
+    stock.earningsTimestamp = stock.earningsTimestamp ?? analystData.earningsTimestamp;
+    stock.earningsTimestampStart = stock.earningsTimestampStart ?? analystData.earningsTimestampStart;
+    stock.earningsTimestampEnd = stock.earningsTimestampEnd ?? analystData.earningsTimestampEnd;
+  } catch (error) {
+    console.error(`Error enriching analyst data for ${stock.symbol}:`, error);
+  }
+}
+
+async function enrichSearchStock(
+  stock: any,
+  includeTechnicals: boolean,
+  includePerformance: boolean,
+  includeAnalystData: boolean
+): Promise<void> {
+  if (includeTechnicals) {
+    await enrichWithTechnicals(stock);
+  }
+
+  if (includePerformance) {
+    await enrichWithPerformance(stock);
+  }
+
+  if (includeAnalystData) {
+    await enrichWithAnalystData(stock);
+  }
+}
+
 export async function handleSearch(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
   try {
-    const { q, market = 'US', technicals, fuzzy } = req.query;
+    const { q, market = 'US', technicals, fuzzy, performance } = req.query;
     const marketType = (market as string).toUpperCase() as Market;
     const includeTechnicals = technicals === 'true';
+    const includePerformance = performance === 'true';
     const isFuzzy = fuzzy === 'true';
 
     if (!q || (q as string).length < 1) {
@@ -169,6 +231,7 @@ export async function handleSearch(req: VercelRequest, res: VercelResponse) {
     }
 
     const query = (q as string).trim();
+    const includeAnalystData = includeTechnicals || includePerformance || query.includes(',');
     const stocks: any[] = [];
     const seenSymbols = new Set<string>();
 
@@ -180,9 +243,7 @@ export async function handleSearch(req: VercelRequest, res: VercelResponse) {
         const quote = await getQuote(exactSymbol, detectedMarket || marketType);
         if (quote && quote.price > 0) {
           const stock: any = { ...quote };
-          if (includeTechnicals) {
-            await enrichWithTechnicals(stock);
-          }
+          await enrichSearchStock(stock, includeTechnicals, includePerformance, includeAnalystData);
           stocks.push(stock);
           seenSymbols.add(exactSymbol);
           console.log(`[Search] Found exact match: ${exactSymbol} @ ${quote.price}`);
@@ -200,9 +261,7 @@ export async function handleSearch(req: VercelRequest, res: VercelResponse) {
           const quote = await getQuote(result.symbol, marketType);
           if (quote && quote.price > 0) {
             const stock: any = { ...quote };
-            if (includeTechnicals) {
-              await enrichWithTechnicals(stock);
-            }
+            await enrichSearchStock(stock, includeTechnicals, includePerformance, includeAnalystData);
             stocks.push(stock);
             seenSymbols.add(result.symbol);
           }
@@ -220,9 +279,7 @@ export async function handleSearch(req: VercelRequest, res: VercelResponse) {
           const quote = await getQuote(trimmed, detectedMarket || marketType);
           if (quote && quote.price > 0) {
             const stock: any = { ...quote };
-            if (includeTechnicals) {
-              await enrichWithTechnicals(stock);
-            }
+            await enrichSearchStock(stock, includeTechnicals, includePerformance, includeAnalystData);
             stocks.push(stock);
             seenSymbols.add(trimmed);
           }
@@ -238,9 +295,7 @@ export async function handleSearch(req: VercelRequest, res: VercelResponse) {
           const quote = await getQuote(result.symbol, marketType);
           if (quote && quote.price > 0) {
             const stock: any = { ...quote };
-            if (includeTechnicals) {
-              await enrichWithTechnicals(stock);
-            }
+            await enrichSearchStock(stock, includeTechnicals, includePerformance, includeAnalystData);
             stocks.push(stock);
             seenSymbols.add(result.symbol);
           }

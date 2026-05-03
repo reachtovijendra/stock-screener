@@ -1118,8 +1118,12 @@ function transformQuote(q, symbol) {
   let change = q.regularMarketChange || 0;
   let changePercent = q.regularMarketChangePercent || 0;
   
-  // Check for extended hours pricing
-  if (q.postMarketPrice && q.postMarketPrice > 0) {
+  // Check for extended hours pricing only when Yahoo says that session is active.
+  // Some quote payloads keep stale pre/post-market fields during REGULAR trading.
+  const marketState = q.marketState || '';
+  const isPostMarket = marketState === 'POST' || marketState === 'POSTPOST';
+  const isPreMarket = marketState === 'PRE' || marketState === 'PREPRE';
+  if (isPostMarket && q.postMarketPrice && q.postMarketPrice > 0) {
     price = q.postMarketPrice;
     change = q.postMarketChange || (q.postMarketPrice - regularPrice);
     changePercent = q.postMarketChangePercent || 
@@ -1129,7 +1133,7 @@ function transformQuote(q, symbol) {
     changePercent = regularPrice > 0 && q.regularMarketPreviousClose > 0 
       ? ((price - q.regularMarketPreviousClose) / q.regularMarketPreviousClose) * 100 
       : changePercent;
-  } else if (q.preMarketPrice && q.preMarketPrice > 0) {
+  } else if (isPreMarket && q.preMarketPrice && q.preMarketPrice > 0) {
     price = q.preMarketPrice;
     change = q.preMarketChange || (q.preMarketPrice - (q.regularMarketPreviousClose || regularPrice));
     changePercent = q.preMarketChangePercent || 
@@ -1945,9 +1949,33 @@ const server = http.createServer(async (req, res) => {
 
     if (path === '/api/stocks' && action === 'quote' && req.method === 'GET') {
       const symbol = url.searchParams.get('symbol');
-      if (!symbol) {
+      const symbols = url.searchParams.get('symbols');
+      if (!symbol && !symbols) {
         res.writeHead(400);
-        res.end(JSON.stringify({ error: 'Symbol required' }));
+        res.end(JSON.stringify({ error: 'Symbol or symbols required' }));
+        return;
+      }
+
+      if (symbols) {
+        const symbolList = symbols.split(',').map(s => s.trim()).filter(Boolean).slice(0, 25);
+        if (symbolList.length === 0) {
+          res.writeHead(400);
+          res.end(JSON.stringify({ error: 'Symbols required' }));
+          return;
+        }
+
+        const quotes = [];
+        for (const sym of symbolList) {
+          const cacheKey = `quote_${sym}`;
+          const quote = await getCached(cacheKey, async () => {
+            const q = await fetchYahooQuote(sym);
+            return transformQuote(q, sym);
+          });
+          if (quote) quotes.push(quote);
+        }
+
+        res.writeHead(200);
+        res.end(JSON.stringify(quotes));
         return;
       }
       

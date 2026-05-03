@@ -1,0 +1,208 @@
+<div class="paper-page">
+  <p-toast position="top-right" [life]="3000"></p-toast>
+
+  <div class="page-header">
+    <div>
+      <h1><i class="pi pi-briefcase"></i> Manual Paper Trading</h1>
+      <p>Practice buying and selling stocks with a market-specific paper account.</p>
+    </div>
+    @if (paperService.enabled()) {
+      <button pButton type="button" class="p-button-outlined p-button-danger" icon="pi pi-refresh" label="Reset Account" (click)="resetAccount()"></button>
+    }
+  </div>
+
+  @if (paperService.loading()) {
+    <div class="loading-card">
+      <p-progressSpinner strokeWidth="4" animationDuration="1s"></p-progressSpinner>
+      <span>Loading paper trading account...</span>
+    </div>
+  } @else if (!paperService.enabled()) {
+    <section class="enable-card">
+      <div>
+        <span class="eyebrow">Start Manual Paper Trading</span>
+        <h2>{{ formatCurrency(startingCash()) }} starting cash for {{ marketService.marketInfo().name }}</h2>
+        <p>
+          Enable a simulated account for this market. Trades are saved to your signed-in profile and stay separate between US and India.
+        </p>
+      </div>
+      <button pButton type="button" icon="pi pi-check-circle" label="Enable Paper Trading" (click)="enableAccount()"></button>
+    </section>
+  } @else {
+    <section class="summary-grid">
+      <div class="summary-card summary-card--cash">
+        <span>Cash</span>
+        <strong>{{ formatCurrency(summary().cashBalance) }}</strong>
+      </div>
+      <div class="summary-card summary-card--market-value">
+        <span>Market Value</span>
+        <strong>{{ formatCurrency(summary().marketValue) }}</strong>
+      </div>
+      <div class="summary-card summary-card--equity">
+        <span>Total Equity</span>
+        <strong>{{ formatCurrency(summary().totalEquity) }}</strong>
+      </div>
+      <div class="summary-card summary-card--realized" [class.positive]="summary().realizedPnl > 0" [class.negative]="summary().realizedPnl < 0">
+        <span>Realized P/L</span>
+        <strong>{{ formatCurrency(summary().realizedPnl) }}</strong>
+      </div>
+      <div class="summary-card summary-card--unrealized" [class.positive]="summary().unrealizedPnl > 0" [class.negative]="summary().unrealizedPnl < 0">
+        <span>Unrealized P/L</span>
+        <strong>{{ formatCurrency(summary().unrealizedPnl) }}</strong>
+      </div>
+      <div class="summary-card summary-card--total-pnl" [class.positive]="summary().totalPnl > 0" [class.negative]="summary().totalPnl < 0">
+        <span>Total P/L</span>
+        <strong>{{ formatCurrency(summary().totalPnl) }}</strong>
+        <small>{{ formatPercent(summary().totalReturnPercent) }}</small>
+      </div>
+    </section>
+
+    <section class="trade-layout">
+      <form class="order-ticket" [formGroup]="orderForm" (ngSubmit)="submitOrder()">
+        <div class="section-heading">
+          <span class="eyebrow">Order Ticket</span>
+          <h2>Buy or sell any stock</h2>
+        </div>
+
+        <label>
+          Action
+          <select formControlName="action">
+            <option value="BUY">Buy</option>
+            <option value="SELL">Sell</option>
+          </select>
+        </label>
+
+        <label class="symbol-field">
+          Stock
+          <input type="text" formControlName="symbol" placeholder="AAPL or RELIANCE.NS" autocomplete="off" (input)="searchStocks($event)" />
+          @if (stockSuggestions().length > 0) {
+            <div class="suggestions">
+              @for (stock of stockSuggestions(); track stock.symbol) {
+                <button type="button" (click)="selectStock(stock)">
+                  <strong>{{ stock.symbol }}</strong>
+                  <span>{{ stock.name }}</span>
+                </button>
+              }
+            </div>
+          }
+        </label>
+
+        <div class="inline-fields">
+          <label>
+            Quantity
+            <p-inputNumber formControlName="quantity" [min]="0.000001" [minFractionDigits]="0" [maxFractionDigits]="6"></p-inputNumber>
+          </label>
+          <label>
+            Execution Price
+            <p-inputNumber formControlName="execution_price" [min]="0.01" [minFractionDigits]="2" [maxFractionDigits]="2" mode="currency" [currency]="marketService.currentMarket() === 'IN' ? 'INR' : 'USD'"></p-inputNumber>
+          </label>
+        </div>
+
+        <div class="ticket-actions">
+          <button pButton type="button" class="p-button-outlined" icon="pi pi-sync" label="Use Live Quote" [loading]="quoteLoading()" [disabled]="!canRefreshQuote()" (click)="refreshQuote()"></button>
+          <button pButton type="submit" icon="pi pi-check" label="Place Paper Order" [loading]="orderSubmitting()" [disabled]="!canPlaceOrder()"></button>
+        </div>
+      </form>
+
+      <section class="positions-panel">
+        <div class="section-heading">
+          <span class="eyebrow">Open Positions</span>
+          <h2>{{ paperService.positions().length }} holding{{ paperService.positions().length === 1 ? '' : 's' }}</h2>
+          <button pButton type="button" class="p-button-text p-button-sm" icon="pi pi-sync" label="Refresh Prices" [loading]="positionQuotesLoading()" (click)="refreshLivePrices()"></button>
+        </div>
+
+        @if (paperService.positions().length === 0) {
+          <div class="empty-state">No open positions yet.</div>
+        } @else {
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Stock</th>
+                  <th>Qty</th>
+                  <th>Avg Cost</th>
+                  <th>Current</th>
+                  <th>Value</th>
+                  <th>P/L</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (position of paperService.positions(); track position.symbol) {
+                  <tr>
+                    <td>
+                      <a class="stock-link" [routerLink]="['/stock', position.symbol]">
+                        <strong>{{ position.symbol }}</strong>
+                        <span>{{ position.name }}</span>
+                      </a>
+                    </td>
+                    <td>{{ position.quantity | number:'1.0-6' }}</td>
+                    <td>{{ formatCurrency(position.average_cost) }}</td>
+                    <td>
+                      @if (getPositionCurrentPrice(position.symbol) != null) {
+                        {{ formatCurrency(getPositionCurrentPrice(position.symbol)) }}
+                        <small>Live{{ getPositionQuoteTime(position.symbol) ? ' as of ' + getPositionQuoteTime(position.symbol) : '' }}</small>
+                      } @else {
+                        <span>Loading quote...</span>
+                      }
+                    </td>
+                    <td>{{ getPositionCurrentPrice(position.symbol) == null ? '-' : formatCurrency(getPositionMarketValue(position.symbol, position.quantity)) }}</td>
+                    <td [class.positive]="getPositionPnl(position.symbol, position.quantity, position.average_cost) > 0" [class.negative]="getPositionPnl(position.symbol, position.quantity, position.average_cost) < 0">
+                      {{ formatCurrency(getPositionPnl(position.symbol, position.quantity, position.average_cost)) }}
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+    </section>
+
+    <section class="history-panel">
+      <div class="section-heading">
+        <span class="eyebrow">Trade History</span>
+        <h2>{{ paperService.trades().length }} trade{{ paperService.trades().length === 1 ? '' : 's' }}</h2>
+      </div>
+
+      @if (paperService.trades().length === 0) {
+        <div class="empty-state">Your filled paper trades will appear here.</div>
+      } @else {
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Action</th>
+                <th>Stock</th>
+                <th>Qty</th>
+                <th>Price</th>
+                <th>Realized P/L</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (trade of paperService.trades(); track trade.id ?? trade.executed_at + trade.symbol) {
+                <tr>
+                  <td>{{ trade.executed_at | date:'medium' }}</td>
+                  <td><span class="action-chip" [class.sell]="trade.action === 'SELL'">{{ trade.action }}</span></td>
+                  <td>
+                    <a class="stock-link" [routerLink]="['/stock', trade.symbol]">
+                      <strong>{{ trade.symbol }}</strong>
+                      <span>{{ trade.name }}</span>
+                    </a>
+                  </td>
+                  <td>{{ trade.quantity | number:'1.0-6' }}</td>
+                  <td>{{ formatCurrency(trade.execution_price) }}</td>
+                  <td [class.positive]="(trade.realized_pnl ?? 0) > 0" [class.negative]="(trade.realized_pnl ?? 0) < 0">
+                    {{ trade.realized_pnl == null ? '-' : formatCurrency(trade.realized_pnl) }}
+                    @if (trade.realized_pnl_percent != null) {
+                      <small>{{ formatPercent(trade.realized_pnl_percent) }}</small>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+  }
+</div>

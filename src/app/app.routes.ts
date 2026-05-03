@@ -41,6 +41,12 @@ export const routes: Routes = [
     title: 'Portfolio Tracker'
   },
   {
+    path: 'paper-trading',
+    loadComponent: () => import('./features/paper-trading/paper-trading.component').then(m => m.PaperTradingComponent),
+    canActivate: [authGuard],
+    title: 'Manual Paper Trading'
+  },
+  {
     path: 'dma-simulator',
     loadComponent: () => import('./features/dma-simulator/dma-simulator.component').then(m => m.DmaSimulatorComponent),
     title: 'DMA Simulator'

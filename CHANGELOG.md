@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Automated paper trading results tab on the recommendations page showing score-based simulated investment, triggered trades, monthly P/L, win rate, and a detailed trade ledger for day-trade picks.
+- Manual Paper Trading page with authenticated Supabase-backed paper accounts, order entry, open positions, trade history, cash/equity summaries, and separate US/India starting balances.
+- Supabase schema script for `paper_accounts`, `paper_positions`, and `paper_trades` tables with row-level security policies for user-owned manual paper trading data.
 - Watchlist table now includes 1M, 3M, and 6M percentage change columns populated from Yahoo daily historical closes through the stock search API.
 - PostHog-ready analytics foundation with a typed Angular `AnalyticsService`, SPA route pageview tracking, authenticated user identity sync, and conservative defaults that disable autocapture, session replay, and feature flag requests until explicitly configured.
 - New luxury-themed Market News V2 page accessible at `/v2/news` with editorial card grid layout, category filter chips, and animated news cards
@@ -31,6 +34,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Automated paper trading results now include simulated shares bought, bought and sold timing labels, separate entry and exit price columns, expanded exit reasons, planned amount formula details, and color-coded outcome badges for exit prices, exit reasons, and P/L.
+- Manual paper trading open positions and trade history stock names now link to each stock's detail page.
+- Manual paper trading summary now shows separate Realized P/L and Unrealized P/L cards with color-coded values while preserving the existing Total P/L card.
 - Updated Angular production budget warning thresholds to match the current application size while retaining error thresholds for unexpected growth.
 - Enabled PostHog analytics in production with the US Cloud host while keeping local development analytics disabled to avoid noisy test data.
 - Added Vercel deployment ignore rules so local helper files, backtest data, build outputs, and local configuration are excluded from CLI deployments.
@@ -66,6 +72,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed local mock quote pricing so stale pre/post-market fields do not override regular-market prices while Yahoo reports the stock is in regular trading.
 - Removed obsolete Vercel function memory configuration and resolved Sass mixed-declaration deprecation warnings in the portfolio tracker table container.
 - Fixed the global header stock search dropdown being clipped by the fixed header, making autocomplete suggestions easier to read and select.
 - Fixed local recommendations page showing no rows by adding the missing mock API route for `/api/stocks?action=daily-picks`, mirroring the Vercel handler against Supabase `daily_picks`.

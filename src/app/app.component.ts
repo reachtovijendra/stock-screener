@@ -28,6 +28,10 @@ import { AuthService } from './core/services/auth.service';
             <i class="pi pi-star"></i>
             <span class="nav-label">Trades</span>
           </a>
+          <a class="nav-item premium" routerLink="/paper-trading" routerLinkActive="active" title="Manual Paper Trading">
+            <i class="pi pi-briefcase"></i>
+            <span class="nav-label">Paper</span>
+          </a>
 
           <div class="nav-divider"></div>
 

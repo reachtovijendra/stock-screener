@@ -1,0 +1,13 @@
+---
+description: Project workflow assumptions for Stock Screener
+alwaysApply: true
+---
+
+# Project Workflow
+
+- There is no Jira process for this project.
+- Use `NO-JIRA` for commits when a ticket prefix is needed.
+- There is no separate test environment.
+- There are no separate feature or release branches by default.
+- Work happens on `main`, and pushing to `main` triggers the Vercel deployment.
+- Do not block pushes or deployment waiting for a Jira ID, test-environment promotion, or branch selection unless the user explicitly requests a different flow.

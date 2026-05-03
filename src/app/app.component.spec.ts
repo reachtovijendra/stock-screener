@@ -90,4 +90,14 @@ describe('AppComponent', () => {
       provider: 'google',
     });
   });
+
+  it('shows manual paper trading in the premium navigation', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    fixture.detectChanges();
+
+    const link = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll<HTMLAnchorElement>('a.nav-item'))
+      .find(anchor => anchor.getAttribute('routerLink') === '/paper-trading');
+
+    expect(link?.textContent).toContain('Paper');
+  });
 });

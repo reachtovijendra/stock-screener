@@ -1,8 +1,16 @@
 import { Injectable, inject, signal, computed } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, of, map, tap, catchError, shareReplay } from 'rxjs';
+import { Observable, of, map, tap, catchError, shareReplay, throwError } from 'rxjs';
 import { Stock, StockSearchResult, MarketIndex, Market, MARKET_INDICES } from '../models/stock.model';
 import { environment } from '../../../environments/environment';
+
+interface StockSearchResponse {
+  stocks: StockSearchResult[];
+}
+
+interface QuoteRequestOptions {
+  forceRefresh?: boolean;
+}
 
 /**
  * Cache entry with timestamp for TTL management
@@ -39,7 +47,12 @@ export class StockService {
    * Get a single stock quote by symbol
    */
   getQuote(symbol: string, market: Market): Observable<Stock> {
-    const cacheKey = `${symbol}-${market}`;
+    const normalizedSymbol = symbol.trim();
+    if (!normalizedSymbol) {
+      return throwError(() => new Error('Symbol is required'));
+    }
+
+    const cacheKey = `${normalizedSymbol}-${market}`;
     const cached = this.getFromCache(this.quoteCache, cacheKey);
     
     if (cached) {
@@ -50,7 +63,7 @@ export class StockService {
     this._error.set(null);
     
     const params = new HttpParams()
-      .set('symbol', symbol)
+      .set('symbol', normalizedSymbol)
       .set('market', market);
     
     return this.http.get<Stock>('/api/stocks', { params: params.set('action', 'quote') }).pipe(
@@ -69,7 +82,7 @@ export class StockService {
   /**
    * Get multiple stock quotes in a batch
    */
-  getQuotes(symbols: string[], market: Market): Observable<Stock[]> {
+  getQuotes(symbols: string[], market: Market, options: QuoteRequestOptions = {}): Observable<Stock[]> {
     // Check cache for each symbol
     const cached: Stock[] = [];
     const uncachedSymbols: string[] = [];
@@ -77,7 +90,7 @@ export class StockService {
     symbols.forEach(symbol => {
       const cacheKey = `${symbol}-${market}`;
       const cachedStock = this.getFromCache(this.quoteCache, cacheKey);
-      if (cachedStock) {
+      if (cachedStock && !options.forceRefresh) {
         cached.push(cachedStock);
       } else {
         uncachedSymbols.push(symbol);
@@ -130,9 +143,11 @@ export class StockService {
     
     const params = new HttpParams()
       .set('q', query)
-      .set('market', market);
+      .set('market', market)
+      .set('fuzzy', 'true');
     
-    return this.http.get<StockSearchResult[]>('/api/stocks', { params: params.set('action', 'search') }).pipe(
+    return this.http.get<StockSearchResult[] | StockSearchResponse>('/api/stocks', { params: params.set('action', 'search') }).pipe(
+      map(response => Array.isArray(response) ? response : response.stocks ?? []),
       tap(results => {
         this.setCache(this.searchCache, cacheKey, results);
       }),

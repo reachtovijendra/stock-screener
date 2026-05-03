@@ -13,6 +13,8 @@ import {
 } from '../models/filter.model';
 import { environment } from '../../../environments/environment';
 
+export type ScreenerQuickView = 'raising-stocks' | null;
+
 /**
  * Service for stock screening functionality
  * Manages filter state, pagination, sorting, and API calls
@@ -67,6 +69,19 @@ export class ScreenerService {
   // Execution time for performance tracking
   private _executionTime = signal<number>(0);
   public executionTime = this._executionTime.asReadonly();
+
+  // Active quick view state
+  private _activeQuickView = signal<ScreenerQuickView>(null);
+  public activeQuickView = this._activeQuickView.asReadonly();
+
+  public quickViewContext = computed(() => {
+    if (this._activeQuickView() === 'raising-stocks') {
+      const market = this._filters().market;
+      const minCap = market === 'IN' ? '₹8,300 Cr' : '$1B';
+      return `Raising Stocks: 1M positive and 1M > 3M > 6M > 1Y, min ${minCap} market cap`;
+    }
+    return null;
+  });
   
   // Technical filter state
   private _rsiFilter = signal<'oversold' | 'overbought' | null>(null);
@@ -140,6 +155,7 @@ export class ScreenerService {
       market: currentMarket
     };
     
+    this._activeQuickView.set(null);
     this._filters.set(newFilters);
     this.resetPagination();
     this.runScreen();
@@ -149,6 +165,7 @@ export class ScreenerService {
    * Update filters and optionally trigger screen
    */
   updateFilters(partialFilters: Partial<ScreenerFilters>, runScreen: boolean = true): void {
+    this._activeQuickView.set(null);
     this._filters.update(current => ({
       ...current,
       ...partialFilters
@@ -176,6 +193,7 @@ export class ScreenerService {
     this._filteredStocks.set([]);
     this._hasClientFilters = false;
     this._totalCount.set(0);
+    this._activeQuickView.set(null);
   }
 
   /**
@@ -187,6 +205,7 @@ export class ScreenerService {
     this._results.set([]);
     this._cachedStocks.set([]);
     this._totalCount.set(0);
+    this._activeQuickView.set(null);
   }
 
   /**
@@ -393,6 +412,7 @@ export class ScreenerService {
   runScreen(): void {
     this._loading.set(true);
     this._error.set(null);
+    this._activeQuickView.set(null);
     
     // Clear cache and reset all filter states
     this._cachedStocks.set([]);
@@ -459,6 +479,57 @@ export class ScreenerService {
   }
 
   /**
+   * Run the Raising Stocks quick view using the current Screener market.
+   */
+  runRaisingStocks(): void {
+    this._loading.set(true);
+    this._error.set(null);
+    this._activeQuickView.set('raising-stocks');
+
+    this._cachedStocks.set([]);
+    this._filteredStocks.set([]);
+    this._hasClientFilters = false;
+    this._technicalsCalculated = false;
+    this._rsiFilter.set(null);
+    this._macdFilter.set(null);
+    this._sectorFilter.set([]);
+    this._industryFilter.set([]);
+    this._sort.set({ field: 'oneMonthChangePercent', direction: 'desc' });
+
+    const startTime = performance.now();
+    const market = this._filters().market;
+
+    this.http.get<ScreenResult & { error?: string; message?: string }>(`/api/stocks?action=raising&market=${market}`).pipe(
+      tap(result => {
+        if (result.error) {
+          throw new Error(result.message || result.error);
+        }
+
+        this._cachedStocks.set(result.stocks);
+        this._totalCount.set(result.totalCount);
+        this._pagination.update(current => ({
+          ...current,
+          page: 0,
+          totalRecords: result.totalCount
+        }));
+
+        this.paginateFromCache();
+        this._executionTime.set(result.executionTimeMs || performance.now() - startTime);
+        this._loading.set(false);
+      }),
+      catchError(error => {
+        this._loading.set(false);
+        this._error.set(error.message || 'An error occurred while loading Raising Stocks');
+        this._results.set([]);
+        this._cachedStocks.set([]);
+        this._totalCount.set(0);
+        console.error('Raising stocks error:', error);
+        return of(null);
+      })
+    ).subscribe();
+  }
+
+  /**
    * Export current results to CSV
    */
   exportToCsv(): void {
@@ -468,7 +539,9 @@ export class ScreenerService {
     }
     
     const headers = [
-      'Symbol', 'Name', 'Price', 'Change', 'Change %', 'Market Cap',
+      'Symbol', 'Name', 'Price', 'Change', 'Change %',
+      ...(this._activeQuickView() === 'raising-stocks' ? ['1M %', '3M %', '6M %', '1Y %'] : []),
+      'Market Cap',
       'P/E Ratio', 'Forward P/E', 'EPS', '52W High', '52W Low',
       '% From High', 'Volume', 'Avg Volume', 'Sector', 'Industry'
     ];
@@ -479,6 +552,12 @@ export class ScreenerService {
       stock.price,
       stock.change,
       stock.changePercent.toFixed(2),
+      ...(this._activeQuickView() === 'raising-stocks' ? [
+        stock.oneMonthChangePercent ?? '',
+        stock.threeMonthChangePercent ?? '',
+        stock.sixMonthChangePercent ?? '',
+        stock.oneYearChangePercent ?? ''
+      ] : []),
       stock.marketCap,
       stock.peRatio ?? '',
       stock.forwardPeRatio ?? '',

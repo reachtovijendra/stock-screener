@@ -102,7 +102,7 @@ src/app/
 
 ### Screener Filter Layout
 
-The screener filter panel is a horizontal bar above the results table. Each filter group (Market Cap, 52-Week, Valuation, Technical, Volume, Sectors) is a dropdown trigger button. Clicking a button opens a PrimeNG OverlayPanel with that section's filter controls. The bar also includes Run Screen and Reset action buttons.
+The screener filter panel is a horizontal bar above the results table. Each filter group (Market Cap, 52-Week, Valuation, Technical, Volume, Sectors) is a dropdown trigger button. Clicking a button opens a PrimeNG OverlayPanel with that section's filter controls. The bar also includes Run Screen, Reset, and a Raising Stocks quick-view action that loads large-cap stocks with positive accelerating returns where 1M > 3M > 6M > 1Y.
 
 ### State Management
 
@@ -134,11 +134,12 @@ See `documentation/ANALYTICS.md` for provider recommendation, configuration, and
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/api/stocks/quote` | GET | Single or batch stock quotes |
-| `/api/stocks/search` | GET | Symbol/name search |
-| `/api/stocks/screen` | POST | Run screening with filters |
-| `/api/stocks/list` | GET | Get available stock list |
-| `/api/stocks/indices` | GET | Market index data |
+| `/api/stocks?action=quote` | GET | Single or batch stock quotes |
+| `/api/stocks?action=search` | GET | Symbol/name search |
+| `/api/stocks?action=screen` | POST | Run screening with filters |
+| `/api/stocks?action=raising` | GET | Run the Raising Stocks quick view for the selected market |
+| `/api/stocks?action=list` | GET | Get available stock list |
+| `/api/stocks?action=indices` | GET | Market index data |
 
 ### Caching Strategy
 

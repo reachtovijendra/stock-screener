@@ -1757,6 +1757,39 @@ async function enrichWithPerformance(stock) {
   return stock;
 }
 
+function isRaisingStock(stock, minMarketCap) {
+  const oneMonth = stock.oneMonthChangePercent;
+  const threeMonth = stock.threeMonthChangePercent;
+  const sixMonth = stock.sixMonthChangePercent;
+  const oneYear = stock.oneYearChangePercent;
+
+  return (stock.marketCap || 0) >= minMarketCap
+    && oneMonth != null
+    && threeMonth != null
+    && sixMonth != null
+    && oneYear != null
+    && oneMonth > 0
+    && oneMonth > threeMonth
+    && threeMonth > sixMonth
+    && sixMonth > oneYear;
+}
+
+async function mapWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function runWorker() {
+    while (nextIndex < items.length) {
+      const currentIndex = nextIndex++;
+      results[currentIndex] = await worker(items[currentIndex], currentIndex);
+    }
+  }
+
+  const workerCount = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: workerCount }, runWorker));
+  return results;
+}
+
 async function fetchDailyPicksList(market, month) {
   const targetMonth = month || new Date().toISOString().slice(0, 7);
   const [year, monthNumber] = targetMonth.split('-').map(Number);
@@ -1967,6 +2000,50 @@ const server = http.createServer(async (req, res) => {
         stocks: paginatedStocks,
         totalCount: stocks.length,
         executionTimeMs: Date.now() - startTime,
+        timestamp: new Date().toISOString()
+      }));
+      return;
+    }
+
+    if (path === '/api/stocks' && action === 'raising' && req.method === 'GET') {
+      const startTime = Date.now();
+      const market = (url.searchParams.get('market') || 'US').toUpperCase();
+      const minMarketCap = market === 'IN' ? 83e9 : 1e9;
+
+      let stocks = await fetchMarketStocks(market, {
+        marketCap: {
+          mode: 'custom',
+          categories: [],
+          customRange: { min: minMarketCap },
+        },
+      });
+
+      stocks = stocks.filter(stock => stock.price > 0 && (stock.marketCap || 0) >= minMarketCap);
+
+      const enriched = await mapWithConcurrency(stocks, 8, async stock => {
+        try {
+          return await enrichWithPerformance({ ...stock });
+        } catch (error) {
+          return stock;
+        }
+      });
+
+      const raisingStocks = enriched
+        .filter(stock => isRaisingStock(stock, minMarketCap))
+        .sort((a, b) => (b.oneMonthChangePercent ?? -Infinity) - (a.oneMonthChangePercent ?? -Infinity));
+
+      res.writeHead(200);
+      res.end(JSON.stringify({
+        stocks: raisingStocks,
+        totalCount: raisingStocks.length,
+        universeCount: stocks.length,
+        executionTimeMs: Date.now() - startTime,
+        quickView: 'raising-stocks',
+        criteria: {
+          minMarketCap,
+          oneMonthPositive: true,
+          sequence: ['1M', '3M', '6M', '1Y'],
+        },
         timestamp: new Date().toISOString()
       }));
       return;

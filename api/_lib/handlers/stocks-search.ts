@@ -1,70 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { searchStocks, getQuote, getMarketFromSymbol, getAnalystData, Market } from '../yahoo-client';
-import https from 'https';
-
-function httpsRequest(options: https.RequestOptions): Promise<{ statusCode: number; body: string }> {
-  return new Promise((resolve, reject) => {
-    const req = https.request(options, (res) => {
-      let data = '';
-      res.on('data', (chunk: Buffer) => data += chunk.toString());
-      res.on('end', () => {
-        resolve({
-          statusCode: res.statusCode || 500,
-          body: data
-        });
-      });
-    });
-
-    req.on('error', reject);
-    req.setTimeout(15000, () => {
-      req.destroy();
-      reject(new Error('Request timeout'));
-    });
-
-    req.end();
-  });
-}
-
-type HistoricalPricePoint = {
-  timestamp: number;
-  close: number;
-};
-
-async function fetchHistoricalSeries(symbol: string, range = '1y'): Promise<HistoricalPricePoint[]> {
-  try {
-    const response = await httpsRequest({
-      hostname: 'query1.finance.yahoo.com',
-      port: 443,
-      path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`,
-      method: 'GET',
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-        'Accept': '*/*'
-      }
-    });
-
-    if (response.statusCode === 200) {
-      const data = JSON.parse(response.body);
-      const result = data.chart?.result?.[0];
-      if (result?.timestamp && result?.indicators?.quote?.[0]?.close) {
-        const timestamps = result.timestamp as number[];
-        const closes = result.indicators.quote[0].close as Array<number | null>;
-        return closes
-          .map((close, index) => close == null ? null : { timestamp: timestamps[index], close })
-          .filter((point): point is HistoricalPricePoint => point != null);
-      }
-    }
-    return [];
-  } catch (error) {
-    console.error(`Error fetching historical data for ${symbol}:`, error);
-    return [];
-  }
-}
-
-async function fetchHistoricalPrices(symbol: string, range = '1y'): Promise<number[]> {
-  const series = await fetchHistoricalSeries(symbol, range);
-  return series.map(point => point.close);
-}
+import { enrichStockWithPerformance, fetchHistoricalPrices } from '../stock-performance';
 
 function calculateRSI(closes: number[], period: number = 14): number | null {
   if (closes.length < period + 1) return null;
@@ -140,25 +76,6 @@ function getMacdSignalType(macd: number | null, signal: number | null, histogram
   return histogram > 0 ? 'bullish' : 'bearish';
 }
 
-function calculatePeriodChangePercent(closes: number[], currentPrice: number, tradingDays: number): number | null {
-  if (!closes.length || currentPrice <= 0 || closes.length <= tradingDays) return null;
-
-  const previousClose = closes[closes.length - 1 - tradingDays];
-  if (!previousClose || previousClose <= 0) return null;
-
-  return Math.round(((currentPrice - previousClose) / previousClose) * 10000) / 100;
-}
-
-function calculateYtdChangePercent(series: HistoricalPricePoint[], currentPrice: number): number | null {
-  if (!series.length || currentPrice <= 0) return null;
-
-  const startOfYearSeconds = Date.UTC(new Date().getUTCFullYear(), 0, 1) / 1000;
-  const firstTradingClose = series.find(point => point.timestamp >= startOfYearSeconds)?.close;
-  if (!firstTradingClose || firstTradingClose <= 0) return null;
-
-  return Math.round(((currentPrice - firstTradingClose) / firstTradingClose) * 10000) / 100;
-}
-
 async function enrichWithTechnicals(stock: any): Promise<void> {
   try {
     const closes = await fetchHistoricalPrices(stock.symbol);
@@ -187,26 +104,7 @@ async function enrichWithTechnicals(stock: any): Promise<void> {
 }
 
 async function enrichWithPerformance(stock: any): Promise<void> {
-  try {
-    const series = await fetchHistoricalSeries(stock.symbol, '2y');
-    const closes = series.map(point => point.close);
-    const currentPrice = stock.price || closes[closes.length - 1] || 0;
-
-    stock.oneWeekChangePercent = calculatePeriodChangePercent(closes, currentPrice, 5);
-    stock.oneMonthChangePercent = calculatePeriodChangePercent(closes, currentPrice, 21);
-    stock.threeMonthChangePercent = calculatePeriodChangePercent(closes, currentPrice, 63);
-    stock.sixMonthChangePercent = calculatePeriodChangePercent(closes, currentPrice, 126);
-    stock.ytdChangePercent = calculateYtdChangePercent(series, currentPrice);
-    stock.oneYearChangePercent = calculatePeriodChangePercent(closes, currentPrice, 252);
-  } catch (error) {
-    console.error(`Error enriching performance for ${stock.symbol}:`, error);
-    stock.oneWeekChangePercent = null;
-    stock.oneMonthChangePercent = null;
-    stock.threeMonthChangePercent = null;
-    stock.sixMonthChangePercent = null;
-    stock.ytdChangePercent = null;
-    stock.oneYearChangePercent = null;
-  }
+  await enrichStockWithPerformance(stock);
 }
 
 async function enrichWithAnalystData(stock: any): Promise<void> {

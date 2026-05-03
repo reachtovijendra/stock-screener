@@ -43,7 +43,7 @@ import { SortConfig } from '../../../core/models/filter.model';
       <!-- Results Header -->
       <div class="results-header">
         <div class="header-left">
-          <h2>Results</h2>
+          <h2>{{ screenerService.activeQuickView() === 'raising-stocks' ? 'Raising Stocks' : 'Results' }}</h2>
           @if (!screenerService.loading() && screenerService.totalCount() > 0) {
             <span class="stock-count">{{ screenerService.totalCount() | number }} stocks</span>
           }
@@ -128,7 +128,9 @@ import { SortConfig } from '../../../core/models/filter.model';
           <div class="exclusions-note">
             <i class="pi pi-info-circle"></i>
             <span>
-              @if (marketService.currentMarket() === 'US') {
+              @if (screenerService.quickViewContext(); as quickViewContext) {
+                {{ quickViewContext }}
+              } @else if (marketService.currentMarket() === 'US') {
                 Filters: Min $1B market cap • NYSE/NASDAQ only • ETFs without market cap included
               } @else {
                 Filters: Min ₹8,300 Cr market cap • NSE/BSE only • ETFs without market cap included
@@ -175,7 +177,7 @@ import { SortConfig } from '../../../core/models/filter.model';
           scrollDirection="vertical"
           [showCurrentPageReport]="true"
           currentPageReportTemplate="{first}–{last} of {totalRecords}"
-          sortField="marketCap"
+          [sortField]="screenerService.activeQuickView() === 'raising-stocks' ? 'oneMonthChangePercent' : 'marketCap'"
           [sortOrder]="-1"
           scrollHeight="calc(100vh - 260px)"
           styleClass="compact-table"
@@ -194,6 +196,20 @@ import { SortConfig } from '../../../core/models/filter.model';
               <th pSortableColumn="changePercent" class="col-change text-right">
                 Change <p-sortIcon field="changePercent"></p-sortIcon>
               </th>
+              @if (screenerService.activeQuickView() === 'raising-stocks') {
+                <th pSortableColumn="oneMonthChangePercent" class="col-period text-right">
+                  1M <p-sortIcon field="oneMonthChangePercent"></p-sortIcon>
+                </th>
+                <th pSortableColumn="threeMonthChangePercent" class="col-period text-right">
+                  3M <p-sortIcon field="threeMonthChangePercent"></p-sortIcon>
+                </th>
+                <th pSortableColumn="sixMonthChangePercent" class="col-period text-right">
+                  6M <p-sortIcon field="sixMonthChangePercent"></p-sortIcon>
+                </th>
+                <th pSortableColumn="oneYearChangePercent" class="col-period text-right">
+                  1Y <p-sortIcon field="oneYearChangePercent"></p-sortIcon>
+                </th>
+              }
               <th pSortableColumn="marketCap" class="col-cap text-right">
                 Mkt Cap <p-sortIcon field="marketCap"></p-sortIcon>
               </th>
@@ -254,6 +270,29 @@ import { SortConfig } from '../../../core/models/filter.model';
                   {{ stock.changePercent >= 0 ? '+' : '' }}{{ stock.changePercent | number:'1.2-2' }}%
                 </span>
               </td>
+
+              @if (screenerService.activeQuickView() === 'raising-stocks') {
+                <td class="col-period text-right">
+                  <span class="period-value" [ngClass]="periodClass(stock.oneMonthChangePercent)">
+                    {{ formatPeriodChange(stock.oneMonthChangePercent) }}
+                  </span>
+                </td>
+                <td class="col-period text-right">
+                  <span class="period-value" [ngClass]="periodClass(stock.threeMonthChangePercent)">
+                    {{ formatPeriodChange(stock.threeMonthChangePercent) }}
+                  </span>
+                </td>
+                <td class="col-period text-right">
+                  <span class="period-value" [ngClass]="periodClass(stock.sixMonthChangePercent)">
+                    {{ formatPeriodChange(stock.sixMonthChangePercent) }}
+                  </span>
+                </td>
+                <td class="col-period text-right">
+                  <span class="period-value" [ngClass]="periodClass(stock.oneYearChangePercent)">
+                    {{ formatPeriodChange(stock.oneYearChangePercent) }}
+                  </span>
+                </td>
+              }
               
               <!-- Market Cap -->
               <td class="col-cap text-right">
@@ -351,7 +390,7 @@ import { SortConfig } from '../../../core/models/filter.model';
 
           <ng-template pTemplate="emptymessage">
             <tr>
-              <td colspan="12" class="text-center p-4">No stocks match your criteria.</td>
+              <td [attr.colspan]="screenerService.activeQuickView() === 'raising-stocks' ? 19 : 15" class="text-center p-4">No stocks match your criteria.</td>
             </tr>
           </ng-template>
         </p-table>
@@ -557,6 +596,15 @@ import { SortConfig } from '../../../core/models/filter.model';
       &.down { color: var(--stock-negative); }
     }
 
+    .period-value {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.65rem;
+      font-weight: 600;
+
+      &.positive { color: var(--stock-positive); }
+      &.negative { color: var(--stock-negative); }
+    }
+
     .cap-value, .vol-value {
       font-family: 'JetBrains Mono', monospace;
       font-size: 0.65rem;
@@ -650,6 +698,7 @@ import { SortConfig } from '../../../core/models/filter.model';
     .col-symbol { width: 85px; max-width: 85px; }
     .col-price { width: 65px; max-width: 65px; }
     .col-change { width: 55px; max-width: 55px; }
+    .col-period { width: 48px; max-width: 48px; }
     .col-cap { width: 70px; max-width: 70px; }
     .col-pe { width: 40px; max-width: 40px; }
     .col-fpe { width: 50px; max-width: 50px; }
@@ -902,6 +951,20 @@ export class ResultsTableComponent {
 
   formatPrice(price: number, market: Market): string {
     return this.marketService.formatCurrency(price, market);
+  }
+
+  formatPeriodChange(value: number | null | undefined): string {
+    if (value == null) {
+      return '—';
+    }
+    return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+  }
+
+  periodClass(value: number | null | undefined): string {
+    if (value == null) {
+      return 'muted';
+    }
+    return value >= 0 ? 'positive' : 'negative';
   }
 
   // Technical filter methods

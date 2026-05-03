@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Raising Stocks quick view on the Screener page, backed by `/api/stocks?action=raising`, to find large-cap stocks with positive accelerating returns where 1M > 3M > 6M > 1Y.
 - Automated paper trading results tab on the recommendations page showing score-based simulated investment, triggered trades, monthly P/L, win rate, and a detailed trade ledger for day-trade picks.
 - Manual Paper Trading page with authenticated Supabase-backed paper accounts, order entry, open positions, trade history, cash/equity summaries, and separate US/India starting balances.
 - Supabase schema script for `paper_accounts`, `paper_positions`, and `paper_trades` tables with row-level security policies for user-owned manual paper trading data.
@@ -34,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Manual paper trading page now uses a more compact, refined visual treatment with smaller summary cards, tighter form controls, lighter panel shadows, and denser tables.
 - Stock detail header now shows 1W, 1M, 3M, 6M, YTD, and 1Y percentage changes in one row using the same color-coded styling as the Watchlists page, with earnings and analyst metrics moved below.
 - Collapsed watchlists rail now shows a rotated vertical "Click to see watchlists" prompt, total watchlist count, and keeps the dock control aligned to the right side of the expanded panel.
 - Collapsed watchlists panel now expands when clicking anywhere on the collapsed panel, not just the dock icon.

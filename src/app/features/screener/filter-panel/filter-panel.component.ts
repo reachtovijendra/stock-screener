@@ -323,6 +323,20 @@ interface FilterOption<T> {
 
       <!-- Action Buttons -->
       <div class="filter-actions">
+        <button
+          class="quick-view-action"
+          [class.active]="screenerService.activeQuickView() === 'raising-stocks'"
+          [class.loading]="screenerService.loading() && screenerService.activeQuickView() === 'raising-stocks'"
+          [disabled]="screenerService.loading()"
+          (click)="runRaisingStocks()"
+          title="Find large-cap stocks with accelerating returns">
+          @if (screenerService.loading() && screenerService.activeQuickView() === 'raising-stocks') {
+            <i class="pi pi-spin pi-spinner"></i>
+          } @else {
+            <i class="pi pi-angle-double-up"></i>
+          }
+          <span>Raising Stocks</span>
+        </button>
         @if (screenerService.activeFilterCount() > 0) {
           <button class="reset-action" (click)="resetFilters()" title="Reset all filters">
             <i class="pi pi-refresh"></i>
@@ -441,6 +455,36 @@ interface FilterOption<T> {
         color: var(--text-color);
         border-color: var(--text-color-secondary);
         background: var(--surface-hover);
+      }
+    }
+
+    .quick-view-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.45rem 0.75rem;
+      border-radius: 8px;
+      border: 1px solid rgba(34, 197, 94, 0.35);
+      background: rgba(34, 197, 94, 0.08);
+      color: #16a34a;
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+
+      i { font-size: 0.78rem; }
+
+      &:hover:not(:disabled),
+      &.active {
+        border-color: #16a34a;
+        background: rgba(34, 197, 94, 0.16);
+        color: #15803d;
+      }
+
+      &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
       }
     }
 
@@ -887,6 +931,11 @@ export class FilterPanelComponent implements OnInit {
 
   runScreen(): void {
     this.screenerService.updateFilters(this.filters, true);
+    this.screenRun.emit();
+  }
+
+  runRaisingStocks(): void {
+    this.screenerService.runRaisingStocks();
     this.screenRun.emit();
   }
 

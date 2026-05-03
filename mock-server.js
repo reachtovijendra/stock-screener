@@ -530,9 +530,9 @@ async function fetchChartQuote(symbol) {
 /**
  * Fetch historical prices for RSI/MACD calculation
  */
-async function fetchHistoricalPrices(symbol, days = 50) {
+async function fetchHistoricalPriceSeries(symbol, days = 50) {
   try {
-    const range = days > 70 ? '1y' : '3mo';
+    const range = days > 252 ? '2y' : days > 70 ? '1y' : '3mo';
     const response = await httpsRequest({
       hostname: 'query1.finance.yahoo.com',
       path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`,
@@ -545,16 +545,24 @@ async function fetchHistoricalPrices(symbol, days = 50) {
     
     if (response.statusCode === 200) {
       const data = JSON.parse(response.body);
-      if (data.chart?.result?.[0]?.indicators?.quote?.[0]) {
-        const closes = data.chart.result[0].indicators.quote[0].close;
-        // Filter out null values and return last N days
-        return closes.filter(c => c != null).slice(-days);
+      const result = data.chart?.result?.[0];
+      if (result?.timestamp && result?.indicators?.quote?.[0]) {
+        const closes = result.indicators.quote[0].close;
+        return closes
+          .map((close, index) => close == null ? null : { timestamp: result.timestamp[index], close })
+          .filter(point => point != null)
+          .slice(-days);
       }
     }
     return null;
   } catch (error) {
     return null;
   }
+}
+
+async function fetchHistoricalPrices(symbol, days = 50) {
+  const series = await fetchHistoricalPriceSeries(symbol, days);
+  return series?.map(point => point.close) || null;
 }
 
 /**
@@ -1714,19 +1722,36 @@ function calculatePeriodChangePercent(prices, currentPrice, tradingDays) {
   return Math.round(((currentPrice - previousClose) / previousClose) * 10000) / 100;
 }
 
+function calculateYtdChangePercent(priceSeries, currentPrice) {
+  if (!priceSeries || !priceSeries.length || currentPrice <= 0) return null;
+
+  const startOfYearSeconds = Date.UTC(new Date().getUTCFullYear(), 0, 1) / 1000;
+  const firstTradingClose = priceSeries.find(point => point.timestamp >= startOfYearSeconds)?.close;
+  if (!firstTradingClose || firstTradingClose <= 0) return null;
+
+  return Math.round(((currentPrice - firstTradingClose) / firstTradingClose) * 10000) / 100;
+}
+
 async function enrichWithPerformance(stock) {
   try {
-    const prices = await fetchHistoricalPrices(stock.symbol, 127);
+    const priceSeries = await fetchHistoricalPriceSeries(stock.symbol, 253);
+    const prices = priceSeries?.map(point => point.close) || null;
     const currentPrice = stock.price || prices?.[prices.length - 1] || 0;
 
+    stock.oneWeekChangePercent = calculatePeriodChangePercent(prices, currentPrice, 5);
     stock.oneMonthChangePercent = calculatePeriodChangePercent(prices, currentPrice, 21);
     stock.threeMonthChangePercent = calculatePeriodChangePercent(prices, currentPrice, 63);
     stock.sixMonthChangePercent = calculatePeriodChangePercent(prices, currentPrice, 126);
+    stock.ytdChangePercent = calculateYtdChangePercent(priceSeries, currentPrice);
+    stock.oneYearChangePercent = calculatePeriodChangePercent(prices, currentPrice, 252);
   } catch (error) {
     console.error(`[Performance] Error enriching ${stock.symbol}:`, error.message);
+    stock.oneWeekChangePercent = null;
     stock.oneMonthChangePercent = null;
     stock.threeMonthChangePercent = null;
     stock.sixMonthChangePercent = null;
+    stock.ytdChangePercent = null;
+    stock.oneYearChangePercent = null;
   }
 
   return stock;

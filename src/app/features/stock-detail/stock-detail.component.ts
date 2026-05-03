@@ -196,6 +196,44 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
               <span class="stat-label">Exchange</span>
               <span class="stat-value small">{{ s.exchange }}</span>
             </div>
+            <div class="period-stats-row">
+              <div class="stat-item period-stat">
+                <span class="stat-label">1W</span>
+                <span class="stat-value period-change" [class.up]="(s.oneWeekChangePercent ?? 0) > 0" [class.down]="(s.oneWeekChangePercent ?? 0) < 0">
+                  {{ s.oneWeekChangePercent != null ? ((s.oneWeekChangePercent >= 0 ? '+' : '') + (s.oneWeekChangePercent | number:'1.2-2') + '%') : '—' }}
+                </span>
+              </div>
+              <div class="stat-item period-stat">
+                <span class="stat-label">1M</span>
+                <span class="stat-value period-change" [class.up]="(s.oneMonthChangePercent ?? 0) > 0" [class.down]="(s.oneMonthChangePercent ?? 0) < 0">
+                  {{ s.oneMonthChangePercent != null ? ((s.oneMonthChangePercent >= 0 ? '+' : '') + (s.oneMonthChangePercent | number:'1.2-2') + '%') : '—' }}
+                </span>
+              </div>
+              <div class="stat-item period-stat">
+                <span class="stat-label">3M</span>
+                <span class="stat-value period-change" [class.up]="(s.threeMonthChangePercent ?? 0) > 0" [class.down]="(s.threeMonthChangePercent ?? 0) < 0">
+                  {{ s.threeMonthChangePercent != null ? ((s.threeMonthChangePercent >= 0 ? '+' : '') + (s.threeMonthChangePercent | number:'1.2-2') + '%') : '—' }}
+                </span>
+              </div>
+              <div class="stat-item period-stat">
+                <span class="stat-label">6M</span>
+                <span class="stat-value period-change" [class.up]="(s.sixMonthChangePercent ?? 0) > 0" [class.down]="(s.sixMonthChangePercent ?? 0) < 0">
+                  {{ s.sixMonthChangePercent != null ? ((s.sixMonthChangePercent >= 0 ? '+' : '') + (s.sixMonthChangePercent | number:'1.2-2') + '%') : '—' }}
+                </span>
+              </div>
+              <div class="stat-item period-stat">
+                <span class="stat-label">YTD</span>
+                <span class="stat-value period-change" [class.up]="(s.ytdChangePercent ?? 0) > 0" [class.down]="(s.ytdChangePercent ?? 0) < 0">
+                  {{ s.ytdChangePercent != null ? ((s.ytdChangePercent >= 0 ? '+' : '') + (s.ytdChangePercent | number:'1.2-2') + '%') : '—' }}
+                </span>
+              </div>
+              <div class="stat-item period-stat">
+                <span class="stat-label">1Y</span>
+                <span class="stat-value period-change" [class.up]="(s.oneYearChangePercent ?? 0) > 0" [class.down]="(s.oneYearChangePercent ?? 0) < 0">
+                  {{ s.oneYearChangePercent != null ? ((s.oneYearChangePercent >= 0 ? '+' : '') + (s.oneYearChangePercent | number:'1.2-2') + '%') : '—' }}
+                </span>
+              </div>
+            </div>
             <div class="stat-item" *ngIf="s.earningsTimestamp">
               <span class="stat-label">Earnings Date</span>
               <span class="stat-value small">{{ formatEarningsDate(s.earningsTimestamp) }}</span>
@@ -679,6 +717,28 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       color: var(--red-500);
     }
 
+    .period-stats-row {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: repeat(6, minmax(5.5rem, 1fr));
+      gap: 1rem;
+      padding-top: 0.15rem;
+    }
+
+    .period-stat .stat-label {
+      color: #64748b;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+    }
+
+    .period-change {
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .period-change.up { color: #34d399; }
+    .period-change.down { color: #f87171; }
+
     /* Two Column Layout - fills remaining space */
     .content-grid {
       display: grid;
@@ -1080,6 +1140,10 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
         grid-template-columns: repeat(3, 1fr);
         gap: 0.5rem;
       }
+      .period-stats-row {
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 0.5rem;
+      }
       .gauges-row {
         flex-wrap: wrap;
       }
@@ -1094,6 +1158,7 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
     @media (max-width: 480px) {
       .stock-detail-container { padding: 0.5rem; }
       .key-stats-grid { grid-template-columns: repeat(2, 1fr); }
+      .period-stats-row { grid-template-columns: repeat(6, minmax(0, 1fr)); }
       .stat-item { padding: 0.4rem; }
       .stat-label { font-size: 0.6rem; }
       .stat-value { font-size: 0.75rem; }
@@ -1263,7 +1328,7 @@ export class StockDetailComponent implements OnInit {
     try {
       // Fetch stock with technicals
       const result = await this.http.get<{ stocks: Stock[] }>(
-        `/api/stocks?action=search&q=${symbol}&technicals=true`
+        `/api/stocks?action=search&q=${encodeURIComponent(symbol)}&technicals=true&performance=true`
       ).toPromise();
 
       if (result?.stocks && result.stocks.length > 0) {

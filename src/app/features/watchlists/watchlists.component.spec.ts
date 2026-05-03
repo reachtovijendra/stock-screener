@@ -24,7 +24,17 @@ describe('WatchlistsComponent', () => {
       updated_at: '2026-04-30T00:00:00Z',
       item_count: 0,
     });
-    const watchlists = signal([selectedWatchlist()]);
+    const watchlists = signal([
+      selectedWatchlist(),
+      {
+        id: 'watchlist-2',
+        user_id: 'user-1',
+        name: 'Second',
+        created_at: '2026-04-30T00:00:00Z',
+        updated_at: '2026-04-30T00:00:00Z',
+        item_count: 3,
+      },
+    ]);
     watchlistItems = signal<WatchlistItem[]>([]);
     const loading = signal(false);
 
@@ -108,6 +118,75 @@ describe('WatchlistsComponent', () => {
     ]);
   });
 
+  it('keeps visible stock suggestions during transient blank autocomplete queries', async () => {
+    const existingSuggestion = { symbol: 'SOXX', name: 'iShares Semiconductor ETF', market: 'US', price: 220 };
+    component.searchResults.set([existingSuggestion]);
+
+    await component.searchStocks({ originalEvent: new Event('input'), query: '' });
+
+    expect(component.searchResults()).toEqual([existingSuggestion]);
+  });
+
+  it('collapses and expands the watchlist panel from the dock control', () => {
+    fixture.detectChanges();
+
+    const native = fixture.nativeElement as HTMLElement;
+    const collapseButton = native.querySelector<HTMLButtonElement>('.sidebar-dock-toggle');
+
+    expect(collapseButton?.getAttribute('aria-label')).toBe('Collapse watchlist panel');
+    expect(collapseButton?.querySelector('.dock-pin-icon')).not.toBeNull();
+    expect(native.querySelector('.wl-sidebar.collapsed')).toBeNull();
+
+    collapseButton?.click();
+    fixture.detectChanges();
+
+    expect(component.watchlistPanelCollapsed()).toBeTrue();
+    expect(native.querySelector('.content.sidebar-collapsed')).not.toBeNull();
+    expect(native.querySelector('.wl-sidebar.collapsed')).not.toBeNull();
+
+    const expandButton = native.querySelector<HTMLButtonElement>('.sidebar-dock-toggle');
+    expect(expandButton?.getAttribute('aria-label')).toBe('Expand watchlist panel');
+    expect(expandButton?.querySelector('.dock-pin-icon.collapsed')).not.toBeNull();
+
+    expandButton?.click();
+    fixture.detectChanges();
+
+    expect(component.watchlistPanelCollapsed()).toBeFalse();
+    expect(native.querySelector('.wl-sidebar.collapsed')).toBeNull();
+  });
+
+  it('auto-collapses the watchlist panel after selecting a watchlist', () => {
+    fixture.detectChanges();
+
+    const native = fixture.nativeElement as HTMLElement;
+    native.querySelector<HTMLElement>('.wl-item')?.click();
+    fixture.detectChanges();
+
+    expect(component.wlService.selectWatchlist).toHaveBeenCalledWith(component.wlService.watchlists()[0]);
+    expect(component.watchlistPanelCollapsed()).toBeTrue();
+    expect(native.querySelector('.wl-sidebar.collapsed')).not.toBeNull();
+  });
+
+  it('expands the watchlist panel when clicking anywhere on the collapsed panel', () => {
+    component.watchlistPanelCollapsed.set(true);
+    fixture.detectChanges();
+
+    const native = fixture.nativeElement as HTMLElement;
+    const collapsedLabel = native.querySelector<HTMLElement>('.collapsed-watchlist-name');
+    const collapsedCount = native.querySelector<HTMLElement>('.collapsed-watchlist-count');
+
+    expect(collapsedLabel?.textContent?.trim()).toBe('Click to see watchlists');
+    expect(getComputedStyle(collapsedLabel!).writingMode).toBe('vertical-rl');
+    expect(getComputedStyle(collapsedLabel!).transform).not.toBe('none');
+    expect(collapsedCount?.textContent?.trim()).toBe('2');
+
+    native.querySelector<HTMLElement>('.wl-sidebar.collapsed')?.click();
+    fixture.detectChanges();
+
+    expect(component.watchlistPanelCollapsed()).toBeFalse();
+    expect(native.querySelector('.wl-sidebar.collapsed')).toBeNull();
+  });
+
   it('maps and displays 1M, 3M, and 6M percent changes for watchlist rows', async () => {
     watchlistItems.set([
       {
@@ -140,12 +219,35 @@ describe('WatchlistsComponent', () => {
     expect((item as any).sixMonthChangePercent).toBe(12.75);
 
     const text = fixture.nativeElement.textContent;
-    expect(text).toContain('1M % CHANGE');
-    expect(text).toContain('3M % CHANGE');
-    expect(text).toContain('6M % CHANGE');
+    expect(text).toContain('1M');
+    expect(text).toContain('3M');
+    expect(text).toContain('6M');
     expect(text).toContain('+4.20%');
     expect(text).toContain('-3.50%');
     expect(text).toContain('+12.75%');
     expect(httpGet.calls.mostRecent().args[0]).toContain('performance=true');
+  });
+
+  it('renders analyst target as separated price and percent lines', async () => {
+    watchlistItems.set([
+      {
+        id: 'item-1',
+        watchlist_id: 'watchlist-1',
+        symbol: 'AAON',
+        name: 'AAON, Inc.',
+        market: 'US',
+        price_when_added: 80,
+        added_at: '2026-04-01T00:00:00Z',
+      },
+    ]);
+
+    fixture.detectChanges();
+    (component as any).currentPrices.set({ AAON: 100 });
+    (component as any).stockExtras.set({ AAON: { targetMeanPrice: 125 } });
+    fixture.detectChanges();
+
+    const targetCell = (fixture.nativeElement as HTMLElement).querySelector('tbody td.col-target-wl');
+    expect(targetCell?.querySelector('.target-price')?.textContent).toContain('$125');
+    expect(targetCell?.querySelector('.target-pct')?.textContent).toContain('+25%');
   });
 });

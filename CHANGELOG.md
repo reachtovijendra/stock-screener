@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Stock detail header now shows 1W, 1M, 3M, 6M, YTD, and 1Y percentage changes in one row using the same color-coded styling as the Watchlists page, with earnings and analyst metrics moved below.
+- Collapsed watchlists rail now shows a rotated vertical "Click to see watchlists" prompt, total watchlist count, and keeps the dock control aligned to the right side of the expanded panel.
+- Collapsed watchlists panel now expands when clicking anywhere on the collapsed panel, not just the dock icon.
+- Watchlists panel now auto-collapses after selecting a watchlist so the stock table has more room immediately.
+- Watchlists page now includes a pin-style collapsible dock for the watchlist panel so the table can use more horizontal space.
+- Watchlists table now uses compact column labels, tighter spacing, and smaller readable typography so more columns fit at normal browser zoom.
 - Automated paper trading results now include simulated shares bought, bought and sold timing labels, separate entry and exit price columns, expanded exit reasons, planned amount formula details, and color-coded outcome badges for exit prices, exit reasons, and P/L.
 - Manual paper trading open positions and trade history stock names now link to each stock's detail page.
 - Manual paper trading summary now shows separate Realized P/L and Unrealized P/L cards with color-coded values while preserving the existing Total P/L card.
@@ -72,6 +78,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed watchlist stock autocomplete suggestions disappearing before selection by preserving active suggestions through transient blank autocomplete events and rendering the dropdown outside the scrollable table container.
+- Fixed watchlist analyst target values overlapping at normal browser zoom by separating target price and upside percentage into a structured two-line layout.
 - Fixed local mock quote pricing so stale pre/post-market fields do not override regular-market prices while Yahoo reports the stock is in regular trading.
 - Removed obsolete Vercel function memory configuration and resolved Sass mixed-declaration deprecation warnings in the portfolio tracker table container.
 - Fixed the global header stock search dropdown being clipped by the fixed header, making autocomplete suggestions easier to read and select.

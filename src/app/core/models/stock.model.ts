@@ -140,6 +140,24 @@ export interface Stock {
   /** Next earnings date (Unix timestamp) */
   earningsTimestamp: number | null;
 
+  /** One-week price change percentage */
+  oneWeekChangePercent?: number | null;
+
+  /** One-month price change percentage */
+  oneMonthChangePercent?: number | null;
+
+  /** Three-month price change percentage */
+  threeMonthChangePercent?: number | null;
+
+  /** Six-month price change percentage */
+  sixMonthChangePercent?: number | null;
+
+  /** Year-to-date price change percentage */
+  ytdChangePercent?: number | null;
+
+  /** One-year price change percentage */
+  oneYearChangePercent?: number | null;
+
   /** Timestamp of last quote update */
   lastUpdated: Date;
 }

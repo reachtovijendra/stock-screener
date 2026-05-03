@@ -25,12 +25,17 @@ function httpsRequest(options: https.RequestOptions): Promise<{ statusCode: numb
   });
 }
 
-async function fetchHistoricalPrices(symbol: string): Promise<number[]> {
+type HistoricalPricePoint = {
+  timestamp: number;
+  close: number;
+};
+
+async function fetchHistoricalSeries(symbol: string, range = '1y'): Promise<HistoricalPricePoint[]> {
   try {
     const response = await httpsRequest({
       hostname: 'query1.finance.yahoo.com',
       port: 443,
-      path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1y`,
+      path: `/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=${range}`,
       method: 'GET',
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -40,9 +45,13 @@ async function fetchHistoricalPrices(symbol: string): Promise<number[]> {
 
     if (response.statusCode === 200) {
       const data = JSON.parse(response.body);
-      if (data.chart?.result?.[0]?.indicators?.quote?.[0]?.close) {
-        const closes = data.chart.result[0].indicators.quote[0].close;
-        return closes.filter((c: number | null) => c != null);
+      const result = data.chart?.result?.[0];
+      if (result?.timestamp && result?.indicators?.quote?.[0]?.close) {
+        const timestamps = result.timestamp as number[];
+        const closes = result.indicators.quote[0].close as Array<number | null>;
+        return closes
+          .map((close, index) => close == null ? null : { timestamp: timestamps[index], close })
+          .filter((point): point is HistoricalPricePoint => point != null);
       }
     }
     return [];
@@ -50,6 +59,11 @@ async function fetchHistoricalPrices(symbol: string): Promise<number[]> {
     console.error(`Error fetching historical data for ${symbol}:`, error);
     return [];
   }
+}
+
+async function fetchHistoricalPrices(symbol: string, range = '1y'): Promise<number[]> {
+  const series = await fetchHistoricalSeries(symbol, range);
+  return series.map(point => point.close);
 }
 
 function calculateRSI(closes: number[], period: number = 14): number | null {
@@ -135,6 +149,16 @@ function calculatePeriodChangePercent(closes: number[], currentPrice: number, tr
   return Math.round(((currentPrice - previousClose) / previousClose) * 10000) / 100;
 }
 
+function calculateYtdChangePercent(series: HistoricalPricePoint[], currentPrice: number): number | null {
+  if (!series.length || currentPrice <= 0) return null;
+
+  const startOfYearSeconds = Date.UTC(new Date().getUTCFullYear(), 0, 1) / 1000;
+  const firstTradingClose = series.find(point => point.timestamp >= startOfYearSeconds)?.close;
+  if (!firstTradingClose || firstTradingClose <= 0) return null;
+
+  return Math.round(((currentPrice - firstTradingClose) / firstTradingClose) * 10000) / 100;
+}
+
 async function enrichWithTechnicals(stock: any): Promise<void> {
   try {
     const closes = await fetchHistoricalPrices(stock.symbol);
@@ -164,17 +188,24 @@ async function enrichWithTechnicals(stock: any): Promise<void> {
 
 async function enrichWithPerformance(stock: any): Promise<void> {
   try {
-    const closes = await fetchHistoricalPrices(stock.symbol);
+    const series = await fetchHistoricalSeries(stock.symbol, '2y');
+    const closes = series.map(point => point.close);
     const currentPrice = stock.price || closes[closes.length - 1] || 0;
 
+    stock.oneWeekChangePercent = calculatePeriodChangePercent(closes, currentPrice, 5);
     stock.oneMonthChangePercent = calculatePeriodChangePercent(closes, currentPrice, 21);
     stock.threeMonthChangePercent = calculatePeriodChangePercent(closes, currentPrice, 63);
     stock.sixMonthChangePercent = calculatePeriodChangePercent(closes, currentPrice, 126);
+    stock.ytdChangePercent = calculateYtdChangePercent(series, currentPrice);
+    stock.oneYearChangePercent = calculatePeriodChangePercent(closes, currentPrice, 252);
   } catch (error) {
     console.error(`Error enriching performance for ${stock.symbol}:`, error);
+    stock.oneWeekChangePercent = null;
     stock.oneMonthChangePercent = null;
     stock.threeMonthChangePercent = null;
     stock.sixMonthChangePercent = null;
+    stock.ytdChangePercent = null;
+    stock.oneYearChangePercent = null;
   }
 }
 

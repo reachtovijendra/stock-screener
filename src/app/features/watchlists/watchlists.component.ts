@@ -60,43 +60,65 @@ type WatchlistStockExtras = {
       </div>
 
       <!-- Main content -->
-      <div class="content" *ngIf="wlService.watchlists().length > 0">
+      <div class="content" *ngIf="wlService.watchlists().length > 0" [class.sidebar-collapsed]="watchlistPanelCollapsed()">
         <!-- Watchlist sidebar -->
-        <div class="wl-sidebar">
-          <div
-            *ngFor="let wl of wlService.watchlists(); let i = index"
-            class="wl-item"
-            [class.active]="wlService.selectedWatchlist()?.id === wl.id"
-            [class.dragging]="dragIndex === i"
-            [class.drag-over]="dragOverIndex === i"
-            draggable="true"
-            (dragstart)="onDragStart(i, $event)"
-            (dragover)="onDragOver(i, $event)"
-            (drop)="onDrop(i, $event)"
-            (dragend)="onDragEnd()"
-            (click)="wlService.selectWatchlist(wl)">
-            <div class="wl-drag-handle"><i class="pi pi-bars"></i></div>
-            <div class="wl-info">
-              <span class="wl-name" *ngIf="editingId !== wl.id">{{ wl.name }}</span>
-              <input
-                *ngIf="editingId === wl.id"
-                class="wl-rename-input"
-                [(ngModel)]="editingName"
-                (keydown.enter)="saveRename(wl)"
-                (keydown.escape)="editingId = ''"
-                (blur)="saveRename(wl)"
-                autofocus />
-              <span class="wl-count">{{ wl.item_count || 0 }} stocks</span>
+        <div class="wl-sidebar" [class.collapsed]="watchlistPanelCollapsed()" (click)="expandWatchlistPanelIfCollapsed()">
+          <button
+            type="button"
+            class="sidebar-dock-toggle"
+            [attr.aria-label]="watchlistPanelCollapsed() ? 'Expand watchlist panel' : 'Collapse watchlist panel'"
+            [attr.aria-expanded]="!watchlistPanelCollapsed()"
+            (click)="toggleWatchlistPanel(); $event.stopPropagation()">
+            <span class="dock-pin-icon" [class.collapsed]="watchlistPanelCollapsed()" aria-hidden="true"></span>
+          </button>
+
+          <ng-container *ngIf="!watchlistPanelCollapsed(); else collapsedWatchlistDock">
+            <div
+              *ngFor="let wl of wlService.watchlists(); let i = index"
+              class="wl-item"
+              [class.active]="wlService.selectedWatchlist()?.id === wl.id"
+              [class.dragging]="dragIndex === i"
+              [class.drag-over]="dragOverIndex === i"
+              draggable="true"
+              (dragstart)="onDragStart(i, $event)"
+              (dragover)="onDragOver(i, $event)"
+              (drop)="onDrop(i, $event)"
+              (dragend)="onDragEnd()"
+              (click)="selectWatchlist(wl); $event.stopPropagation()">
+              <div class="wl-drag-handle"><i class="pi pi-bars"></i></div>
+              <div class="wl-info">
+                <span class="wl-name" *ngIf="editingId !== wl.id">{{ wl.name }}</span>
+                <input
+                  *ngIf="editingId === wl.id"
+                  class="wl-rename-input"
+                  [(ngModel)]="editingName"
+                  (keydown.enter)="saveRename(wl)"
+                  (keydown.escape)="editingId = ''"
+                  (blur)="saveRename(wl)"
+                  autofocus />
+                <span class="wl-count">{{ wl.item_count || 0 }} stocks</span>
+              </div>
+              <div class="wl-actions">
+                <button class="icon-btn" (click)="startRename(wl); $event.stopPropagation()" pTooltip="Rename" tooltipPosition="top">
+                  <i class="pi pi-pencil"></i>
+                </button>
+                <button class="icon-btn danger" (click)="confirmDelete(wl); $event.stopPropagation()" pTooltip="Delete" tooltipPosition="top">
+                  <i class="pi pi-trash"></i>
+                </button>
+              </div>
             </div>
-            <div class="wl-actions">
-              <button class="icon-btn" (click)="startRename(wl); $event.stopPropagation()" pTooltip="Rename" tooltipPosition="top">
-                <i class="pi pi-pencil"></i>
-              </button>
-              <button class="icon-btn danger" (click)="confirmDelete(wl); $event.stopPropagation()" pTooltip="Delete" tooltipPosition="top">
-                <i class="pi pi-trash"></i>
-              </button>
+          </ng-container>
+
+          <ng-template #collapsedWatchlistDock>
+            <div
+              class="wl-collapsed-rail"
+              aria-label="Click to see watchlists"
+              pTooltip="Expand watchlists"
+              tooltipPosition="right">
+              <span class="collapsed-watchlist-name">Click to see watchlists</span>
+              <span class="collapsed-watchlist-count">{{ wlService.watchlists().length }}</span>
             </div>
-          </div>
+          </ng-template>
         </div>
 
         <!-- Stock table -->
@@ -120,6 +142,9 @@ type WatchlistStockExtras = {
                 [showEmptyMessage]="true"
                 emptyMessage="No stocks found"
                 [forceSelection]="false"
+                appendTo="body"
+                panelStyleClass="wl-stock-search-panel"
+                [scrollHeight]="'320px'"
                 styleClass="wl-stock-search"
                 inputStyleClass="wl-search-input">
                 <ng-template let-stock pTemplate="item">
@@ -145,16 +170,16 @@ type WatchlistStockExtras = {
                   <th class="col-ticker">TICKER</th>
                   <th class="col-company">COMPANY</th>
                   <th class="col-added">ADDED</th>
-                  <th class="col-days">DAYS SINCE ADDED</th>
-                  <th class="col-cost">COST BASIS</th>
-                  <th class="col-last">LAST PRICE</th>
-                  <th class="col-pnl">CHANGE SINCE</th>
-                  <th class="col-return">CHANGE SINCE %</th>
-                  <th class="col-period">1M % CHANGE</th>
-                  <th class="col-period">3M % CHANGE</th>
-                  <th class="col-period">6M % CHANGE</th>
-                  <th class="col-target-wl">ANALYST TARGET</th>
-                  <th class="col-earnings-wl">EARNINGS</th>
+                  <th class="col-days" title="Days since added">DAYS</th>
+                  <th class="col-cost" title="Cost basis">COST</th>
+                  <th class="col-last" title="Last price">LAST</th>
+                  <th class="col-pnl" title="Change since added">$ CHG</th>
+                  <th class="col-return" title="Change since added percent">% CHG</th>
+                  <th class="col-period" title="1 month percent change">1M</th>
+                  <th class="col-period" title="3 month percent change">3M</th>
+                  <th class="col-period" title="6 month percent change">6M</th>
+                  <th class="col-target-wl" title="Analyst target">TARGET</th>
+                  <th class="col-earnings-wl">EARN</th>
                   <th class="col-x"></th>
                 </tr>
               </thead>
@@ -234,8 +259,13 @@ type WatchlistStockExtras = {
                     <span *ngIf="item.sixMonthChangePercent == null" class="muted-text">—</span>
                   </td>
                   <td class="col-target-wl">
-                    <span *ngIf="getAnalystTargetDisplay(item)" class="target-text" [innerHTML]="getAnalystTargetDisplay(item)"></span>
-                    <span *ngIf="!getAnalystTargetDisplay(item)" class="muted-text">—</span>
+                    <span *ngIf="getAnalystTarget(item) && item.currentPrice" class="target-text">
+                      <span class="target-price">{{ getCurrency(item.market) }}{{ getAnalystTarget(item) | number:'1.0-0' }}</span>
+                      <span class="target-pct" [class.positive]="getAnalystTargetPercent(item)! >= 0" [class.negative]="getAnalystTargetPercent(item)! < 0">
+                        {{ getAnalystTargetPercent(item)! >= 0 ? '+' : '' }}{{ getAnalystTargetPercent(item) | number:'1.0-0' }}%
+                      </span>
+                    </span>
+                    <span *ngIf="!getAnalystTarget(item) || !item.currentPrice" class="muted-text">—</span>
                   </td>
                   <td class="col-earnings-wl">
                     <span *ngIf="getEarningsDate(item)" class="earnings-text">{{ getEarningsDate(item) }}</span>
@@ -320,11 +350,138 @@ type WatchlistStockExtras = {
     .wl-sidebar {
       width: 260px;
       flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
       background: var(--surface-card);
       border: 1px solid var(--surface-border);
       border-radius: 12px;
       padding: 8px;
       overflow-y: auto;
+      transition: width 0.18s ease, padding 0.18s ease;
+    }
+
+    .wl-sidebar.collapsed {
+      width: 52px;
+      padding: 8px 6px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    .sidebar-dock-toggle {
+      display: flex;
+      align-items: center;
+      align-self: flex-end;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      margin: 0 0 8px;
+      border: 1px solid rgba(96, 165, 250, 0.28);
+      border-radius: 10px;
+      background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.18), rgba(15, 23, 42, 0.28)),
+        var(--surface-ground);
+      color: var(--primary-color);
+      cursor: pointer;
+      transition: all 0.15s ease;
+      box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+    }
+
+    .wl-sidebar.collapsed .sidebar-dock-toggle {
+      align-self: center;
+      margin: 0 0 12px;
+    }
+
+    .sidebar-dock-toggle:hover,
+    .sidebar-dock-toggle:focus-visible {
+      color: var(--primary-color);
+      border-color: rgba(96, 165, 250, 0.55);
+      background:
+        linear-gradient(135deg, rgba(59, 130, 246, 0.25), rgba(15, 23, 42, 0.34)),
+        var(--surface-ground);
+      outline: none;
+    }
+
+    .dock-pin-icon {
+      position: relative;
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid currentColor;
+      border-left-width: 5px;
+      border-radius: 3px;
+      transform: rotate(0deg);
+      transition: transform 0.18s ease;
+    }
+
+    .dock-pin-icon::before {
+      content: '';
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 5px;
+      height: 10px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.85;
+    }
+
+    .dock-pin-icon::after {
+      content: '';
+      position: absolute;
+      top: 6px;
+      left: -9px;
+      width: 5px;
+      height: 2px;
+      border-radius: 999px;
+      background: currentColor;
+      opacity: 0.75;
+    }
+
+    .dock-pin-icon.collapsed {
+      transform: rotate(180deg);
+    }
+
+    .wl-collapsed-rail {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.65rem;
+      flex: 1;
+      width: 100%;
+      min-height: 0;
+      padding: 0.25rem 0 0.5rem;
+      color: var(--text-color-secondary);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .collapsed-watchlist-name {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      transform: rotate(180deg);
+      color: #cbd5e1;
+      font-size: 0.78rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1;
+      max-height: 16rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .collapsed-watchlist-count {
+      min-width: 1.4rem;
+      min-height: 1.4rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      background: rgba(59, 130, 246, 0.12);
+      color: var(--primary-color);
+      font-size: 0.75rem;
+      font-weight: 800;
     }
 
     .wl-item {
@@ -428,6 +585,12 @@ type WatchlistStockExtras = {
     }
     :host ::ng-deep .wl-search-input:focus { border-color: #3b82f6 !important; }
 
+    :host ::ng-deep .wl-stock-search-panel {
+      min-width: 360px;
+      max-width: min(520px, calc(100vw - 24px));
+      z-index: 1200 !important;
+    }
+
     .search-result-item {
       display: flex;
       align-items: center;
@@ -467,13 +630,14 @@ type WatchlistStockExtras = {
       width: 100%;
       border-collapse: separate;
       border-spacing: 0;
+      table-layout: auto;
     }
 
     .wl-table thead th {
-      padding: 8px 12px;
-      font-size: 10px;
+      padding: 7px 8px;
+      font-size: 9px;
       font-weight: 700;
-      letter-spacing: 0.08em;
+      letter-spacing: 0.075em;
       color: #475569;
       text-transform: uppercase;
       border-bottom: 1px solid rgba(148, 163, 184, 0.1);
@@ -484,22 +648,65 @@ type WatchlistStockExtras = {
       z-index: 1;
     }
 
-    .wl-table table { table-layout: fixed; }
+    .col-ticker,
+    .col-company {
+      text-align: left;
+    }
 
-    .col-ticker  { width: 160px; text-align: left; padding-left: 16px !important; }
-    .col-company { text-align: left; padding-left: 20px !important; max-width: 200px; }
-    .col-added   { width: 105px; text-align: center; padding-left: 16px !important; }
-    .col-days    { width: 130px; text-align: center; }
-    .col-cost    { width: 110px; text-align: right; padding-left: 16px !important; }
-    .col-last    { width: 110px; text-align: right; padding-left: 16px !important; }
-    .col-pnl     { width: 115px; text-align: right; padding-left: 16px !important; }
-    .col-return  { width: 130px; text-align: right; padding-left: 16px !important; }
-    .col-target-wl { width: 110px; text-align: center; }
-    .col-earnings-wl { width: 90px; text-align: center; }
+    .col-company {
+      max-inline-size: clamp(8.5rem, 14vw, 13rem);
+    }
+
+    .col-added,
+    .col-days,
+    .col-earnings-wl,
+    .col-x {
+      text-align: center;
+    }
+
+    .col-cost,
+    .col-last,
+    .col-pnl,
+    .col-return,
+    .col-period,
+    .col-target-wl {
+      text-align: right;
+    }
+
     .muted-text { color: #475569; opacity: 0.3; }
     .earnings-text { font-size: 12px; color: #94a3b8; }
-    .target-text { font-size: 12px; color: #e2e8f0; }
-    .col-x       { width: 40px; text-align: center; }
+    .target-text {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      font-size: 11px;
+      line-height: 1.15;
+      color: #e2e8f0;
+      white-space: nowrap;
+    }
+    .target-price {
+      font-weight: 800;
+      color: #e2e8f0;
+    }
+    .target-pct {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      align-self: flex-end;
+      border-radius: 999px;
+      padding: 2px 6px;
+      font-size: 9px;
+      font-weight: 800;
+    }
+    .target-pct.positive {
+      color: #34d399;
+      background: rgba(52, 211, 153, 0.12);
+    }
+    .target-pct.negative {
+      color: #f87171;
+      background: rgba(248, 113, 113, 0.12);
+    }
 
     .stock-row {
       cursor: pointer;
@@ -512,10 +719,11 @@ type WatchlistStockExtras = {
     }
 
     .stock-row td {
-      padding: 12px 12px;
+      padding: 10px 8px;
       border-bottom: 1px solid rgba(148, 163, 184, 0.04);
       vertical-align: middle;
       transition: background 0.15s;
+      white-space: nowrap;
     }
 
     .stock-row:hover td {
@@ -529,22 +737,22 @@ type WatchlistStockExtras = {
     .ticker-cell {
       display: flex;
       align-items: center;
-      gap: 6px;
+      gap: 5px;
     }
 
     .ticker-actions {
       display: flex;
       align-items: center;
-      gap: 8px;
-      margin-left: 4px;
+      gap: 5px;
+      margin-left: 2px;
     }
 
     .ticker-icon {
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      width: 22px;
-      height: 22px;
+      width: 18px;
+      height: 18px;
       border-radius: 5px;
       overflow: hidden;
       transition: transform 0.15s, box-shadow 0.2s;
@@ -552,8 +760,8 @@ type WatchlistStockExtras = {
     }
 
     .ticker-icon img {
-      width: 22px;
-      height: 22px;
+      width: 18px;
+      height: 18px;
       object-fit: cover;
       display: block;
     }
@@ -569,7 +777,7 @@ type WatchlistStockExtras = {
     }
 
     .ticker {
-      font-size: 14px;
+      font-size: 12px;
       font-weight: 800;
       color: #f1f5f9;
       letter-spacing: 0.02em;
@@ -577,40 +785,40 @@ type WatchlistStockExtras = {
     }
 
     .market-flag {
-      font-size: 9px;
+      font-size: 8px;
       font-weight: 600;
       color: #64748b;
       background: rgba(100, 116, 139, 0.1);
-      padding: 2px 6px;
+      padding: 1px 4px;
       border-radius: 4px;
       letter-spacing: 0.05em;
     }
 
     .company-name {
-      font-size: 13px;
+      font-size: 11px;
       color: #94a3b8;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       display: block;
-      max-width: 220px;
+      max-width: clamp(8.5rem, 14vw, 13rem);
     }
 
     .date-text {
-      font-size: 12px;
+      font-size: 11px;
       color: #64748b;
       font-variant-numeric: tabular-nums;
     }
 
     .days-text {
-      font-size: 12px;
+      font-size: 11px;
       color: #94a3b8;
       font-weight: 500;
       font-variant-numeric: tabular-nums;
     }
 
     .price-text {
-      font-size: 13px;
+      font-size: 11.5px;
       color: #cbd5e1;
       font-weight: 500;
       font-variant-numeric: tabular-nums;
@@ -641,7 +849,7 @@ type WatchlistStockExtras = {
     }
 
     .change-val {
-      font-size: 13px;
+      font-size: 11.5px;
       font-weight: 500;
       font-variant-numeric: tabular-nums;
     }
@@ -651,9 +859,9 @@ type WatchlistStockExtras = {
 
     .return-badge {
       display: inline-block;
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
-      padding: 3px 10px;
+      padding: 3px 7px;
       border-radius: 6px;
       font-variant-numeric: tabular-nums;
     }
@@ -669,7 +877,7 @@ type WatchlistStockExtras = {
     }
 
     .period-change {
-      font-size: 12px;
+      font-size: 11px;
       font-weight: 700;
       font-variant-numeric: tabular-nums;
     }
@@ -748,7 +956,6 @@ type WatchlistStockExtras = {
       .wl-sidebar { width: 100%; max-height: 160px; overflow-y: auto; }
       .wl-main { padding: 12px; }
       .wl-table { overflow-x: auto; }
-      .wl-table table { min-width: 600px; }
       .table-header { flex-direction: column; align-items: flex-start; gap: 8px; }
       .add-stock-search { min-width: 100%; }
       .today-date { font-size: 11px; }
@@ -783,6 +990,7 @@ export class WatchlistsComponent implements OnInit {
   // Stock search
   searchQuery: any = '';
   searchResults = signal<any[]>([]);
+  watchlistPanelCollapsed = signal(false);
   private stockSearchRequestId = 0;
 
   enrichedItems = computed(() => {
@@ -823,6 +1031,21 @@ export class WatchlistsComponent implements OnInit {
 
   ngOnInit() {
     this.wlService.loadWatchlists();
+  }
+
+  toggleWatchlistPanel(): void {
+    this.watchlistPanelCollapsed.update(collapsed => !collapsed);
+  }
+
+  expandWatchlistPanelIfCollapsed(): void {
+    if (this.watchlistPanelCollapsed()) {
+      this.watchlistPanelCollapsed.set(false);
+    }
+  }
+
+  selectWatchlist(wl: Watchlist): void {
+    this.wlService.selectWatchlist(wl);
+    this.watchlistPanelCollapsed.set(true);
   }
 
   async createWatchlist() {
@@ -913,11 +1136,12 @@ export class WatchlistsComponent implements OnInit {
 
   async searchStocks(event: AutoCompleteCompleteEvent) {
     const query = event.query.trim();
-    const requestId = ++this.stockSearchRequestId;
     if (query.length < 1) {
-      this.searchResults.set([]);
+      this.stockSearchRequestId++;
       return;
     }
+
+    const requestId = ++this.stockSearchRequestId;
 
     try {
       // Search both markets so users can mix US and India stocks in any watchlist
@@ -949,6 +1173,7 @@ export class WatchlistsComponent implements OnInit {
     const market = stock.market || this.marketService.currentMarket();
     await this.wlService.addItem(wl.id, stock.symbol, stock.name || stock.symbol, market, stock.price || 0);
     this.searchQuery = '';
+    this.searchResults.set([]);
     this.fetchPrices();
   }
 
@@ -957,14 +1182,10 @@ export class WatchlistsComponent implements OnInit {
     return extras[item.symbol]?.targetMeanPrice || null;
   }
 
-  getAnalystTargetDisplay(item: any): string | null {
+  getAnalystTargetPercent(item: any): number | null {
     const target = this.getAnalystTarget(item);
     if (!target || !item.currentPrice) return null;
-    const curr = this.getCurrency(item.market);
-    const pct = ((target - item.currentPrice) / item.currentPrice * 100);
-    const sign = pct >= 0 ? '+' : '';
-    const color = pct >= 0 ? '#34d399' : '#f87171';
-    return `${curr}${target.toFixed(0)} <span style="color:${color};font-size:10px">(${sign}${pct.toFixed(0)}%)</span>`;
+    return ((target - item.currentPrice) / item.currentPrice) * 100;
   }
 
   getEarningsDate(item: any): string | null {

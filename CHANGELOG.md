@@ -80,6 +80,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed watchlist enrichment for larger lists by batching quote/performance requests so rows beyond the backend multi-symbol limit receive current price, period returns, analyst target, and earnings data.
 - Fixed watchlist stock autocomplete suggestions disappearing before selection by preserving active suggestions through transient blank autocomplete events and rendering the dropdown outside the scrollable table container.
 - Fixed watchlist analyst target values overlapping at normal browser zoom by separating target price and upside percentage into a structured two-line layout.
 - Fixed local mock quote pricing so stale pre/post-market fields do not override regular-market prices while Yahoo reports the stock is in regular trading.

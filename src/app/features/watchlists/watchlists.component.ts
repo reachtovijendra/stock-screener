@@ -19,6 +19,8 @@ type WatchlistStockExtras = {
   sixMonthChangePercent?: number | null;
 };
 
+const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
+
 @Component({
   selector: 'app-watchlists',
   standalone: true,
@@ -1017,6 +1019,7 @@ export class WatchlistsComponent implements OnInit {
 
   private currentPrices = signal<Record<string, number>>({});
   private stockExtras = signal<Record<string, WatchlistStockExtras>>({});
+  private fetchPricesRequestId = 0;
 
   constructor() {
     // Re-fetch prices whenever items change (e.g. switching watchlists)
@@ -1201,6 +1204,7 @@ export class WatchlistsComponent implements OnInit {
   }
 
   private async fetchPrices() {
+    const requestId = ++this.fetchPricesRequestId;
     const items = this.wlService.items();
     if (items.length === 0) return;
 
@@ -1214,28 +1218,39 @@ export class WatchlistsComponent implements OnInit {
     const prices: Record<string, number> = {};
     const extras: Record<string, WatchlistStockExtras> = {};
 
-    try {
-      const fetches = Object.entries(byMarket).map(async ([market, symbols]) => {
-        const url = `${environment.apiBaseUrl}/api/stocks?action=search&q=${encodeURIComponent(symbols.join(','))}&market=${market}&performance=true`;
-        const data: any = await this.http.get(url).toPromise();
-        if (data?.stocks) {
-          for (const s of data.stocks) {
-            prices[s.symbol] = s.price;
-            extras[s.symbol] = {
-              targetMeanPrice: s.targetMeanPrice || null,
-              earningsTimestamp: s.earningsTimestamp || null,
-              oneMonthChangePercent: s.oneMonthChangePercent ?? null,
-              threeMonthChangePercent: s.threeMonthChangePercent ?? null,
-              sixMonthChangePercent: s.sixMonthChangePercent ?? null,
-            };
+    const fetches = Object.entries(byMarket).flatMap(([market, symbols]) => {
+      const chunks: string[][] = [];
+      for (let i = 0; i < symbols.length; i += WATCHLIST_ENRICHMENT_BATCH_SIZE) {
+        chunks.push(symbols.slice(i, i + WATCHLIST_ENRICHMENT_BATCH_SIZE));
+      }
+
+      return chunks.map(async chunk => {
+        const url = `${environment.apiBaseUrl}/api/stocks?action=search&q=${encodeURIComponent(chunk.join(','))}&market=${market}&performance=true`;
+        try {
+          const data: any = await this.http.get(url).toPromise();
+          if (data?.stocks) {
+            for (const s of data.stocks) {
+              prices[s.symbol] = s.price;
+              extras[s.symbol] = {
+                targetMeanPrice: s.targetMeanPrice || null,
+                earningsTimestamp: s.earningsTimestamp || null,
+                oneMonthChangePercent: s.oneMonthChangePercent ?? null,
+                threeMonthChangePercent: s.threeMonthChangePercent ?? null,
+                sixMonthChangePercent: s.sixMonthChangePercent ?? null,
+              };
+            }
           }
+        } catch {
+          // Leave this chunk blank; other chunks can still populate normally.
         }
       });
-      await Promise.all(fetches);
-      this.currentPrices.set(prices);
-      this.stockExtras.set(extras);
-    } catch {
-      // Prices will show as "..." — not critical
+    });
+
+    await Promise.all(fetches);
+    if (requestId !== this.fetchPricesRequestId) {
+      return;
     }
+    this.currentPrices.set(prices);
+    this.stockExtras.set(extras);
   }
 }

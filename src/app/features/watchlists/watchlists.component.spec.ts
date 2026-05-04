@@ -228,6 +228,48 @@ describe('WatchlistsComponent', () => {
     expect(httpGet.calls.mostRecent().args[0]).toContain('performance=true');
   });
 
+  it('chunks watchlist enrichment so more than 10 rows receive quote and performance data', async () => {
+    const symbols = ['AAA', 'BBB', 'CCC', 'DDD', 'EEE', 'FFF', 'GGG', 'HHH', 'III', 'JJJ', 'KKK', 'LLL'];
+    httpGet.and.callFake((url: string) => {
+      const parsed = new URL(url, 'http://localhost');
+      const requestedSymbols = (parsed.searchParams.get('q') || '').split(',').filter(Boolean);
+      return of({
+        // Mirrors the backend cap that caused later watchlist rows to stay blank.
+        stocks: requestedSymbols.slice(0, 10).map((symbol, index) => ({
+          symbol,
+          price: 100 + index,
+          oneMonthChangePercent: 5,
+          threeMonthChangePercent: 3,
+          sixMonthChangePercent: 1,
+        })),
+      });
+    });
+
+    httpGet.calls.reset();
+    watchlistItems.set(symbols.map((symbol, index) => ({
+      id: `item-${index}`,
+      watchlist_id: 'watchlist-1',
+      symbol,
+      name: symbol,
+      market: 'US',
+      price_when_added: 80,
+      added_at: '2026-04-01T00:00:00Z',
+    })));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const requestedSymbolGroups = httpGet.calls.allArgs()
+      .map(([url]) => new URL(url as string, 'http://localhost').searchParams.get('q') || '')
+      .filter(Boolean)
+      .map(q => q.split(',').filter(Boolean));
+
+    expect(requestedSymbolGroups.length).toBeGreaterThan(1);
+    expect(requestedSymbolGroups.every(group => group.length <= 10)).toBeTrue();
+    expect(component.enrichedItems().every(item => (item as any).currentPrice != null)).toBeTrue();
+    expect(component.enrichedItems().every(item => (item as any).oneMonthChangePercent === 5)).toBeTrue();
+  });
+
   it('renders analyst target as separated price and percent lines', async () => {
     watchlistItems.set([
       {

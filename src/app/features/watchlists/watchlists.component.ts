@@ -7,7 +7,7 @@ import { TableModule } from 'primeng/table';
 import { ButtonModule } from 'primeng/button';
 import { TooltipModule } from 'primeng/tooltip';
 import { AutoCompleteModule, AutoCompleteCompleteEvent } from 'primeng/autocomplete';
-import { WatchlistService, Watchlist, WatchlistItem } from '../../core/services/watchlist.service';
+import { ShareRole, WatchlistService, Watchlist, WatchlistItem, WatchlistShare } from '../../core/services/watchlist.service';
 import { MarketService } from '../../core/services';
 import { environment } from '../../../environments/environment';
 
@@ -69,6 +69,63 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
         </div>
       </div>
 
+      <!-- Share dialog -->
+      <div class="share-overlay" *ngIf="showShareDialog()" (click)="closeShareDialog()">
+        <div class="share-dialog" (click)="$event.stopPropagation()">
+          <div class="share-dialog-header">
+            <div>
+              <h3>Share Watchlist</h3>
+              <p>{{ wlService.selectedWatchlist()?.name }}</p>
+            </div>
+            <button class="icon-btn" type="button" (click)="closeShareDialog()" aria-label="Close share dialog">
+              <i class="pi pi-times"></i>
+            </button>
+          </div>
+
+          <div class="share-form">
+            <input
+              type="email"
+              [(ngModel)]="shareEmail"
+              placeholder="Collaborator email"
+              (keydown.enter)="submitShare()"
+              [disabled]="shareLoading()" />
+            <select [(ngModel)]="shareRole" [disabled]="shareLoading()">
+              <option value="viewer">Viewer</option>
+              <option value="editor">Editor</option>
+            </select>
+            <button class="btn-primary" type="button" (click)="submitShare()" [disabled]="shareLoading() || !shareEmail.trim()">
+              <i class="pi pi-share-alt"></i> Share
+            </button>
+          </div>
+
+          <p class="share-message success" *ngIf="shareMessage()">{{ shareMessage() }}</p>
+          <p class="share-message error" *ngIf="shareError()">{{ shareError() }}</p>
+
+          <div class="collaborators">
+            <h4>Collaborators</h4>
+            <div class="collaborator-empty" *ngIf="wlService.shares().length === 0 && !shareLoading()">
+              No collaborators yet.
+            </div>
+            <div class="collaborator-row" *ngFor="let share of wlService.shares()">
+              <div class="collaborator-info">
+                <span class="collaborator-email">{{ share.shared_with_email || 'Account user' }}</span>
+                <span class="collaborator-role">Can {{ share.role === 'editor' ? 'edit' : 'view' }}</span>
+              </div>
+              <select
+                [ngModel]="share.role"
+                (ngModelChange)="changeShareRole(share, $event)"
+                [disabled]="shareLoading()">
+                <option value="viewer">Viewer</option>
+                <option value="editor">Editor</option>
+              </select>
+              <button class="icon-btn danger" type="button" (click)="revokeShare(share)" [disabled]="shareLoading()" pTooltip="Revoke access" tooltipPosition="top">
+                <i class="pi pi-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- Empty state -->
       <div class="empty-state" *ngIf="!wlService.loading() && wlService.watchlists().length === 0">
         <i class="pi pi-bookmark" style="font-size: 48px; color: #3b82f6; opacity: 0.5;"></i>
@@ -116,9 +173,14 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
                   (keydown.escape)="editingId = ''"
                   (blur)="saveRename(wl)"
                   autofocus />
-                <span class="wl-count">{{ wl.item_count || 0 }} stocks</span>
+                <span class="wl-meta">
+                  <span class="wl-count">{{ wl.item_count || 0 }} stocks</span>
+                  <span class="role-badge" [class.viewer]="wl.access_role === 'viewer'" [class.editor]="wl.access_role === 'editor'">
+                    {{ getAccessRoleLabel(wl) }}
+                  </span>
+                </span>
               </div>
-              <div class="wl-actions">
+              <div class="wl-actions" *ngIf="isOwner(wl)">
                 <button class="icon-btn" (click)="startRename(wl); $event.stopPropagation()" pTooltip="Rename" tooltipPosition="top">
                   <i class="pi pi-pencil"></i>
                 </button>
@@ -147,9 +209,15 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
             <div class="table-header-left">
               <h2>{{ wlService.selectedWatchlist()!.name }}</h2>
               <span class="stock-count">{{ enrichedItems().length }} stocks</span>
+              <span class="role-badge selected" [class.viewer]="wlService.selectedWatchlist()!.access_role === 'viewer'" [class.editor]="wlService.selectedWatchlist()!.access_role === 'editor'">
+                {{ getAccessRoleLabel(wlService.selectedWatchlist()!) }}
+              </span>
             </div>
             <span class="today-date">{{ today | date:'EEEE, MMM d, y' }}</span>
-            <div class="add-stock-search">
+            <button class="btn-share" *ngIf="canShareSelectedWatchlist()" type="button" (click)="openShareDialog()">
+              <i class="pi pi-share-alt"></i> Share
+            </button>
+            <div class="add-stock-search" *ngIf="canEditSelectedWatchlist(); else readonlyWatchlistNotice">
               <p-autoComplete
                 [(ngModel)]="searchQuery"
                 [suggestions]="searchResults()"
@@ -176,11 +244,16 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
                 </ng-template>
               </p-autoComplete>
             </div>
+            <ng-template #readonlyWatchlistNotice>
+              <div class="readonly-notice" pTooltip="Ask the owner for Editor access to make changes." tooltipPosition="left">
+                <i class="pi pi-lock"></i> View only
+              </div>
+            </ng-template>
           </div>
 
           <div class="empty-wl" *ngIf="wlService.selectedWatchlist() && enrichedItems().length === 0 && !wlService.loading()">
             <p>No stocks in this watchlist yet.</p>
-            <p class="hint">Go to any stock page and click "Add to Watchlist"</p>
+            <p class="hint">{{ getEmptyHint() }}</p>
           </div>
 
           <div class="wl-table" *ngIf="enrichedItems().length > 0">
@@ -347,9 +420,12 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
                     <span *ngIf="!getEarningsDate(item)" class="muted-text">—</span>
                   </td>
                   <td class="col-x">
-                    <button class="remove-btn" (click)="removeItem(item); $event.stopPropagation()" pTooltip="Remove" tooltipPosition="left">
+                    <button *ngIf="canEditSelectedWatchlist()" class="remove-btn" (click)="removeItem(item); $event.stopPropagation()" pTooltip="Remove" tooltipPosition="left">
                       <i class="pi pi-times"></i>
                     </button>
+                    <span *ngIf="!canEditSelectedWatchlist()" class="row-lock" pTooltip="View-only access" tooltipPosition="left">
+                      <i class="pi pi-lock"></i>
+                    </span>
                   </td>
                 </tr>
               </tbody>
@@ -589,6 +665,37 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
     .wl-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
     .wl-name { font-size: 13px; font-weight: 600; color: var(--text-color); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .wl-count { font-size: 11px; color: var(--text-color-secondary); }
+    .wl-meta { display: flex; align-items: center; gap: 6px; min-width: 0; }
+
+    .role-badge {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background: rgba(59, 130, 246, 0.12);
+      color: #60a5fa;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .role-badge.viewer {
+      background: rgba(148, 163, 184, 0.14);
+      color: #94a3b8;
+    }
+
+    .role-badge.editor {
+      background: rgba(16, 185, 129, 0.12);
+      color: #34d399;
+    }
+
+    .role-badge.selected {
+      font-size: 11px;
+      padding: 2px 8px;
+    }
 
     .wl-rename-input {
       font-size: 13px;
@@ -647,7 +754,40 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
       white-space: nowrap;
     }
 
+    .btn-share {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      background: rgba(59, 130, 246, 0.12);
+      border: 1px solid rgba(59, 130, 246, 0.28);
+      border-radius: 8px;
+      color: #93c5fd;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      font-family: inherit;
+      white-space: nowrap;
+    }
+
+    .btn-share:hover {
+      background: rgba(59, 130, 246, 0.2);
+      color: #bfdbfe;
+    }
+
     .add-stock-search { min-width: 280px; }
+    .readonly-notice {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(148, 163, 184, 0.1);
+      color: var(--text-color-secondary);
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
     :host ::ng-deep .wl-stock-search { width: 100%; }
     :host ::ng-deep .wl-search-input {
       width: 100% !important;
@@ -997,9 +1137,10 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
 
     .stock-row:hover .remove-btn { opacity: 1; }
     .remove-btn:hover { color: #f87171; background: rgba(248, 113, 113, 0.1); }
+    .row-lock { color: #64748b; font-size: 12px; }
 
     /* Create dialog */
-    .create-overlay {
+    .create-overlay, .share-overlay {
       position: fixed;
       inset: 0;
       background: rgba(0, 0, 0, 0.6);
@@ -1009,7 +1150,7 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
       z-index: 1000;
     }
 
-    .create-dialog {
+    .create-dialog, .share-dialog {
       background: var(--surface-card);
       border: 1px solid var(--surface-border);
       border-radius: 16px;
@@ -1018,13 +1159,39 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
       box-shadow: 0 24px 48px rgba(0, 0, 0, 0.4);
     }
 
+    .share-dialog {
+      width: min(560px, calc(100vw - 32px));
+      max-height: calc(100vh - 64px);
+      overflow: auto;
+    }
+
     .create-dialog h3 {
       margin: 0 0 16px 0;
       font-size: 16px;
       color: var(--text-color);
     }
 
-    .create-dialog input {
+    .share-dialog h3 {
+      margin: 0;
+      font-size: 16px;
+      color: var(--text-color);
+    }
+
+    .share-dialog-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .share-dialog-header p {
+      margin: 4px 0 0;
+      color: var(--text-color-secondary);
+      font-size: 13px;
+    }
+
+    .create-dialog input, .share-form input, .share-form select, .collaborator-row select {
       width: 100%;
       padding: 10px 12px;
       background: var(--surface-ground);
@@ -1038,7 +1205,79 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
       margin-bottom: 16px;
     }
 
-    .create-dialog input:focus { border-color: #3b82f6; }
+    .share-form input, .share-form select, .collaborator-row select {
+      margin-bottom: 0;
+    }
+
+    .share-form {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 120px auto;
+      gap: 8px;
+      align-items: stretch;
+      margin-bottom: 12px;
+    }
+
+    .create-dialog input:focus, .share-form input:focus, .share-form select:focus, .collaborator-row select:focus { border-color: #3b82f6; }
+
+    .share-message {
+      margin: 8px 0 0;
+      font-size: 13px;
+    }
+
+    .share-message.success { color: #34d399; }
+    .share-message.error { color: #f87171; }
+
+    .collaborators {
+      margin-top: 20px;
+      border-top: 1px solid var(--surface-border);
+      padding-top: 16px;
+    }
+
+    .collaborators h4 {
+      margin: 0 0 10px;
+      font-size: 13px;
+      color: var(--text-color);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .collaborator-empty {
+      padding: 12px;
+      border-radius: 8px;
+      background: rgba(148, 163, 184, 0.08);
+      color: var(--text-color-secondary);
+      font-size: 13px;
+    }
+
+    .collaborator-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 120px 32px;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+    }
+
+    .collaborator-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .collaborator-email {
+      color: var(--text-color);
+      font-size: 13px;
+      font-weight: 700;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .collaborator-role {
+      color: var(--text-color-secondary);
+      font-size: 11px;
+    }
 
     .dialog-actions {
       display: flex;
@@ -1056,6 +1295,8 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
       .wl-table { overflow-x: auto; }
       .table-header { flex-direction: column; align-items: flex-start; gap: 8px; }
       .add-stock-search { min-width: 100%; }
+      .share-form, .collaborator-row { grid-template-columns: 1fr; }
+      .share-dialog { width: calc(100vw - 24px); padding: 18px; }
       .today-date { font-size: 11px; }
       .btn-create { font-size: 12px; padding: 6px 12px; }
     }
@@ -1075,7 +1316,13 @@ export class WatchlistsComponent implements OnInit {
   private router = inject(Router);
 
   showCreateDialog = signal(false);
+  showShareDialog = signal(false);
+  shareLoading = signal(false);
+  shareMessage = signal<string | null>(null);
+  shareError = signal<string | null>(null);
   newWatchlistName = '';
+  shareEmail = '';
+  shareRole: ShareRole = 'viewer';
   editingId = '';
   editingName = '';
   today = new Date();
@@ -1184,6 +1431,87 @@ export class WatchlistsComponent implements OnInit {
     }
   }
 
+  async openShareDialog(): Promise<void> {
+    const wl = this.wlService.selectedWatchlist();
+    if (!wl || !this.isOwner(wl)) return;
+
+    this.shareEmail = '';
+    this.shareRole = 'viewer';
+    this.shareMessage.set(null);
+    this.shareError.set(null);
+    this.showShareDialog.set(true);
+    this.shareLoading.set(true);
+
+    try {
+      await this.wlService.loadShares(wl.id);
+    } catch (error) {
+      this.shareError.set(this.getErrorMessage(error, 'Unable to load collaborators.'));
+    } finally {
+      this.shareLoading.set(false);
+    }
+  }
+
+  closeShareDialog(): void {
+    this.showShareDialog.set(false);
+    this.shareMessage.set(null);
+    this.shareError.set(null);
+  }
+
+  async submitShare(): Promise<void> {
+    const wl = this.wlService.selectedWatchlist();
+    const email = this.shareEmail.trim();
+    if (!wl || !email || !this.isOwner(wl)) return;
+
+    this.shareLoading.set(true);
+    this.shareMessage.set(null);
+    this.shareError.set(null);
+
+    try {
+      await this.wlService.shareWatchlist(wl.id, email, this.shareRole);
+      this.shareEmail = '';
+      this.shareRole = 'viewer';
+      this.shareMessage.set('Collaborator access updated.');
+    } catch (error) {
+      this.shareError.set(this.getErrorMessage(error, 'Unable to share this watchlist.'));
+    } finally {
+      this.shareLoading.set(false);
+    }
+  }
+
+  async changeShareRole(share: WatchlistShare, role: ShareRole): Promise<void> {
+    if (share.role === role) return;
+
+    this.shareLoading.set(true);
+    this.shareMessage.set(null);
+    this.shareError.set(null);
+
+    try {
+      await this.wlService.updateShareRole(share.id, role);
+      this.shareMessage.set('Collaborator role updated.');
+    } catch (error) {
+      this.shareError.set(this.getErrorMessage(error, 'Unable to update collaborator access.'));
+    } finally {
+      this.shareLoading.set(false);
+    }
+  }
+
+  async revokeShare(share: WatchlistShare): Promise<void> {
+    if (!confirm(`Revoke access for ${share.shared_with_email || 'this collaborator'}?`)) return;
+
+    this.shareLoading.set(true);
+    this.shareMessage.set(null);
+    this.shareError.set(null);
+
+    try {
+      await this.wlService.revokeShare(share.id);
+      this.shareMessage.set('Collaborator access revoked.');
+    } catch (error) {
+      this.shareError.set(this.getErrorMessage(error, 'Unable to revoke collaborator access.'));
+    } finally {
+      this.shareLoading.set(false);
+    }
+  }
+
   // --- Drag-and-drop reorder ---
 
   onDragStart(index: number, event: DragEvent) {
@@ -1224,6 +1552,37 @@ export class WatchlistsComponent implements OnInit {
   async removeItem(item: WatchlistItem) {
     await this.wlService.removeItem(item.id);
     this.fetchPrices();
+  }
+
+  isOwner(wl: Watchlist): boolean {
+    return wl.access_role === 'owner';
+  }
+
+  canShareSelectedWatchlist(): boolean {
+    const wl = this.wlService.selectedWatchlist();
+    return !!wl && this.isOwner(wl);
+  }
+
+  canEditSelectedWatchlist(): boolean {
+    const wl = this.wlService.selectedWatchlist();
+    return !!wl && this.wlService.canEditWatchlist(wl.id);
+  }
+
+  getAccessRoleLabel(wl: Watchlist): string {
+    switch (wl.access_role) {
+      case 'owner':
+        return 'Owner';
+      case 'editor':
+        return 'Editor';
+      case 'viewer':
+        return 'Viewer';
+    }
+  }
+
+  getEmptyHint(): string {
+    return this.canEditSelectedWatchlist()
+      ? 'Go to any stock page and click "Add to Watchlist"'
+      : 'This shared watchlist is view-only.';
   }
 
   openStock(symbol: string) {
@@ -1366,6 +1725,10 @@ export class WatchlistsComponent implements OnInit {
     }
 
     return a - b;
+  }
+
+  private getErrorMessage(error: unknown, fallback: string): string {
+    return error instanceof Error ? error.message : fallback;
   }
 
   private async fetchPrices() {

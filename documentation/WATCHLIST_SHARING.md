@@ -1,0 +1,56 @@
+# Watchlist Sharing
+
+## Overview
+
+Authenticated users can share owned watchlists with other existing authenticated users by email. Shared watchlists are collaborative for owners and editors, while viewers can only read, sort, and navigate watchlist stocks.
+
+## Permissions
+
+| Role | Read watchlist | Add/remove stocks | Rename/delete list | Manage sharing |
+|------|----------------|-------------------|--------------------|----------------|
+| Owner | Yes | Yes | Yes | Yes |
+| Editor | Yes | Yes | No | No |
+| Viewer | Yes | No | No | No |
+
+Owners retain the canonical watchlist record in `watchlists.user_id`. Collaborator access is stored separately in `watchlist_shares`.
+
+## Database Tables
+
+The schema is defined in `supabase/watchlist-sharing-schema.sql`.
+
+- `watchlists`: owner-owned watchlist metadata, including `sort_order`.
+- `watchlist_items`: stock rows for each watchlist.
+- `watchlist_shares`: collaborator assignments with `viewer` or `editor` role.
+
+Row-level security allows owners to manage their own lists, shared users to read granted lists, editors to add or remove list items, and viewers to read only.
+
+## API Endpoints
+
+Email lookup is performed only on the server with Supabase service-role access.
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/watchlists/share?watchlistId={id}` | GET | List collaborators for an owned watchlist |
+| `/api/watchlists/share` | POST | Share or update a collaborator by `{ watchlistId, email, role }` |
+| `/api/watchlists/share/{shareId}` | PATCH | Change a collaborator role |
+| `/api/watchlists/share/{shareId}` | DELETE | Revoke collaborator access |
+
+All endpoints require a Supabase bearer token in the `Authorization` header and verify that the caller owns the affected watchlist.
+
+## Frontend Behavior
+
+`WatchlistService` loads owned and shared lists into one sidebar collection and annotates each list with `access_role`.
+
+- Owner lists show `Owner` badges and a Share action.
+- Shared lists show `Viewer` or `Editor` badges.
+- Viewer lists hide add-stock and remove controls and display a view-only notice.
+- Editor lists allow item changes but do not expose rename, delete, sorting persistence, or sharing controls.
+
+## Configuration
+
+The share API requires these server-side environment variables in Vercel:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+The service-role key must never be exposed to Angular client code.

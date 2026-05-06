@@ -112,6 +112,7 @@ The application uses Angular Signals for reactive state management:
 - `MarketService`: Handles market selection (US/India) with localStorage persistence
 - `PortfolioTrackerService`: Persists market-specific portfolio targets and actuals in Supabase
 - `PaperTradingService`: Persists market-specific manual paper trading accounts, positions, and trade history in Supabase
+- `WatchlistService`: Loads owned and shared watchlists from Supabase, annotates access roles, and routes owner-only sharing actions through Vercel APIs
 - `AnalyticsService`: Owns PostHog initialization, SPA route pageviews, typed event capture, and authenticated identity sync
 - `ThemeService`: Manages dark/light theme with persistence
 
@@ -140,6 +141,8 @@ See `documentation/ANALYTICS.md` for provider recommendation, configuration, and
 | `/api/stocks?action=raising` | GET | Run the Raising Stocks quick view for the selected market |
 | `/api/stocks?action=list` | GET | Get available stock list |
 | `/api/stocks?action=indices` | GET | Market index data |
+| `/api/watchlists/share` | GET/POST | List collaborators for an owned watchlist or share by email |
+| `/api/watchlists/share/{shareId}` | PATCH/DELETE | Update collaborator role or revoke access |
 
 ### Caching Strategy
 
@@ -176,6 +179,20 @@ Manual paper trading is an authenticated feature at `/paper-trading`. It uses Su
 - `paper_trades`: filled order history with realized P/L on sell orders.
 
 The page starts users with USD 100,000 in the US market and INR 10,00,000 in the India market. Order prices default from the quote API and remain editable before confirmation.
+
+### Watchlists
+
+Watchlists are authenticated Supabase-backed records. Owned lists are stored in `watchlists`, stock rows are stored in `watchlist_items`, and collaborator access is stored in `watchlist_shares`.
+
+The sharing model supports three UI roles:
+
+- `owner`: can rename, delete, reorder owned lists, add or remove stocks, and manage collaborators.
+- `editor`: can read the shared list and add or remove stocks.
+- `viewer`: can read, sort, and navigate the shared list but cannot modify it.
+
+The browser never queries Supabase Auth email addresses directly. Sharing by email is handled by Vercel serverless endpoints that validate the caller's Supabase access token, verify watchlist ownership, resolve the recipient with service-role access, and write `watchlist_shares`.
+
+See `documentation/WATCHLIST_SHARING.md` for endpoint details, RLS expectations, and required environment variables.
 
 ### Stock Quote
 
@@ -218,6 +235,7 @@ interface ScreenerFilters {
 
 - No sensitive data stored on client
 - API calls proxied through Vercel (no direct Yahoo Finance exposure)
+- Supabase service-role access is restricted to serverless functions; watchlist sharing APIs validate caller ownership before resolving user emails or mutating shares
 - CORS headers configured for same-origin requests
 - Content Security Policy headers set
 

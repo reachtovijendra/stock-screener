@@ -89,6 +89,11 @@ export class AuthService {
     return { error: error?.message ?? null };
   }
 
+  async getAccessToken(): Promise<string | null> {
+    const { data: { session } } = await this.supabase.auth.getSession();
+    return session?.access_token ?? null;
+  }
+
   async signOut(): Promise<void> {
     await this.supabase.auth.signOut();
     window.location.href = '/';

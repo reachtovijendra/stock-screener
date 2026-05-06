@@ -5,7 +5,7 @@ import { Router } from '@angular/router';
 import { of, Subject } from 'rxjs';
 
 import { MarketService } from '../../core/services';
-import { WatchlistItem, WatchlistService } from '../../core/services/watchlist.service';
+import { Watchlist, WatchlistItem, WatchlistService } from '../../core/services/watchlist.service';
 import { WatchlistsComponent } from './watchlists.component';
 
 describe('WatchlistsComponent', () => {
@@ -16,15 +16,16 @@ describe('WatchlistsComponent', () => {
 
   beforeEach(async () => {
     const currentMarket = signal<'US' | 'IN'>('US');
-    const selectedWatchlist = signal({
+    const selectedWatchlist = signal<Watchlist>({
       id: 'watchlist-1',
       user_id: 'user-1',
       name: 'Test',
       created_at: '2026-04-30T00:00:00Z',
       updated_at: '2026-04-30T00:00:00Z',
       item_count: 0,
+      access_role: 'owner' as const,
     });
-    const watchlists = signal([
+    const watchlists = signal<Watchlist[]>([
       selectedWatchlist(),
       {
         id: 'watchlist-2',
@@ -33,10 +34,12 @@ describe('WatchlistsComponent', () => {
         created_at: '2026-04-30T00:00:00Z',
         updated_at: '2026-04-30T00:00:00Z',
         item_count: 3,
+        access_role: 'viewer' as const,
       },
     ]);
     watchlistItems = signal<WatchlistItem[]>([]);
     const loading = signal(false);
+    const shares = signal([]);
 
     httpGet = jasmine.createSpy('get');
 
@@ -49,15 +52,22 @@ describe('WatchlistsComponent', () => {
             watchlists,
             selectedWatchlist,
             items: watchlistItems,
+            shares,
             loading,
             addItem: jasmine.createSpy('addItem').and.resolveTo(),
+            canEditWatchlist: jasmine.createSpy('canEditWatchlist').and.callFake((id: string) => selectedWatchlist()?.id === id && selectedWatchlist()?.access_role !== 'viewer'),
+            canManageWatchlist: jasmine.createSpy('canManageWatchlist').and.callFake((id: string) => selectedWatchlist()?.id === id && selectedWatchlist()?.access_role === 'owner'),
             createWatchlist: jasmine.createSpy('createWatchlist').and.resolveTo(null),
             deleteWatchlist: jasmine.createSpy('deleteWatchlist').and.resolveTo(),
+            loadShares: jasmine.createSpy('loadShares').and.resolveTo([]),
             loadItems: jasmine.createSpy('loadItems').and.resolveTo(),
             loadWatchlists: jasmine.createSpy('loadWatchlists').and.resolveTo(),
             removeItem: jasmine.createSpy('removeItem').and.resolveTo(),
             renameWatchlist: jasmine.createSpy('renameWatchlist').and.resolveTo(),
             saveOrder: jasmine.createSpy('saveOrder').and.resolveTo(),
+            shareWatchlist: jasmine.createSpy('shareWatchlist').and.resolveTo(null),
+            updateShareRole: jasmine.createSpy('updateShareRole').and.resolveTo(null),
+            revokeShare: jasmine.createSpy('revokeShare').and.resolveTo(),
             selectWatchlist: jasmine.createSpy('selectWatchlist'),
           },
         },
@@ -185,6 +195,54 @@ describe('WatchlistsComponent', () => {
 
     expect(component.watchlistPanelCollapsed()).toBeFalse();
     expect(native.querySelector('.wl-sidebar.collapsed')).toBeNull();
+  });
+
+  it('shows access role badges for owned and shared watchlists', () => {
+    fixture.detectChanges();
+
+    const native: HTMLElement = fixture.nativeElement;
+    const badges = Array.from(native.querySelectorAll<HTMLElement>('.role-badge')).map(badge => badge.textContent?.trim());
+
+    expect(badges).toContain('Owner');
+    expect(badges).toContain('Viewer');
+  });
+
+  it('hides edit controls for viewer watchlists', () => {
+    component.wlService.selectedWatchlist.set({
+      ...component.wlService.selectedWatchlist()!,
+      access_role: 'viewer',
+    });
+    watchlistItems.set([
+      {
+        id: 'item-1',
+        watchlist_id: 'watchlist-1',
+        symbol: 'AAPL',
+        name: 'Apple',
+        market: 'US',
+        price_when_added: 100,
+        added_at: '2026-04-30T00:00:00Z',
+      },
+    ]);
+    httpGet.and.returnValue(of({ stocks: [] }));
+
+    fixture.detectChanges();
+
+    const native: HTMLElement = fixture.nativeElement;
+    expect(native.querySelector('.add-stock-search')).toBeNull();
+    expect(native.querySelector('.readonly-notice')?.textContent).toContain('View only');
+    expect(native.querySelector('.remove-btn')).toBeNull();
+    expect(native.querySelector('.row-lock')).not.toBeNull();
+  });
+
+  it('loads collaborators when owner opens the share dialog', async () => {
+    fixture.detectChanges();
+
+    await component.openShareDialog();
+    fixture.detectChanges();
+
+    expect(component.wlService.loadShares).toHaveBeenCalledWith('watchlist-1');
+    expect(component.showShareDialog()).toBeTrue();
+    expect((fixture.nativeElement as HTMLElement).querySelector('.share-dialog')).not.toBeNull();
   });
 
   it('maps and displays live 1D, 1M, 3M, and 6M percent changes for watchlist rows', async () => {

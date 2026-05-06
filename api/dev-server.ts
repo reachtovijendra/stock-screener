@@ -28,7 +28,7 @@ const server = http.createServer(async (req, res) => {
 
   // CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-request-time, Authorization');
   if (req.method === 'OPTIONS') { res.writeHead(200); res.end(); return; }
 
@@ -38,7 +38,7 @@ const server = http.createServer(async (req, res) => {
       // Build a mock VercelRequest/VercelResponse
       const query = parsed.query as Record<string, string>;
       let body: any = {};
-      if (req.method === 'POST') {
+      if (['POST', 'PATCH', 'PUT'].includes(req.method || '')) {
         const chunks: Buffer[] = [];
         for await (const chunk of req) chunks.push(chunk as Buffer);
         try { body = JSON.parse(Buffer.concat(chunks).toString()); } catch {}
@@ -59,6 +59,45 @@ const server = http.createServer(async (req, res) => {
       };
 
       const mod = path === '/api/market' ? await import('./market') : await import('./stocks');
+      await mod.default(mockReq, mockRes);
+    } catch (err: any) {
+      console.error('Handler error:', err);
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: err.message }));
+    }
+    return;
+  }
+
+  if (path === '/api/watchlists/share' || path.startsWith('/api/watchlists/share/')) {
+    try {
+      const query = { ...(parsed.query as Record<string, string>) };
+      const shareIdMatch = path.match(/^\/api\/watchlists\/share\/([^/]+)$/);
+      if (shareIdMatch) query['shareId'] = decodeURIComponent(shareIdMatch[1]);
+
+      let body: any = {};
+      if (['POST', 'PATCH', 'PUT'].includes(req.method || '')) {
+        const chunks: Buffer[] = [];
+        for await (const chunk of req) chunks.push(chunk as Buffer);
+        try { body = JSON.parse(Buffer.concat(chunks).toString()); } catch {}
+      }
+
+      const mockReq: any = { method: req.method, headers: req.headers, query, body };
+      const mockRes: any = {
+        statusCode: 200,
+        _headers: {} as Record<string, string>,
+        setHeader(k: string, v: string) { this._headers[k] = v; return this; },
+        status(code: number) { this.statusCode = code; return this; },
+        json(data: any) {
+          res.writeHead(this.statusCode, { 'Content-Type': 'application/json', ...this._headers });
+          res.end(JSON.stringify(data));
+          return this;
+        },
+        end() { res.writeHead(this.statusCode, this._headers); res.end(); return this; },
+      };
+
+      const mod = shareIdMatch
+        ? await import('./watchlists/share/[shareId]')
+        : await import('./watchlists/share');
       await mod.default(mockReq, mockRes);
     } catch (err: any) {
       console.error('Handler error:', err);

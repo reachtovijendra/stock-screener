@@ -157,4 +157,42 @@ describe('StockDetailComponent', () => {
     ).map(label => label.textContent?.trim());
     expect(periodLabels).toEqual(['1W', '1M', '3M', '6M', 'YTD', '1Y']);
   });
+
+  it('explains RSI signal thresholds for tooltips', () => {
+    const component = fixture.componentInstance;
+
+    expect(component.getRsiSignalExplanation(24.8)).toContain('below 30');
+    expect(component.getRsiSignalExplanation(24.8)).toContain('Buy');
+    expect(component.getRsiSignalExplanation(76.1)).toContain('above 70');
+    expect(component.getRsiSignalExplanation(76.1)).toContain('Sell');
+    expect(component.getRsiSignalExplanation(50.2)).toContain('30 to 70');
+    expect(component.getRsiSignalExplanation(null)).toContain('not available');
+  });
+
+  it('explains MACD signal direction for tooltips', () => {
+    const component = fixture.componentInstance;
+
+    expect(component.getMacdSignalExplanation('bullish', 2.45)).toContain('above the signal line');
+    expect(component.getMacdSignalExplanation('bullish', 2.45)).toContain('Buy');
+    expect(component.getMacdSignalExplanation('bearish', -1.25)).toContain('below the signal line');
+    expect(component.getMacdSignalExplanation('bearish', -1.25)).toContain('Sell');
+    expect(component.getMacdSignalExplanation(null, null)).toContain('not available');
+  });
+
+  it('renders visible RSI and MACD explanation controls', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const helpButtons = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.signal-help-btn')
+    ) as HTMLButtonElement[];
+
+    expect(helpButtons.length).toBe(2);
+    expect(helpButtons.map(button => button.textContent?.trim())).toEqual(['Why?', 'Why?']);
+    expect(helpButtons.map(button => button.getAttribute('aria-label'))).toEqual([
+      'Why is RSI marked this way?',
+      'Why is MACD marked this way?',
+    ]);
+  });
 });

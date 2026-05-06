@@ -101,6 +101,12 @@
           <button pButton type="button" class="p-button-outlined" icon="pi pi-sync" label="Use Live Quote" [loading]="quoteLoading()" [disabled]="!canRefreshQuote()" (click)="refreshQuote()"></button>
           <button pButton type="submit" icon="pi pi-check" label="Place Paper Order" [loading]="orderSubmitting()" [disabled]="!canPlaceOrder()"></button>
         </div>
+        @if (orderBlockReason(); as reason) {
+          <div class="order-block-reason">
+            <i class="pi pi-info-circle"></i>
+            <span>{{ reason }}</span>
+          </div>
+        }
       </form>
 
       <section class="positions-panel">

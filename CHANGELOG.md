@@ -35,6 +35,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Manual paper trading order validation now allows manually entered valid symbols with an execution price and shows an inline reason when the Place Paper Order button is disabled.
+- Stock detail Technical Analysis RSI and MACD tiles now include visible "Why?" controls with polished global tooltip styling and concise explanations describing the buy, sell, or neutral threshold logic behind each signal.
+- Stock detail Technical Analysis panel now uses a Signal Console layout with richer gauge cards, compact signal tiles, directional accents, and subtle one-time entrance animation.
+- Stock detail price container now has a color-coded background and border: green-tinted when the stock is up, red-tinted when down, with the price text matching the direction color for clear visual emphasis.
+- Stock detail header metrics now use grouped responsive sections for performance, valuation, trading range, and research data to improve desktop alignment and mobile readability.
 - Manual paper trading page now uses a more compact, refined visual treatment with smaller summary cards, tighter form controls, lighter panel shadows, and denser tables.
 - Stock detail header now shows 1W, 1M, 3M, 6M, YTD, and 1Y percentage changes in one row using the same color-coded styling as the Watchlists page, with earnings and analyst metrics moved below.
 - Collapsed watchlists rail now shows a rotated vertical "Click to see watchlists" prompt, total watchlist count, and keeps the dock control aligned to the right side of the expanded panel.
@@ -80,6 +85,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed multi-symbol stock search requests so exact-symbol batches over the supported limit return a clear error instead of silently truncating results.
 - Fixed watchlist enrichment for larger lists by batching quote/performance requests so rows beyond the backend multi-symbol limit receive current price, period returns, analyst target, and earnings data.
 - Fixed watchlist stock autocomplete suggestions disappearing before selection by preserving active suggestions through transient blank autocomplete events and rendering the dropdown outside the scrollable table container.
 - Fixed watchlist analyst target values overlapping at normal browser zoom by separating target price and upside percentage into a structured two-line layout.

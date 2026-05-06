@@ -57,19 +57,25 @@ export class PaperTradingComponent {
   readonly summary = computed(() => this.paperService.getSummary(this.latestPrices()));
   readonly currencySymbol = computed(() => this.marketService.marketInfo().currencySymbol);
   readonly locale = computed(() => this.marketService.currentMarket() === 'IN' ? 'en-IN' : 'en-US');
-  readonly canRefreshQuote = computed(() =>
-    this.orderForm.controls.symbol.value.trim().length > 0 && !this.quoteLoading()
-  );
-  readonly canPlaceOrder = computed(() => {
+
+  canRefreshQuote(): boolean {
+    return this.orderForm.controls.symbol.value.trim().length > 0 && !this.quoteLoading();
+  }
+
+  canPlaceOrder(): boolean {
+    return this.orderBlockReason() == null;
+  }
+
+  orderBlockReason(): string | null {
     const value = this.orderForm.getRawValue();
-    const hasResolvedStock = !!value.name || !!this.getPositionForSymbol(value.symbol);
-    return this.orderForm.valid
-      && hasResolvedStock
-      && value.symbol.trim().length > 0
-      && value.execution_price > 0
-      && !this.orderSubmitting()
-      && !this.quoteLoading();
-  });
+    if (this.orderSubmitting()) return 'Submitting this paper order...';
+    if (this.quoteLoading()) return 'Waiting for the live quote to finish loading.';
+    if (!value.symbol.trim()) return 'Enter a stock symbol.';
+    if (!value.quantity || value.quantity <= 0) return 'Enter a quantity above 0.';
+    if (!value.execution_price || value.execution_price <= 0) return 'Use Live Quote or enter an execution price above 0.';
+    if (this.orderForm.invalid) return 'Complete the order ticket before placing the trade.';
+    return null;
+  }
 
   constructor() {
     effect(() => {

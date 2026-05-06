@@ -170,6 +170,24 @@ describe('PaperTradingComponent', () => {
     expect(component.canPlaceOrder()).toBeTrue();
   });
 
+  it('allows a manually entered valid symbol with an execution price', () => {
+    component.orderForm.patchValue({
+      action: 'BUY',
+      symbol: 'KAYNES.NS',
+      name: null,
+      quantity: 10,
+      execution_price: 4305.5,
+    });
+
+    expect(component.canPlaceOrder()).toBeTrue();
+  });
+
+  it('shows why an incomplete paper order cannot be placed', () => {
+    component.orderForm.patchValue({ symbol: 'KAYNES.NS', name: null, quantity: 10, execution_price: 0 });
+
+    expect(component.orderBlockReason()).toBe('Use Live Quote or enter an execution price above 0.');
+  });
+
   it('refreshes open position prices from live quotes instead of using cost basis as current price', async () => {
     positionsSignal.set([
       {

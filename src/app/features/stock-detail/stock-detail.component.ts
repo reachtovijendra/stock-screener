@@ -114,7 +114,7 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
               </div>
             </div>
 
-            <div class="stock-price">
+            <div class="stock-price" [class.price-up]="s.changePercent >= 0" [class.price-down]="s.changePercent < 0">
               <span class="price">{{ marketService.formatCurrency(s.price, s.market) }}</span>
               <span class="change" [class.positive]="s.changePercent >= 0" [class.negative]="s.changePercent < 0">
                 {{ s.changePercent >= 0 ? '+' : '' }}{{ s.changePercent | number:'1.2-2' }}%
@@ -145,119 +145,142 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
             </button>
           </div>
           
-          <div class="key-stats-grid">
-            <div class="stat-item">
-              <span class="stat-label">Market Cap</span>
-              <span class="stat-value">{{ marketService.formatMarketCap(s.marketCap, s.market) }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">P/E Ratio</span>
-              <span class="stat-value">{{ s.peRatio !== null ? (s.peRatio | number:'1.2-2') : '—' }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Forward P/E</span>
-              <span class="stat-value">{{ s.forwardPeRatio !== null ? (s.forwardPeRatio | number:'1.2-2') : '—' }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">52W High</span>
-              <span class="stat-value">{{ marketService.formatCurrency(s.fiftyTwoWeekHigh, s.market) }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">52W Low</span>
-              <span class="stat-value">{{ marketService.formatCurrency(s.fiftyTwoWeekLow, s.market) }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">% from 52W High</span>
-              <span class="stat-value" [class.negative]="(s.percentFromFiftyTwoWeekHigh || 0) < 0">
-                {{ s.percentFromFiftyTwoWeekHigh | number:'1.1-1' }}%
-              </span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Volume</span>
-              <span class="stat-value">{{ marketService.formatVolume(s.volume) }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Avg Volume</span>
-              <span class="stat-value">{{ marketService.formatVolume(s.avgVolume) }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Dividend Yield</span>
-              <span class="stat-value">{{ s.dividendYield ? (s.dividendYield | number:'1.2-2') + '%' : '—' }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Sector</span>
-              <span class="stat-value small">{{ s.sector }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Industry</span>
-              <span class="stat-value small">{{ s.industry }}</span>
-            </div>
-            <div class="stat-item">
-              <span class="stat-label">Exchange</span>
-              <span class="stat-value small">{{ s.exchange }}</span>
-            </div>
-            <div class="period-stats-row">
-              <div class="stat-item period-stat">
-                <span class="stat-label">1W</span>
-                <span class="stat-value period-change" [class.up]="(s.oneWeekChangePercent ?? 0) > 0" [class.down]="(s.oneWeekChangePercent ?? 0) < 0">
-                  {{ s.oneWeekChangePercent != null ? ((s.oneWeekChangePercent >= 0 ? '+' : '') + (s.oneWeekChangePercent | number:'1.2-2') + '%') : '—' }}
-                </span>
+          <div class="header-metrics">
+            <section class="metric-section performance-section">
+              <div class="metric-section-title">Performance</div>
+              <div class="period-stats-row">
+                <div class="stat-item period-stat">
+                  <span class="stat-label">1W</span>
+                  <span class="stat-value period-change" [class.up]="(s.oneWeekChangePercent ?? 0) > 0" [class.down]="(s.oneWeekChangePercent ?? 0) < 0">
+                    {{ s.oneWeekChangePercent != null ? ((s.oneWeekChangePercent >= 0 ? '+' : '') + (s.oneWeekChangePercent | number:'1.2-2') + '%') : '—' }}
+                  </span>
+                </div>
+                <div class="stat-item period-stat">
+                  <span class="stat-label">1M</span>
+                  <span class="stat-value period-change" [class.up]="(s.oneMonthChangePercent ?? 0) > 0" [class.down]="(s.oneMonthChangePercent ?? 0) < 0">
+                    {{ s.oneMonthChangePercent != null ? ((s.oneMonthChangePercent >= 0 ? '+' : '') + (s.oneMonthChangePercent | number:'1.2-2') + '%') : '—' }}
+                  </span>
+                </div>
+                <div class="stat-item period-stat">
+                  <span class="stat-label">3M</span>
+                  <span class="stat-value period-change" [class.up]="(s.threeMonthChangePercent ?? 0) > 0" [class.down]="(s.threeMonthChangePercent ?? 0) < 0">
+                    {{ s.threeMonthChangePercent != null ? ((s.threeMonthChangePercent >= 0 ? '+' : '') + (s.threeMonthChangePercent | number:'1.2-2') + '%') : '—' }}
+                  </span>
+                </div>
+                <div class="stat-item period-stat">
+                  <span class="stat-label">6M</span>
+                  <span class="stat-value period-change" [class.up]="(s.sixMonthChangePercent ?? 0) > 0" [class.down]="(s.sixMonthChangePercent ?? 0) < 0">
+                    {{ s.sixMonthChangePercent != null ? ((s.sixMonthChangePercent >= 0 ? '+' : '') + (s.sixMonthChangePercent | number:'1.2-2') + '%') : '—' }}
+                  </span>
+                </div>
+                <div class="stat-item period-stat">
+                  <span class="stat-label">YTD</span>
+                  <span class="stat-value period-change" [class.up]="(s.ytdChangePercent ?? 0) > 0" [class.down]="(s.ytdChangePercent ?? 0) < 0">
+                    {{ s.ytdChangePercent != null ? ((s.ytdChangePercent >= 0 ? '+' : '') + (s.ytdChangePercent | number:'1.2-2') + '%') : '—' }}
+                  </span>
+                </div>
+                <div class="stat-item period-stat">
+                  <span class="stat-label">1Y</span>
+                  <span class="stat-value period-change" [class.up]="(s.oneYearChangePercent ?? 0) > 0" [class.down]="(s.oneYearChangePercent ?? 0) < 0">
+                    {{ s.oneYearChangePercent != null ? ((s.oneYearChangePercent >= 0 ? '+' : '') + (s.oneYearChangePercent | number:'1.2-2') + '%') : '—' }}
+                  </span>
+                </div>
               </div>
-              <div class="stat-item period-stat">
-                <span class="stat-label">1M</span>
-                <span class="stat-value period-change" [class.up]="(s.oneMonthChangePercent ?? 0) > 0" [class.down]="(s.oneMonthChangePercent ?? 0) < 0">
-                  {{ s.oneMonthChangePercent != null ? ((s.oneMonthChangePercent >= 0 ? '+' : '') + (s.oneMonthChangePercent | number:'1.2-2') + '%') : '—' }}
-                </span>
-              </div>
-              <div class="stat-item period-stat">
-                <span class="stat-label">3M</span>
-                <span class="stat-value period-change" [class.up]="(s.threeMonthChangePercent ?? 0) > 0" [class.down]="(s.threeMonthChangePercent ?? 0) < 0">
-                  {{ s.threeMonthChangePercent != null ? ((s.threeMonthChangePercent >= 0 ? '+' : '') + (s.threeMonthChangePercent | number:'1.2-2') + '%') : '—' }}
-                </span>
-              </div>
-              <div class="stat-item period-stat">
-                <span class="stat-label">6M</span>
-                <span class="stat-value period-change" [class.up]="(s.sixMonthChangePercent ?? 0) > 0" [class.down]="(s.sixMonthChangePercent ?? 0) < 0">
-                  {{ s.sixMonthChangePercent != null ? ((s.sixMonthChangePercent >= 0 ? '+' : '') + (s.sixMonthChangePercent | number:'1.2-2') + '%') : '—' }}
-                </span>
-              </div>
-              <div class="stat-item period-stat">
-                <span class="stat-label">YTD</span>
-                <span class="stat-value period-change" [class.up]="(s.ytdChangePercent ?? 0) > 0" [class.down]="(s.ytdChangePercent ?? 0) < 0">
-                  {{ s.ytdChangePercent != null ? ((s.ytdChangePercent >= 0 ? '+' : '') + (s.ytdChangePercent | number:'1.2-2') + '%') : '—' }}
-                </span>
-              </div>
-              <div class="stat-item period-stat">
-                <span class="stat-label">1Y</span>
-                <span class="stat-value period-change" [class.up]="(s.oneYearChangePercent ?? 0) > 0" [class.down]="(s.oneYearChangePercent ?? 0) < 0">
-                  {{ s.oneYearChangePercent != null ? ((s.oneYearChangePercent >= 0 ? '+' : '') + (s.oneYearChangePercent | number:'1.2-2') + '%') : '—' }}
-                </span>
-              </div>
-            </div>
-            <div class="stat-item" *ngIf="s.earningsTimestamp">
-              <span class="stat-label">Earnings Date</span>
-              <span class="stat-value small">{{ formatEarningsDate(s.earningsTimestamp) }}</span>
-            </div>
-            <div class="stat-item" *ngIf="s.targetMeanPrice">
-              <span class="stat-label">Analyst Target</span>
-              <span class="stat-value">
-                {{ marketService.formatCurrency(s.targetMeanPrice, s.market) }}
-                <span class="target-upside" [class.positive]="s.targetMeanPrice > s.price" [class.negative]="s.targetMeanPrice < s.price">
-                  ({{ s.targetMeanPrice > s.price ? '+' : '' }}{{ ((s.targetMeanPrice - s.price) / s.price * 100) | number:'1.1-1' }}%)
-                </span>
-              </span>
-            </div>
-            <div class="stat-item" *ngIf="s.numberOfAnalystOpinions">
-              <span class="stat-label">Analyst Rating</span>
-              <span class="stat-value small">{{ getRecommendationLabel(s.recommendationMean) }} ({{ s.numberOfAnalystOpinions }} analysts)</span>
-            </div>
-            <div class="stat-item" *ngIf="s.heldPercentInstitutions != null">
-              <span class="stat-label">Institutional %</span>
-              <span class="stat-value">{{ (s.heldPercentInstitutions * 100) | number:'1.1-1' }}%</span>
-            </div>
-            <div class="stat-item" *ngIf="s.heldPercentInsiders != null">
-              <span class="stat-label">Insider %</span>
-              <span class="stat-value">{{ (s.heldPercentInsiders * 100) | number:'1.1-1' }}%</span>
+            </section>
+
+            <div class="metric-sections-grid">
+              <section class="metric-section">
+                <div class="metric-section-title">Valuation</div>
+                <div class="metric-grid">
+                  <div class="stat-item">
+                    <span class="stat-label">Market Cap</span>
+                    <span class="stat-value">{{ marketService.formatMarketCap(s.marketCap, s.market) }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">P/E Ratio</span>
+                    <span class="stat-value">{{ s.peRatio !== null ? (s.peRatio | number:'1.2-2') : '—' }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Forward P/E</span>
+                    <span class="stat-value">{{ s.forwardPeRatio !== null ? (s.forwardPeRatio | number:'1.2-2') : '—' }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Dividend Yield</span>
+                    <span class="stat-value">{{ s.dividendYield ? (s.dividendYield | number:'1.2-2') + '%' : '—' }}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="metric-section">
+                <div class="metric-section-title">Trading Range</div>
+                <div class="metric-grid">
+                  <div class="stat-item">
+                    <span class="stat-label">52W High</span>
+                    <span class="stat-value">{{ marketService.formatCurrency(s.fiftyTwoWeekHigh, s.market) }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">52W Low</span>
+                    <span class="stat-value">{{ marketService.formatCurrency(s.fiftyTwoWeekLow, s.market) }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">% from 52W High</span>
+                    <span class="stat-value" [class.negative]="(s.percentFromFiftyTwoWeekHigh || 0) < 0">
+                      {{ s.percentFromFiftyTwoWeekHigh | number:'1.1-1' }}%
+                    </span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Volume</span>
+                    <span class="stat-value">{{ marketService.formatVolume(s.volume) }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Avg Volume</span>
+                    <span class="stat-value">{{ marketService.formatVolume(s.avgVolume) }}</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="metric-section">
+                <div class="metric-section-title">Research & Company</div>
+                <div class="metric-grid">
+                  <div class="stat-item" *ngIf="s.earningsTimestamp">
+                    <span class="stat-label">Earnings Date</span>
+                    <span class="stat-value small">{{ formatEarningsDate(s.earningsTimestamp) }}</span>
+                  </div>
+                  <div class="stat-item" *ngIf="s.targetMeanPrice">
+                    <span class="stat-label">Analyst Target</span>
+                    <span class="stat-value">
+                      {{ marketService.formatCurrency(s.targetMeanPrice, s.market) }}
+                      <span class="target-upside" [class.positive]="s.targetMeanPrice > s.price" [class.negative]="s.targetMeanPrice < s.price">
+                        ({{ s.targetMeanPrice > s.price ? '+' : '' }}{{ ((s.targetMeanPrice - s.price) / s.price * 100) | number:'1.1-1' }}%)
+                      </span>
+                    </span>
+                  </div>
+                  <div class="stat-item" *ngIf="s.numberOfAnalystOpinions">
+                    <span class="stat-label">Analyst Rating</span>
+                    <span class="stat-value small">{{ getRecommendationLabel(s.recommendationMean) }} ({{ s.numberOfAnalystOpinions }} analysts)</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Sector</span>
+                    <span class="stat-value small">{{ s.sector }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Industry</span>
+                    <span class="stat-value small">{{ s.industry }}</span>
+                  </div>
+                  <div class="stat-item">
+                    <span class="stat-label">Exchange</span>
+                    <span class="stat-value small">{{ s.exchange }}</span>
+                  </div>
+                  <div class="stat-item" *ngIf="s.heldPercentInstitutions != null">
+                    <span class="stat-label">Institutional %</span>
+                    <span class="stat-value">{{ (s.heldPercentInstitutions * 100) | number:'1.1-1' }}%</span>
+                  </div>
+                  <div class="stat-item" *ngIf="s.heldPercentInsiders != null">
+                    <span class="stat-label">Insider %</span>
+                    <span class="stat-value">{{ (s.heldPercentInsiders * 100) | number:'1.1-1' }}%</span>
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
         </div>
@@ -267,17 +290,29 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
           <!-- Left Column: Technical Analysis -->
           <div class="analysis-column">
             <div class="analysis-section">
-              <h2>Technical Analysis</h2>
-              <p class="data-source">Based on real-time data from Yahoo Finance</p>
-              
+              <div class="analysis-header">
+                <div>
+                  <span class="analysis-eyebrow">Signal Console</span>
+                  <h2>Technical Analysis</h2>
+                </div>
+                <span class="data-source">Yahoo Finance live data</span>
+              </div>
+
               <!-- All 3 gauges in a single row -->
               <div class="gauges-row">
                 <!-- Overall Summary Gauge -->
-                <div class="gauge-card">
-                  <h3>Overall</h3>
+                <div
+                  class="gauge-card signal-card"
+                  [class.signal-bearish]="overallScore() < 40"
+                  [class.signal-neutral]="overallScore() >= 40 && overallScore() < 60"
+                  [class.signal-bullish]="overallScore() >= 60">
+                  <div class="signal-card-header">
+                    <h3>Overall</h3>
+                    <span class="signal-score">{{ overallScore() | number:'1.0-0' }}</span>
+                  </div>
                   <div class="gauge-wrapper">
                     <svg viewBox="0 0 200 120" class="gauge-svg">
-                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e0e0e0" stroke-width="12" stroke-linecap="round"/>
+                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(148, 163, 184, 0.18)" stroke-width="12" stroke-linecap="round"/>
                       <path d="M 20 100 A 80 80 0 0 1 52 40" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round"/>
                       <path d="M 52 40 A 80 80 0 0 1 100 20" fill="none" stroke="#fca5a5" stroke-width="12"/>
                       <path d="M 100 20 A 80 80 0 0 1 148 40" fill="none" stroke="#86efac" stroke-width="12"/>
@@ -287,22 +322,29 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
                       <line [attr.x1]="100" [attr.y1]="100" 
                             [attr.x2]="getNeedleX(overallScore())" 
                             [attr.y2]="getNeedleY(overallScore())" 
-                            stroke="#374151" stroke-width="3" stroke-linecap="round"/>
-                      <circle cx="100" cy="100" r="6" fill="#374151"/>
+                            class="gauge-needle"/>
+                      <circle cx="100" cy="100" r="6" class="gauge-pivot"/>
                     </svg>
                   </div>
                   <div class="gauge-label" [class]="getSignalClass(overallScore())">
                     {{ getSignalLabel(overallScore()) }}
                   </div>
-                  <div class="score-display">{{ overallScore() | number:'1.0-0' }}/100</div>
+                  <div class="score-display">Composite signal / 100</div>
                 </div>
 
                 <!-- Technical Indicators Gauge -->
-                <div class="gauge-card">
-                  <h3>Indicators</h3>
+                <div
+                  class="gauge-card signal-card"
+                  [class.signal-bearish]="technicalScore() < 40"
+                  [class.signal-neutral]="technicalScore() >= 40 && technicalScore() < 60"
+                  [class.signal-bullish]="technicalScore() >= 60">
+                  <div class="signal-card-header">
+                    <h3>Indicators</h3>
+                    <span class="signal-score">{{ technicalScore() | number:'1.0-0' }}</span>
+                  </div>
                   <div class="gauge-wrapper">
                     <svg viewBox="0 0 200 120" class="gauge-svg">
-                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e0e0e0" stroke-width="12" stroke-linecap="round"/>
+                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(148, 163, 184, 0.18)" stroke-width="12" stroke-linecap="round"/>
                       <path d="M 20 100 A 80 80 0 0 1 52 40" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round"/>
                       <path d="M 52 40 A 80 80 0 0 1 100 20" fill="none" stroke="#f97316" stroke-width="12"/>
                       <path d="M 100 20 A 80 80 0 0 1 148 40" fill="none" stroke="#a3a3a3" stroke-width="12"/>
@@ -312,21 +354,29 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
                       <line [attr.x1]="100" [attr.y1]="100" 
                             [attr.x2]="getNeedleX(technicalScore())" 
                             [attr.y2]="getNeedleY(technicalScore())" 
-                            stroke="#374151" stroke-width="3" stroke-linecap="round"/>
-                      <circle cx="100" cy="100" r="6" fill="#374151"/>
+                            class="gauge-needle"/>
+                      <circle cx="100" cy="100" r="6" class="gauge-pivot"/>
                     </svg>
                   </div>
                   <div class="gauge-label" [class]="getSignalClass(technicalScore())">
                     {{ getSignalLabel(technicalScore()) }}
                   </div>
+                  <div class="score-display">RSI + MACD pressure</div>
                 </div>
 
                 <!-- Moving Averages Gauge -->
-                <div class="gauge-card">
-                  <h3>Moving Avg</h3>
+                <div
+                  class="gauge-card signal-card"
+                  [class.signal-bearish]="maScore() < 40"
+                  [class.signal-neutral]="maScore() >= 40 && maScore() < 60"
+                  [class.signal-bullish]="maScore() >= 60">
+                  <div class="signal-card-header">
+                    <h3>Moving Avg</h3>
+                    <span class="signal-score">{{ maScore() | number:'1.0-0' }}</span>
+                  </div>
                   <div class="gauge-wrapper">
                     <svg viewBox="0 0 200 120" class="gauge-svg">
-                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="#e0e0e0" stroke-width="12" stroke-linecap="round"/>
+                      <path d="M 20 100 A 80 80 0 0 1 180 100" fill="none" stroke="rgba(148, 163, 184, 0.18)" stroke-width="12" stroke-linecap="round"/>
                       <path d="M 20 100 A 80 80 0 0 1 52 40" fill="none" stroke="#ef4444" stroke-width="12" stroke-linecap="round"/>
                       <path d="M 52 40 A 80 80 0 0 1 100 20" fill="none" stroke="#f97316" stroke-width="12"/>
                       <path d="M 100 20 A 80 80 0 0 1 148 40" fill="none" stroke="#a3a3a3" stroke-width="12"/>
@@ -336,53 +386,110 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
                       <line [attr.x1]="100" [attr.y1]="100" 
                             [attr.x2]="getNeedleX(maScore())" 
                             [attr.y2]="getNeedleY(maScore())" 
-                            stroke="#374151" stroke-width="3" stroke-linecap="round"/>
-                      <circle cx="100" cy="100" r="6" fill="#374151"/>
+                            class="gauge-needle"/>
+                      <circle cx="100" cy="100" r="6" class="gauge-pivot"/>
                     </svg>
                   </div>
                   <div class="gauge-label" [class]="getSignalClass(maScore())">
                     {{ getSignalLabel(maScore()) }}
                   </div>
+                  <div class="score-display">Trend position</div>
                 </div>
               </div>
 
               <!-- Compact breakdown grid below gauges -->
               <div class="breakdown-grid">
-                <div class="breakdown-item">
-                  <span class="breakdown-label">RSI (14)</span>
-                  <span class="breakdown-value" [class]="getRsiClass(s.rsi)">
-                    {{ s.rsi !== null ? (s.rsi | number:'1.1-1') : 'N/A' }}
-                  </span>
-                  <span class="breakdown-signal" [class]="getRsiSignalClass(s.rsi)">
-                    {{ getRsiShortSignal(s.rsi) }}
-                  </span>
+                <div
+                  class="breakdown-item signal-tile"
+                  [class.tile-buy]="getRsiSignalClass(s.rsi) === 'buy'"
+                  [class.tile-sell]="getRsiSignalClass(s.rsi) === 'sell'"
+                  [class.tile-neutral]="getRsiSignalClass(s.rsi) === 'neutral'">
+                  <div class="signal-tile-copy">
+                    <span class="breakdown-label">RSI (14)</span>
+                    <span class="signal-tile-meta">Momentum oscillator</span>
+                    <button
+                      type="button"
+                      class="signal-help-btn"
+                      aria-label="Why is RSI marked this way?"
+                      [pTooltip]="getRsiSignalExplanation(s.rsi)"
+                      tooltipPosition="right"
+                      tooltipStyleClass="signal-explain-tooltip">
+                      <i class="pi pi-info-circle" aria-hidden="true"></i>
+                      Why?
+                    </button>
+                  </div>
+                  <div class="signal-tile-reading">
+                    <span class="breakdown-value" [class]="getRsiClass(s.rsi)">
+                      {{ s.rsi !== null ? (s.rsi | number:'1.1-1') : 'N/A' }}
+                    </span>
+                    <span class="breakdown-signal" [class]="getRsiSignalClass(s.rsi)">
+                      {{ getRsiShortSignal(s.rsi) }}
+                    </span>
+                  </div>
                 </div>
-                <div class="breakdown-item">
-                  <span class="breakdown-label">MACD</span>
-                  <span class="breakdown-value" [class.positive]="(s.macdHistogram || 0) > 0" [class.negative]="(s.macdHistogram || 0) < 0">
-                    {{ s.macdHistogram !== null ? (s.macdHistogram | number:'1.2-2') : 'N/A' }}
-                  </span>
-                  <span class="breakdown-signal" [class]="getMacdSignalClass(s.macdSignalType)">
-                    {{ getMacdShortSignal(s.macdSignalType) }}
-                  </span>
+                <div
+                  class="breakdown-item signal-tile"
+                  [class.tile-buy]="getMacdSignalClass(s.macdSignalType) === 'buy'"
+                  [class.tile-sell]="getMacdSignalClass(s.macdSignalType) === 'sell'"
+                  [class.tile-neutral]="getMacdSignalClass(s.macdSignalType) === 'neutral'">
+                  <div class="signal-tile-copy">
+                    <span class="breakdown-label">MACD</span>
+                    <span class="signal-tile-meta">Momentum shift</span>
+                    <button
+                      type="button"
+                      class="signal-help-btn"
+                      aria-label="Why is MACD marked this way?"
+                      [pTooltip]="getMacdSignalExplanation(s.macdSignalType, s.macdHistogram)"
+                      tooltipPosition="right"
+                      tooltipStyleClass="signal-explain-tooltip">
+                      <i class="pi pi-info-circle" aria-hidden="true"></i>
+                      Why?
+                    </button>
+                  </div>
+                  <div class="signal-tile-reading">
+                    <span class="breakdown-value" [class.positive]="(s.macdHistogram || 0) > 0" [class.negative]="(s.macdHistogram || 0) < 0">
+                      {{ s.macdHistogram !== null ? (s.macdHistogram | number:'1.2-2') : 'N/A' }}
+                    </span>
+                    <span class="breakdown-signal" [class]="getMacdSignalClass(s.macdSignalType)">
+                      {{ getMacdShortSignal(s.macdSignalType) }}
+                    </span>
+                  </div>
                 </div>
-                <div class="breakdown-item">
-                  <span class="breakdown-label">50 MA</span>
-                  <span class="breakdown-value" [class.positive]="(s.percentFromFiftyDayMA || 0) > 0" [class.negative]="(s.percentFromFiftyDayMA || 0) < 0">
-                    {{ s.percentFromFiftyDayMA !== null ? ((s.percentFromFiftyDayMA >= 0 ? '+' : '') + (s.percentFromFiftyDayMA | number:'1.1-1') + '%') : 'N/A' }}
-                  </span>
-                  <span class="breakdown-signal" [class.buy]="(s.percentFromFiftyDayMA || 0) > 0" [class.sell]="(s.percentFromFiftyDayMA || 0) < 0">
-                    {{ (s.percentFromFiftyDayMA || 0) > 0 ? 'Buy' : ((s.percentFromFiftyDayMA || 0) < 0 ? 'Sell' : '—') }}
-                  </span>
+                <div
+                  class="breakdown-item signal-tile"
+                  [class.tile-buy]="(s.percentFromFiftyDayMA || 0) > 0"
+                  [class.tile-sell]="(s.percentFromFiftyDayMA || 0) < 0"
+                  [class.tile-neutral]="(s.percentFromFiftyDayMA || 0) === 0">
+                  <div class="signal-tile-copy">
+                    <span class="breakdown-label">50 MA</span>
+                    <span class="signal-tile-meta">Short trend</span>
+                  </div>
+                  <div class="signal-tile-reading">
+                    <span class="breakdown-value" [class.positive]="(s.percentFromFiftyDayMA || 0) > 0" [class.negative]="(s.percentFromFiftyDayMA || 0) < 0">
+                      {{ s.percentFromFiftyDayMA !== null ? ((s.percentFromFiftyDayMA >= 0 ? '+' : '') + (s.percentFromFiftyDayMA | number:'1.1-1') + '%') : 'N/A' }}
+                    </span>
+                    <span class="breakdown-signal" [class.buy]="(s.percentFromFiftyDayMA || 0) > 0" [class.sell]="(s.percentFromFiftyDayMA || 0) < 0">
+                      {{ (s.percentFromFiftyDayMA || 0) > 0 ? 'Buy' : ((s.percentFromFiftyDayMA || 0) < 0 ? 'Sell' : '—') }}
+                    </span>
+                  </div>
                 </div>
-                <div class="breakdown-item">
-                  <span class="breakdown-label">200 MA</span>
-                  <span class="breakdown-value" [class.positive]="(s.percentFromTwoHundredDayMA || 0) > 0" [class.negative]="(s.percentFromTwoHundredDayMA || 0) < 0">
-                    {{ s.percentFromTwoHundredDayMA !== null ? ((s.percentFromTwoHundredDayMA >= 0 ? '+' : '') + (s.percentFromTwoHundredDayMA | number:'1.1-1') + '%') : 'N/A' }}
-                  </span>
-                  <span class="breakdown-signal" [class.buy]="(s.percentFromTwoHundredDayMA || 0) > 0" [class.sell]="(s.percentFromTwoHundredDayMA || 0) < 0">
-                    {{ (s.percentFromTwoHundredDayMA || 0) > 0 ? 'Buy' : ((s.percentFromTwoHundredDayMA || 0) < 0 ? 'Sell' : '—') }}
-                  </span>
+                <div
+                  class="breakdown-item signal-tile"
+                  [class.tile-buy]="(s.percentFromTwoHundredDayMA || 0) > 0"
+                  [class.tile-sell]="(s.percentFromTwoHundredDayMA || 0) < 0"
+                  [class.tile-neutral]="(s.percentFromTwoHundredDayMA || 0) === 0">
+                  <div class="signal-tile-copy">
+                    <span class="breakdown-label">200 MA</span>
+                    <span class="signal-tile-meta">Long trend</span>
+                  </div>
+                  <div class="signal-tile-reading">
+                    <span class="breakdown-value" [class.positive]="(s.percentFromTwoHundredDayMA || 0) > 0" [class.negative]="(s.percentFromTwoHundredDayMA || 0) < 0">
+                      {{ s.percentFromTwoHundredDayMA !== null ? ((s.percentFromTwoHundredDayMA >= 0 ? '+' : '') + (s.percentFromTwoHundredDayMA | number:'1.1-1') + '%') : 'N/A' }}
+                    </span>
+                    <span class="breakdown-signal" [class.buy]="(s.percentFromTwoHundredDayMA || 0) > 0" [class.sell]="(s.percentFromTwoHundredDayMA || 0) < 0">
+                      {{ (s.percentFromTwoHundredDayMA || 0) > 0 ? 'Buy' : ((s.percentFromTwoHundredDayMA || 0) < 0 ? 'Sell' : '—') }}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -641,6 +748,20 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
 
     .stock-price {
       text-align: right;
+      padding: 10px 16px;
+      border-radius: 12px;
+      border: 1px solid transparent;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    .stock-price.price-up {
+      background: rgba(76, 175, 80, 0.10);
+      border-color: rgba(76, 175, 80, 0.25);
+    }
+
+    .stock-price.price-down {
+      background: rgba(244, 67, 54, 0.10);
+      border-color: rgba(244, 67, 54, 0.25);
     }
 
     .stock-price .price {
@@ -648,6 +769,9 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       font-size: 1.75rem;
       font-weight: 700;
     }
+
+    .stock-price.price-up .price { color: var(--green-400); }
+    .stock-price.price-down .price { color: var(--red-400); }
 
     .stock-price .change {
       font-size: 1rem;
@@ -685,44 +809,87 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
     .target-upside.positive { color: var(--green-500); }
     .target-upside.negative { color: var(--red-500); }
 
-    /* Key Stats - horizontal layout */
-    .key-stats-grid {
-      display: grid;
-      grid-template-columns: repeat(12, 1fr);
-      gap: 1rem;
-    }
-
-    .key-stats-grid .stat-item {
+    .header-metrics {
       display: flex;
       flex-direction: column;
-      gap: 0.25rem;
+      gap: 0.9rem;
     }
 
-    .key-stats-grid .stat-label {
-      font-size: 0.75rem;
+    .metric-section {
+      min-width: 0;
+      padding: 0.75rem;
+      border: 1px solid color-mix(in srgb, var(--surface-border) 80%, transparent);
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--surface-ground) 42%, transparent);
+    }
+
+    .performance-section {
+      padding: 0.7rem 0.85rem;
+      background: linear-gradient(135deg, rgba(34, 197, 94, 0.08), rgba(59, 130, 246, 0.06));
+    }
+
+    .metric-section-title {
+      margin-bottom: 0.55rem;
+      font-size: 0.62rem;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-color-secondary);
+    }
+
+    .metric-sections-grid {
+      display: grid;
+      grid-template-columns: minmax(220px, 0.9fr) minmax(260px, 1.15fr) minmax(300px, 1.45fr);
+      gap: 0.75rem;
+      align-items: stretch;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(92px, 1fr));
+      gap: 0.65rem 0.75rem;
+    }
+
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.22rem;
+      min-width: 0;
+    }
+
+    .stat-label {
+      font-size: 0.68rem;
       color: var(--text-color-secondary);
       white-space: nowrap;
     }
 
-    .key-stats-grid .stat-value {
-      font-size: 0.9rem;
-      font-weight: 600;
+    .stat-value {
+      font-size: 0.82rem;
+      font-weight: 700;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
     }
 
-    .key-stats-grid .stat-value.small {
-      font-size: 0.85rem;
+    .stat-value.small {
+      font-size: 0.76rem;
     }
 
-    .key-stats-grid .stat-value.negative {
+    .stat-value.negative {
       color: var(--red-500);
     }
 
     .period-stats-row {
-      grid-column: 1 / -1;
       display: grid;
-      grid-template-columns: repeat(6, minmax(5.5rem, 1fr));
-      gap: 1rem;
-      padding-top: 0.15rem;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 0.45rem;
+    }
+
+    .period-stat {
+      align-items: center;
+      padding: 0.45rem 0.35rem;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.025);
+      text-align: center;
     }
 
     .period-stat .stat-label {
@@ -734,6 +901,7 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
     .period-change {
       font-weight: 800;
       font-variant-numeric: tabular-nums;
+      white-space: nowrap;
     }
 
     .period-change.up { color: #34d399; }
@@ -775,36 +943,90 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
 
     /* Technical Analysis Section */
     .analysis-section {
-      background: var(--surface-card);
-      border-radius: 12px;
-      padding: 1rem 1.5rem;
+      position: relative;
+      isolation: isolate;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(34, 197, 94, 0.16), transparent 34%),
+        radial-gradient(circle at 82% 12%, rgba(59, 130, 246, 0.12), transparent 30%),
+        linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(17, 24, 39, 0.98));
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 18px;
+      padding: 1rem;
       height: 100%;
       display: flex;
       flex-direction: column;
       overflow-y: auto;
       overflow-x: hidden;
+      box-shadow: 0 18px 46px rgba(0, 0, 0, 0.24);
+    }
+
+    .analysis-section::before {
+      content: '';
+      position: absolute;
+      inset: 1px;
+      z-index: -1;
+      border-radius: 17px;
+      background:
+        linear-gradient(90deg, rgba(148, 163, 184, 0.06) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+      background-size: 28px 28px;
+      mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.65), transparent 78%);
+    }
+
+    .analysis-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 1rem;
+      margin-bottom: 0.75rem;
+      flex-shrink: 0;
     }
 
     .analysis-section h2 {
-      margin: 0 0 0.25rem 0;
-      font-size: 1rem;
-      font-weight: 600;
-      text-align: center;
-      flex-shrink: 0;
+      margin: 0.1rem 0 0;
+      font-size: 1.05rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .analysis-eyebrow {
+      color: #93c5fd;
+      display: block;
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
     }
 
     .data-source {
-      text-align: center;
-      font-size: 0.7rem;
-      color: var(--text-color-secondary);
-      margin-bottom: 0.5rem;
+      align-items: center;
+      background: rgba(15, 23, 42, 0.72);
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 999px;
+      color: #94a3b8;
+      display: inline-flex;
       flex-shrink: 0;
+      font-size: 0.62rem;
+      font-weight: 600;
+      gap: 0.35rem;
+      line-height: 1;
+      padding: 0.4rem 0.55rem;
+    }
+
+    .data-source::before {
+      content: '';
+      width: 0.38rem;
+      height: 0.38rem;
+      border-radius: 999px;
+      background: #22c55e;
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.8);
     }
 
     /* Gauges Row - all 3 side by side */
     .gauges-row {
-      display: flex;
-      gap: 0.5rem;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 0.65rem;
       justify-content: center;
       align-items: flex-start;
       flex-shrink: 0;
@@ -814,31 +1036,88 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       display: flex;
       flex-direction: column;
       align-items: center;
-      padding: 0.25rem;
-      flex: 1;
       min-width: 0;
     }
 
+    .signal-card {
+      position: relative;
+      overflow: hidden;
+      padding: 0.7rem 0.55rem 0.65rem;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.72);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+      animation: signalCardIn 360ms ease-out both;
+    }
+
+    .signal-card:nth-child(2) { animation-delay: 60ms; }
+    .signal-card:nth-child(3) { animation-delay: 120ms; }
+
+    .signal-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      opacity: 0.75;
+      pointer-events: none;
+    }
+
+    .signal-card.signal-bullish::before {
+      background: linear-gradient(180deg, rgba(34, 197, 94, 0.18), transparent 64%);
+    }
+
+    .signal-card.signal-bearish::before {
+      background: linear-gradient(180deg, rgba(239, 68, 68, 0.16), transparent 64%);
+    }
+
+    .signal-card.signal-neutral::before {
+      background: linear-gradient(180deg, rgba(148, 163, 184, 0.12), transparent 64%);
+    }
+
+    .signal-card-header {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      gap: 0.5rem;
+      margin-bottom: 0.2rem;
+    }
+
     .gauge-card h3 {
-      margin: 0 0 0.15rem 0;
-      font-size: 0.7rem;
-      font-weight: 600;
-      color: var(--text-color-secondary);
+      margin: 0;
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: #cbd5e1;
       white-space: nowrap;
     }
 
+    .signal-score {
+      color: #e2e8f0;
+      font-size: 0.68rem;
+      font-weight: 800;
+      line-height: 1;
+      padding: 0.25rem 0.4rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
     .gauge-wrapper {
-      width: 110px;
-      height: 66px;
+      position: relative;
+      z-index: 1;
+      width: 118px;
+      height: 72px;
     }
 
     .gauge-svg {
       width: 100%;
       height: 100%;
+      overflow: visible;
     }
 
     .gauge-label-text {
-      font-size: 10px;
+      font-size: 9px;
       font-weight: 600;
       text-anchor: middle;
     }
@@ -846,34 +1125,54 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
     .gauge-label-text.sell { fill: var(--red-400); }
     .gauge-label-text.buy { fill: var(--green-400); }
 
-    .gauge-label {
-      margin-top: 0.15rem;
-      padding: 0.15rem 0.5rem;
-      border-radius: 5px;
-      font-weight: 600;
-      font-size: 0.65rem;
+    .gauge-needle {
+      stroke: #e2e8f0;
+      stroke-linecap: round;
+      stroke-width: 3;
+      filter: drop-shadow(0 0 8px rgba(226, 232, 240, 0.35));
+      animation: needleSettle 520ms cubic-bezier(0.22, 1, 0.36, 1) both;
     }
 
-    .gauge-label.strong_sell { background: var(--red-500); color: white; }
-    .gauge-label.sell { background: var(--orange-500); color: white; }
-    .gauge-label.neutral { background: var(--gray-400); color: white; }
-    .gauge-label.buy { background: var(--green-400); color: white; }
-    .gauge-label.strong_buy { background: var(--green-600); color: white; }
+    .gauge-pivot {
+      fill: #0f172a;
+      stroke: #94a3b8;
+      stroke-width: 2;
+    }
+
+    .gauge-label {
+      position: relative;
+      z-index: 1;
+      margin-top: 0.1rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 999px;
+      font-weight: 700;
+      font-size: 0.64rem;
+      line-height: 1.1;
+    }
+
+    .gauge-label.strong_sell { background: rgba(239, 68, 68, 0.22); color: #fecaca; }
+    .gauge-label.sell { background: rgba(249, 115, 22, 0.22); color: #fed7aa; }
+    .gauge-label.neutral { background: rgba(148, 163, 184, 0.18); color: #cbd5e1; }
+    .gauge-label.buy { background: rgba(34, 197, 94, 0.2); color: #bbf7d0; }
+    .gauge-label.strong_buy { background: rgba(22, 163, 74, 0.26); color: #dcfce7; }
 
     .score-display {
-      margin-top: 0.1rem;
-      font-size: 0.65rem;
-      color: var(--text-color-secondary);
+      position: relative;
+      z-index: 1;
+      margin-top: 0.25rem;
+      font-size: 0.58rem;
+      color: #94a3b8;
+      text-align: center;
     }
 
     /* Breakdown grid below gauges */
     .breakdown-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 0.15rem 1rem;
-      margin-top: 0.5rem;
-      padding-top: 0.5rem;
-      border-top: 1px solid var(--surface-border);
+      gap: 0.55rem;
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid rgba(148, 163, 184, 0.12);
       flex-shrink: 0;
     }
 
@@ -881,39 +1180,151 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       display: flex;
       justify-content: space-between;
       align-items: center;
-      padding: 0.15rem 0;
       font-size: 0.7rem;
+    }
+
+    .signal-tile {
+      position: relative;
+      overflow: hidden;
+      gap: 0.75rem;
+      padding: 0.65rem;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 12px;
+      background: rgba(15, 23, 42, 0.62);
+      transition: border-color 0.18s, box-shadow 0.18s, transform 0.18s;
+    }
+
+    .signal-tile:hover {
+      border-color: rgba(147, 197, 253, 0.38);
+      box-shadow: 0 0 0 1px rgba(147, 197, 253, 0.12), 0 10px 24px rgba(0, 0, 0, 0.18);
+      transform: translateY(-1px);
+    }
+
+    .signal-tile::before {
+      content: '';
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 3px;
+      background: #94a3b8;
+    }
+
+    .signal-tile.tile-buy::before { background: #22c55e; }
+    .signal-tile.tile-sell::before { background: #ef4444; }
+    .signal-tile.tile-neutral::before { background: #94a3b8; }
+
+    .signal-tile-copy,
+    .signal-tile-reading {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .signal-tile-copy {
+      min-width: 0;
+      gap: 0.15rem;
+    }
+
+    .signal-tile-reading {
+      align-items: flex-end;
+      gap: 0.3rem;
     }
 
     .breakdown-label {
-      color: var(--text-color-secondary);
-      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      color: #cbd5e1;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .signal-tile-meta {
+      color: #64748b;
+      font-size: 0.58rem;
+      font-weight: 600;
+      white-space: nowrap;
+    }
+
+    .signal-help-btn {
+      align-items: center;
+      align-self: flex-start;
+      background: rgba(147, 197, 253, 0.1);
+      border: 1px solid rgba(147, 197, 253, 0.22);
+      border-radius: 999px;
+      color: #bfdbfe;
+      cursor: help;
+      display: inline-flex;
+      font-family: inherit;
+      font-size: 0.58rem;
+      font-weight: 800;
+      gap: 0.25rem;
+      line-height: 1;
+      margin-top: 0.12rem;
+      padding: 0.22rem 0.42rem;
+      transition: background 0.18s, border-color 0.18s, box-shadow 0.18s, color 0.18s;
+    }
+
+    .signal-help-btn .pi {
+      font-size: 0.58rem;
+    }
+
+    .signal-help-btn:hover,
+    .signal-help-btn:focus-visible {
+      background: rgba(147, 197, 253, 0.18);
+      border-color: rgba(147, 197, 253, 0.44);
+      box-shadow: 0 0 0 3px rgba(147, 197, 253, 0.1);
+      color: #eff6ff;
+      outline: none;
     }
 
     .breakdown-value {
-      font-weight: 600;
-      margin: 0 0.5rem;
-      min-width: 45px;
+      font-size: 0.86rem;
+      font-weight: 800;
       text-align: right;
+      line-height: 1;
     }
 
-    .breakdown-value.positive { color: var(--green-500); }
-    .breakdown-value.negative { color: var(--red-500); }
-    .breakdown-value.oversold { color: var(--green-500); }
-    .breakdown-value.overbought { color: var(--red-500); }
+    .breakdown-value.positive { color: #34d399; }
+    .breakdown-value.negative { color: #f87171; }
+    .breakdown-value.oversold { color: #34d399; }
+    .breakdown-value.overbought { color: #f87171; }
 
     .breakdown-signal {
-      font-size: 0.7rem;
-      font-weight: 600;
-      padding: 0.15rem 0.4rem;
-      border-radius: 3px;
-      min-width: 40px;
+      font-size: 0.62rem;
+      font-weight: 800;
+      padding: 0.18rem 0.45rem;
+      border-radius: 999px;
+      min-width: 42px;
       text-align: center;
+      line-height: 1.1;
     }
 
-    .breakdown-signal.buy { background: rgba(34, 197, 94, 0.2); color: var(--green-500); }
-    .breakdown-signal.sell { background: rgba(239, 68, 68, 0.2); color: var(--red-500); }
-    .breakdown-signal.neutral { background: rgba(163, 163, 163, 0.2); color: var(--text-color-secondary); }
+    .breakdown-signal.buy { background: rgba(34, 197, 94, 0.18); color: #bbf7d0; }
+    .breakdown-signal.sell { background: rgba(239, 68, 68, 0.18); color: #fecaca; }
+    .breakdown-signal.neutral { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; }
+
+    @keyframes signalCardIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px) scale(0.98);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    @keyframes needleSettle {
+      from {
+        opacity: 0;
+        transform: translateY(5px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
 
     /* News Section */
     .news-section {
@@ -1136,16 +1547,25 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       .stock-price {
         text-align: left;
       }
-      .key-stats-grid {
-        grid-template-columns: repeat(3, 1fr);
-        gap: 0.5rem;
+      .stock-header-combined {
+        padding: 1rem;
+      }
+      .metric-sections-grid {
+        grid-template-columns: 1fr;
+        gap: 0.65rem;
+      }
+      .metric-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
       }
       .period-stats-row {
-        grid-template-columns: repeat(6, minmax(0, 1fr));
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+      .analysis-header {
+        flex-direction: column;
         gap: 0.5rem;
       }
       .gauges-row {
-        flex-wrap: wrap;
+        grid-template-columns: 1fr;
       }
       .breakdown-grid {
         grid-template-columns: 1fr;
@@ -1157,13 +1577,18 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
 
     @media (max-width: 480px) {
       .stock-detail-container { padding: 0.5rem; }
-      .key-stats-grid { grid-template-columns: repeat(2, 1fr); }
-      .period-stats-row { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+      .stock-header-combined { padding: 0.8rem; }
+      .metric-section { padding: 0.65rem; }
+      .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .period-stats-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .stat-item { padding: 0.4rem; }
       .stat-label { font-size: 0.6rem; }
       .stat-value { font-size: 0.75rem; }
       .symbol-row h1 { font-size: 1.1rem; }
       .stock-price .price { font-size: 1.3rem; }
+      .analysis-section { padding: 0.75rem; }
+      .signal-card { padding: 0.65rem 0.5rem; }
+      .gauge-wrapper { width: 110px; height: 68px; }
       .stock-price .change { font-size: 0.8rem; }
     }
   `]
@@ -1438,6 +1863,23 @@ export class StockDetailComponent implements OnInit {
     return 'neutral';
   }
 
+  getRsiSignalExplanation(rsi: number | null): string {
+    if (rsi == null) {
+      return 'RSI signal is not available because Yahoo Finance did not return a current RSI value.';
+    }
+
+    const value = rsi.toFixed(1);
+    if (rsi < 30) {
+      return `RSI ${value} is below 30. Oversold readings can signal a rebound setup, so this tile marks Buy.`;
+    }
+
+    if (rsi > 70) {
+      return `RSI ${value} is above 70. Overbought readings can signal stretched momentum, so this tile marks Sell.`;
+    }
+
+    return `RSI ${value} is in the 30 to 70 neutral range, so it does not trigger Buy or Sell.`;
+  }
+
   getMacdSignalLabel(signalType: string | null): string {
     if (!signalType) return 'No Data';
     const labels: Record<string, string> = {
@@ -1456,6 +1898,23 @@ export class StockDetailComponent implements OnInit {
     if (signalType.includes('bullish')) return 'buy';
     if (signalType.includes('bearish')) return 'sell';
     return 'neutral';
+  }
+
+  getMacdSignalExplanation(signalType: string | null, histogram: number | null): string {
+    if (!signalType) {
+      return 'MACD signal is not available because Yahoo Finance did not return enough MACD data.';
+    }
+
+    const histogramText = histogram == null ? 'histogram data is unavailable' : `histogram is ${histogram.toFixed(2)}`;
+    if (signalType.includes('bullish')) {
+      return `MACD is bullish: the line is above the signal line or crossed above it; ${histogramText}. This supports Buy.`;
+    }
+
+    if (signalType.includes('bearish')) {
+      return `MACD is bearish: the line is below the signal line or crossed below it; ${histogramText}. This supports Sell.`;
+    }
+
+    return `MACD is neutral: no bullish or bearish crossover is active; ${histogramText}.`;
   }
 
   getRsiShortSignal(rsi: number | null): string {

@@ -7,8 +7,17 @@ const http = require('http');
 const https = require('https');
 
 const PORT = 3000;
+const MAX_EXACT_SYMBOL_SEARCH = 10;
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://cbvfjicmcwuwmcchwwbw.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNidmZqaWNtY3d1d21jY2h3d2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDA2NzcsImV4cCI6MjA5MDU3NjY3N30.xYvt9FmnhaXWQkQVPWqYkVTQa067oG04t0W373L4WyM';
+
+function parseExactSymbolSearchQuery(query) {
+  const symbols = query.toUpperCase().split(',').map(symbol => symbol.trim()).filter(Boolean);
+  if (symbols.length > MAX_EXACT_SYMBOL_SEARCH) {
+    throw new Error(`Search supports up to ${MAX_EXACT_SYMBOL_SEARCH} exact symbols per request`);
+  }
+  return symbols;
+}
 
 // Cache for API responses
 const cache = new Map();
@@ -2310,7 +2319,7 @@ const server = http.createServer(async (req, res) => {
           }
         } else if (query.includes(',')) {
           // Multi-symbol exact search
-          const symbols = query.toUpperCase().split(',').slice(0, 10);
+          const symbols = parseExactSymbolSearchQuery(query);
           
           for (const symbol of symbols) {
             const sym = symbol.trim();
@@ -2338,8 +2347,17 @@ const server = http.createServer(async (req, res) => {
         res.writeHead(200);
         res.end(JSON.stringify({ stocks: quotes }));
       } catch (error) {
-        res.writeHead(500);
-        res.end(JSON.stringify({ error: error.message }));
+        if (error.message?.startsWith('Search supports up to')) {
+          res.writeHead(400);
+          res.end(JSON.stringify({
+            error: 'Too many symbols',
+            message: error.message,
+            maxSymbols: MAX_EXACT_SYMBOL_SEARCH
+          }));
+        } else {
+          res.writeHead(500);
+          res.end(JSON.stringify({ error: error.message }));
+        }
       }
       return;
     }

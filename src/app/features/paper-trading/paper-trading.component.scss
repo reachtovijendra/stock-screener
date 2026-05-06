@@ -265,6 +265,21 @@ select {
   flex-wrap: wrap;
 }
 
+.order-block-reason {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+  color: #fbbf24;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.35;
+
+  .pi {
+    font-size: 0.72rem;
+  }
+}
+
 .table-wrap {
   overflow-x: auto;
 }

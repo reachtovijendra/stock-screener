@@ -2,6 +2,16 @@ import type { VercelRequest, VercelResponse } from '@vercel/node';
 import { searchStocks, getQuote, getMarketFromSymbol, getAnalystData, Market } from '../yahoo-client';
 import { enrichStockWithPerformance, fetchHistoricalPrices } from '../stock-performance';
 
+export const MAX_EXACT_SYMBOL_SEARCH = 10;
+
+export function parseExactSymbolSearchQuery(query: string): string[] {
+  const symbols = query.toUpperCase().split(',').map(symbol => symbol.trim()).filter(Boolean);
+  if (symbols.length > MAX_EXACT_SYMBOL_SEARCH) {
+    throw new Error(`Search supports up to ${MAX_EXACT_SYMBOL_SEARCH} exact symbols per request`);
+  }
+  return symbols;
+}
+
 function calculateRSI(closes: number[], period: number = 14): number | null {
   if (closes.length < period + 1) return null;
 
@@ -199,7 +209,7 @@ export async function handleSearch(req: VercelRequest, res: VercelResponse) {
         }
       }
     } else if (query.includes(',')) {
-      const symbols = query.toUpperCase().split(',').slice(0, 10);
+      const symbols = parseExactSymbolSearchQuery(query);
       for (const sym of symbols) {
         const trimmed = sym.trim();
         if (seenSymbols.has(trimmed)) continue;
@@ -236,6 +246,14 @@ export async function handleSearch(req: VercelRequest, res: VercelResponse) {
 
     return res.status(200).json({ stocks });
   } catch (error: any) {
+    if (error.message?.startsWith('Search supports up to')) {
+      return res.status(400).json({
+        error: 'Too many symbols',
+        message: error.message,
+        maxSymbols: MAX_EXACT_SYMBOL_SEARCH,
+      });
+    }
+
     console.error('Search API error:', error);
     return res.status(500).json({ 
       error: 'Search failed',

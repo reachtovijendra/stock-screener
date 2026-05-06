@@ -242,7 +242,7 @@ export class WatchlistService {
     }
 
     const response = await firstValueFrom(this.http.get<{ shares: WatchlistShare[] }>(
-      `/api/watchlists/share?watchlistId=${encodeURIComponent(watchlistId)}`,
+      `/api/watchlists/share?watchlistId=${encodeURIComponent(watchlistId)}&_=${Date.now()}`,
       { headers: await this.authHeaders() }
     ));
     const shares = response.shares ?? [];
@@ -258,7 +258,10 @@ export class WatchlistService {
       { watchlistId, email, role },
       { headers: await this.authHeaders() }
     ));
-    await this.loadShares(watchlistId);
+    this.shares.update(shares => [
+      ...shares.filter(share => share.id !== response.share.id),
+      response.share,
+    ]);
     return response.share;
   }
 
@@ -268,8 +271,7 @@ export class WatchlistService {
       { role },
       { headers: await this.authHeaders() }
     ));
-    const selected = this.selectedWatchlist();
-    if (selected) await this.loadShares(selected.id);
+    this.shares.update(shares => shares.map(share => share.id === response.share.id ? response.share : share));
     return response.share;
   }
 
@@ -278,8 +280,7 @@ export class WatchlistService {
       `/api/watchlists/share/${encodeURIComponent(shareId)}`,
       { headers: await this.authHeaders() }
     ));
-    const selected = this.selectedWatchlist();
-    if (selected) await this.loadShares(selected.id);
+    this.shares.update(shares => shares.filter(share => share.id !== shareId));
   }
 
   private findWatchlist(watchlistId: string): Watchlist | undefined {

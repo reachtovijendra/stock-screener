@@ -90,6 +90,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed shared watchlist collaborator lists to refresh immediately after share, role update, or revoke actions instead of showing stale cached results.
 - Fixed the local API dev server to route watchlist sharing endpoints so the Share dialog can be tested locally with Vercel-style handlers.
 - Fixed Stock Detail mobile News & Analysis filters so the type and source controls fit within the card instead of being clipped on narrow screens.
 - Fixed multi-symbol stock search requests so exact-symbol batches over the supported limit return a clear error instead of silently truncating results.

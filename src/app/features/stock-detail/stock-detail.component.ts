@@ -1570,6 +1570,34 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       .breakdown-grid {
         grid-template-columns: 1fr;
       }
+      .news-section {
+        padding: 0.85rem;
+      }
+      .news-header {
+        align-items: stretch;
+        flex-direction: column;
+        gap: 0.6rem;
+      }
+      .news-header h2 {
+        white-space: normal;
+      }
+      .news-filters {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.45rem;
+        width: 100%;
+      }
+      :host ::ng-deep .news-filter-select {
+        max-width: none;
+        min-width: 0;
+        width: 100%;
+      }
+      :host ::ng-deep .news-filter-select .p-multiselect {
+        width: 100%;
+      }
+      :host ::ng-deep .news-filter-select .p-multiselect-label {
+        min-width: 0;
+      }
       .week-range-container { display: none; }
       .wl-dropdown { right: auto; left: 0; }
       .symbol-row h1 { font-size: 1.3rem; }

@@ -187,7 +187,7 @@ describe('WatchlistsComponent', () => {
     expect(native.querySelector('.wl-sidebar.collapsed')).toBeNull();
   });
 
-  it('maps and displays 1M, 3M, and 6M percent changes for watchlist rows', async () => {
+  it('maps and displays live 1D, 1M, 3M, and 6M percent changes for watchlist rows', async () => {
     watchlistItems.set([
       {
         id: 'item-1',
@@ -204,6 +204,7 @@ describe('WatchlistsComponent', () => {
       stocks: [{
         symbol: 'AAON',
         price: 100,
+        changePercent: -1.25,
         oneMonthChangePercent: 4.2,
         threeMonthChangePercent: -3.5,
         sixMonthChangePercent: 12.75,
@@ -214,18 +215,121 @@ describe('WatchlistsComponent', () => {
     fixture.detectChanges();
 
     const [item] = component.enrichedItems();
+    expect((item as any).oneDayChangePercent).toBe(-1.25);
     expect((item as any).oneMonthChangePercent).toBe(4.2);
     expect((item as any).threeMonthChangePercent).toBe(-3.5);
     expect((item as any).sixMonthChangePercent).toBe(12.75);
 
     const text = fixture.nativeElement.textContent;
+    expect(text).toContain('1D');
     expect(text).toContain('1M');
     expect(text).toContain('3M');
     expect(text).toContain('6M');
+    expect(text).toContain('-1.25%');
     expect(text).toContain('+4.20%');
     expect(text).toContain('-3.50%');
     expect(text).toContain('+12.75%');
     expect(httpGet.calls.mostRecent().args[0]).toContain('performance=true');
+  });
+
+  it('removes the company column from the watchlist table', async () => {
+    watchlistItems.set([
+      {
+        id: 'item-1',
+        watchlist_id: 'watchlist-1',
+        symbol: 'AAON',
+        name: 'AAON, Inc.',
+        market: 'US',
+        price_when_added: 80,
+        added_at: '2026-04-01T00:00:00Z',
+      },
+    ]);
+
+    fixture.detectChanges();
+
+    const headerText = Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('thead th')
+    ).map(th => th.textContent?.trim().replace(/\s+/g, ' '));
+    expect(headerText).not.toContain('COMPANY');
+  });
+
+  it('sorts enriched watchlist rows by sortable header fields', () => {
+    watchlistItems.set([
+      {
+        id: 'item-1',
+        watchlist_id: 'watchlist-1',
+        symbol: 'AAA',
+        name: 'AAA Corp',
+        market: 'US',
+        price_when_added: 100,
+        added_at: '2026-04-01T00:00:00Z',
+      },
+      {
+        id: 'item-2',
+        watchlist_id: 'watchlist-1',
+        symbol: 'BBB',
+        name: 'BBB Corp',
+        market: 'US',
+        price_when_added: 100,
+        added_at: '2026-04-01T00:00:00Z',
+      },
+    ]);
+    (component as any).currentPrices.set({ AAA: 90, BBB: 120 });
+    (component as any).stockExtras.set({
+      AAA: { oneDayChangePercent: 2.5 },
+      BBB: { oneDayChangePercent: -1.5 },
+    });
+
+    component.setSort('last');
+    expect(component.enrichedItems().map(item => item.symbol)).toEqual(['AAA', 'BBB']);
+
+    component.setSort('last');
+    expect(component.enrichedItems().map(item => item.symbol)).toEqual(['BBB', 'AAA']);
+
+    component.setSort('oneDay');
+    expect(component.enrichedItems().map(item => item.symbol)).toEqual(['BBB', 'AAA']);
+  });
+
+  it('defaults to sorting watchlist rows by live 1D percent change descending', () => {
+    watchlistItems.set([
+      {
+        id: 'item-1',
+        watchlist_id: 'watchlist-1',
+        symbol: 'AAA',
+        name: 'AAA Corp',
+        market: 'US',
+        price_when_added: 100,
+        added_at: '2026-04-01T00:00:00Z',
+      },
+      {
+        id: 'item-2',
+        watchlist_id: 'watchlist-1',
+        symbol: 'BBB',
+        name: 'BBB Corp',
+        market: 'US',
+        price_when_added: 100,
+        added_at: '2026-04-01T00:00:00Z',
+      },
+      {
+        id: 'item-3',
+        watchlist_id: 'watchlist-1',
+        symbol: 'CCC',
+        name: 'CCC Corp',
+        market: 'US',
+        price_when_added: 100,
+        added_at: '2026-04-01T00:00:00Z',
+      },
+    ]);
+    (component as any).currentPrices.set({ AAA: 100, BBB: 100, CCC: 100 });
+    (component as any).stockExtras.set({
+      AAA: { oneDayChangePercent: -1 },
+      BBB: { oneDayChangePercent: 4.5 },
+      CCC: { oneDayChangePercent: 1.2 },
+    });
+
+    expect(component.sortKey()).toBe('oneDay');
+    expect(component.sortDirection()).toBe('desc');
+    expect(component.enrichedItems().map(item => item.symbol)).toEqual(['BBB', 'CCC', 'AAA']);
   });
 
   it('chunks watchlist enrichment so more than 10 rows receive quote and performance data', async () => {

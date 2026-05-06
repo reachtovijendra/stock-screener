@@ -14,10 +14,28 @@ import { environment } from '../../../environments/environment';
 type WatchlistStockExtras = {
   targetMeanPrice?: number | null;
   earningsTimestamp?: number | null;
+  oneDayChangePercent?: number | null;
   oneMonthChangePercent?: number | null;
   threeMonthChangePercent?: number | null;
   sixMonthChangePercent?: number | null;
 };
+
+type WatchlistSortKey =
+  | 'symbol'
+  | 'added'
+  | 'days'
+  | 'cost'
+  | 'last'
+  | 'pnl'
+  | 'return'
+  | 'oneDay'
+  | 'oneMonth'
+  | 'threeMonth'
+  | 'sixMonth'
+  | 'target'
+  | 'earnings';
+
+type SortDirection = 'asc' | 'desc';
 
 const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
 
@@ -169,19 +187,71 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
             <table>
               <thead>
                 <tr>
-                  <th class="col-ticker">TICKER</th>
-                  <th class="col-company">COMPANY</th>
-                  <th class="col-added">ADDED</th>
-                  <th class="col-days" title="Days since added">DAYS</th>
-                  <th class="col-cost" title="Cost basis">COST</th>
-                  <th class="col-last" title="Last price">LAST</th>
-                  <th class="col-pnl" title="Change since added">$ CHG</th>
-                  <th class="col-return" title="Change since added percent">% CHG</th>
-                  <th class="col-period" title="1 month percent change">1M</th>
-                  <th class="col-period" title="3 month percent change">3M</th>
-                  <th class="col-period" title="6 month percent change">6M</th>
-                  <th class="col-target-wl" title="Analyst target">TARGET</th>
-                  <th class="col-earnings-wl">EARN</th>
+                  <th class="col-ticker">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'symbol'" (click)="setSort('symbol')">
+                      TICKER <span class="sort-indicator">{{ getSortIndicator('symbol') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-added">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'added'" (click)="setSort('added')">
+                      ADDED <span class="sort-indicator">{{ getSortIndicator('added') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-days" title="Days since added">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'days'" (click)="setSort('days')">
+                      DAYS <span class="sort-indicator">{{ getSortIndicator('days') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-cost" title="Cost basis">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'cost'" (click)="setSort('cost')">
+                      COST <span class="sort-indicator">{{ getSortIndicator('cost') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-last" title="Last price">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'last'" (click)="setSort('last')">
+                      LAST <span class="sort-indicator">{{ getSortIndicator('last') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-pnl" title="Change since added">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'pnl'" (click)="setSort('pnl')">
+                      $ CHG <span class="sort-indicator">{{ getSortIndicator('pnl') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-return" title="Change since added percent">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'return'" (click)="setSort('return')">
+                      % CHG <span class="sort-indicator">{{ getSortIndicator('return') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-period" title="Live 1 day percent change">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'oneDay'" (click)="setSort('oneDay')">
+                      1D <span class="sort-indicator">{{ getSortIndicator('oneDay') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-period" title="1 month percent change">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'oneMonth'" (click)="setSort('oneMonth')">
+                      1M <span class="sort-indicator">{{ getSortIndicator('oneMonth') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-period" title="3 month percent change">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'threeMonth'" (click)="setSort('threeMonth')">
+                      3M <span class="sort-indicator">{{ getSortIndicator('threeMonth') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-period" title="6 month percent change">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'sixMonth'" (click)="setSort('sixMonth')">
+                      6M <span class="sort-indicator">{{ getSortIndicator('sixMonth') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-target-wl" title="Analyst target">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'target'" (click)="setSort('target')">
+                      TARGET <span class="sort-indicator">{{ getSortIndicator('target') }}</span>
+                    </button>
+                  </th>
+                  <th class="col-earnings-wl">
+                    <button type="button" class="sort-header" [class.active]="sortKey() === 'earnings'" (click)="setSort('earnings')">
+                      EARN <span class="sort-indicator">{{ getSortIndicator('earnings') }}</span>
+                    </button>
+                  </th>
                   <th class="col-x"></th>
                 </tr>
               </thead>
@@ -216,9 +286,6 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
                       </div>
                     </div>
                   </td>
-                  <td class="col-company">
-                    <span class="company-name">{{ item.name || item.symbol }}</span>
-                  </td>
                   <td class="col-added">
                     <span class="date-text">{{ item.added_at | date:'MMM d, y' }}</span>
                   </td>
@@ -241,6 +308,12 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
                     <span *ngIf="item.changePercent != null" class="return-badge" [class.up]="item.changePercent > 0" [class.down]="item.changePercent < 0">
                       {{ item.changePercent >= 0 ? '+' : '' }}{{ item.changePercent | number:'1.2-2' }}%
                     </span>
+                  </td>
+                  <td class="col-period">
+                    <span *ngIf="item.oneDayChangePercent != null" class="period-change" [class.up]="item.oneDayChangePercent > 0" [class.down]="item.oneDayChangePercent < 0">
+                      {{ item.oneDayChangePercent >= 0 ? '+' : '' }}{{ item.oneDayChangePercent | number:'1.2-2' }}%
+                    </span>
+                    <span *ngIf="item.oneDayChangePercent == null" class="muted-text">—</span>
                   </td>
                   <td class="col-period">
                     <span *ngIf="item.oneMonthChangePercent != null" class="period-change" [class.up]="item.oneMonthChangePercent > 0" [class.down]="item.oneMonthChangePercent < 0">
@@ -650,13 +723,46 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
       z-index: 1;
     }
 
-    .col-ticker,
-    .col-company {
-      text-align: left;
+    .sort-header {
+      display: inline-flex;
+      align-items: center;
+      justify-content: inherit;
+      gap: 3px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      cursor: pointer;
+      font: inherit;
+      letter-spacing: inherit;
+      text-transform: inherit;
+      white-space: nowrap;
     }
 
-    .col-company {
-      max-inline-size: clamp(8.5rem, 14vw, 13rem);
+    .sort-header:hover,
+    .sort-header.active {
+      color: #93c5fd;
+    }
+
+    .sort-indicator {
+      display: inline-flex;
+      min-width: 7px;
+      color: #60a5fa;
+      font-size: 9px;
+      font-weight: 900;
+    }
+
+    .col-cost .sort-header,
+    .col-last .sort-header,
+    .col-pnl .sort-header,
+    .col-return .sort-header,
+    .col-period .sort-header,
+    .col-target-wl .sort-header {
+      margin-left: auto;
+    }
+
+    .col-ticker {
+      text-align: left;
     }
 
     .col-added,
@@ -794,16 +900,6 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
       padding: 1px 4px;
       border-radius: 4px;
       letter-spacing: 0.05em;
-    }
-
-    .company-name {
-      font-size: 11px;
-      color: #94a3b8;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      display: block;
-      max-width: clamp(8.5rem, 14vw, 13rem);
     }
 
     .date-text {
@@ -969,7 +1065,6 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
       .wl-sidebar { max-height: 120px; }
       .wl-item { padding: 8px 10px; }
       .ticker { font-size: 12px; }
-      .company-name { font-size: 11px; max-width: 120px; }
     }
   `]
 })
@@ -994,12 +1089,14 @@ export class WatchlistsComponent implements OnInit {
   searchResults = signal<any[]>([]);
   watchlistPanelCollapsed = signal(false);
   private stockSearchRequestId = 0;
+  sortKey = signal<WatchlistSortKey | null>('oneDay');
+  sortDirection = signal<SortDirection>('desc');
 
   enrichedItems = computed(() => {
     const items = this.wlService.items();
     const prices = this.currentPrices();
     const extras = this.stockExtras();
-    return items.map(item => {
+    const enriched = items.map(item => {
       const cp = prices[item.symbol];
       const ext = extras[item.symbol] ?? {};
       const changeDollar = cp != null ? cp - item.price_when_added : null;
@@ -1010,10 +1107,20 @@ export class WatchlistsComponent implements OnInit {
         currentPrice: cp ?? null,
         changeDollar,
         changePercent,
+        oneDayChangePercent: ext.oneDayChangePercent ?? null,
         oneMonthChangePercent: ext.oneMonthChangePercent ?? null,
         threeMonthChangePercent: ext.threeMonthChangePercent ?? null,
         sixMonthChangePercent: ext.sixMonthChangePercent ?? null,
       };
+    });
+
+    const key = this.sortKey();
+    if (!key) return enriched;
+
+    const directionMultiplier = this.sortDirection() === 'asc' ? 1 : -1;
+    return [...enriched].sort((a, b) => {
+      const result = this.compareSortValues(this.getSortValue(a, key), this.getSortValue(b, key));
+      return result * directionMultiplier;
     });
   });
 
@@ -1137,6 +1244,21 @@ export class WatchlistsComponent implements OnInit {
     return Math.floor((now.getTime() - added.getTime()) / (1000 * 60 * 60 * 24));
   }
 
+  setSort(key: WatchlistSortKey): void {
+    if (this.sortKey() === key) {
+      this.sortDirection.update(direction => direction === 'asc' ? 'desc' : 'asc');
+      return;
+    }
+
+    this.sortKey.set(key);
+    this.sortDirection.set('asc');
+  }
+
+  getSortIndicator(key: WatchlistSortKey): string {
+    if (this.sortKey() !== key) return '';
+    return this.sortDirection() === 'asc' ? '^' : 'v';
+  }
+
   async searchStocks(event: AutoCompleteCompleteEvent) {
     const query = event.query.trim();
     if (query.length < 1) {
@@ -1203,6 +1325,49 @@ export class WatchlistsComponent implements OnInit {
     return dateStr;
   }
 
+  private getSortValue(item: any, key: WatchlistSortKey): string | number | null {
+    switch (key) {
+      case 'symbol':
+        return item.symbol?.toUpperCase() ?? null;
+      case 'added':
+        return new Date(item.added_at).getTime();
+      case 'days':
+        return this.getDaysSince(item.added_at);
+      case 'cost':
+        return item.price_when_added;
+      case 'last':
+        return item.currentPrice;
+      case 'pnl':
+        return item.changeDollar;
+      case 'return':
+        return item.changePercent;
+      case 'oneDay':
+        return item.oneDayChangePercent;
+      case 'oneMonth':
+        return item.oneMonthChangePercent;
+      case 'threeMonth':
+        return item.threeMonthChangePercent;
+      case 'sixMonth':
+        return item.sixMonthChangePercent;
+      case 'target':
+        return this.getAnalystTargetPercent(item) ?? this.getAnalystTarget(item);
+      case 'earnings':
+        return this.stockExtras()[item.symbol]?.earningsTimestamp ?? null;
+    }
+  }
+
+  private compareSortValues(a: string | number | null, b: string | number | null): number {
+    if (a == null && b == null) return 0;
+    if (a == null) return 1;
+    if (b == null) return -1;
+
+    if (typeof a === 'string' || typeof b === 'string') {
+      return String(a).localeCompare(String(b));
+    }
+
+    return a - b;
+  }
+
   private async fetchPrices() {
     const requestId = ++this.fetchPricesRequestId;
     const items = this.wlService.items();
@@ -1234,6 +1399,7 @@ export class WatchlistsComponent implements OnInit {
               extras[s.symbol] = {
                 targetMeanPrice: s.targetMeanPrice || null,
                 earningsTimestamp: s.earningsTimestamp || null,
+                oneDayChangePercent: s.changePercent ?? null,
                 oneMonthChangePercent: s.oneMonthChangePercent ?? null,
                 threeMonthChangePercent: s.threeMonthChangePercent ?? null,
                 sixMonthChangePercent: s.sixMonthChangePercent ?? null,

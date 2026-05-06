@@ -35,6 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Watchlist tables now support sortable column headers, default to live 1D percent change descending, remove the separate company-name column, and include a live 1D percent change column from quote data.
 - Manual paper trading order validation now allows manually entered valid symbols with an execution price and shows an inline reason when the Place Paper Order button is disabled.
 - Stock detail Technical Analysis RSI and MACD tiles now include visible "Why?" controls with polished global tooltip styling and concise explanations describing the buy, sell, or neutral threshold logic behind each signal.
 - Stock detail Technical Analysis panel now uses a Signal Console layout with richer gauge cards, compact signal tiles, directional accents, and subtle one-time entrance animation.
@@ -85,6 +86,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed Stock Detail mobile News & Analysis filters so the type and source controls fit within the card instead of being clipped on narrow screens.
 - Fixed multi-symbol stock search requests so exact-symbol batches over the supported limit return a clear error instead of silently truncating results.
 - Fixed watchlist enrichment for larger lists by batching quote/performance requests so rows beyond the backend multi-symbol limit receive current price, period returns, analyst target, and earnings data.
 - Fixed watchlist stock autocomplete suggestions disappearing before selection by preserving active suggestions through transient blank autocomplete events and rendering the dropdown outside the scrollable table container.

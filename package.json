@@ -15,7 +15,7 @@
   },
   "private": true,
   "engines": {
-    "node": "20.x"
+    "node": ">=20.0.0"
   },
   "dependencies": {
     "@angular/common": "^19.2.0",

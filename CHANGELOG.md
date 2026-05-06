@@ -37,6 +37,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Node engine configuration now allows Node 20 or newer so Vercel can use the project-level Node 24 runtime for serverless functions.
 - Watchlists now load owned and shared lists with role badges, show owner-only share controls, and gate add/remove actions for Viewer versus Editor access.
 - Watchlist tables now support sortable column headers, default to live 1D percent change descending, remove the separate company-name column, and include a live 1D percent change column from quote data.
 - Manual paper trading order validation now allows manually entered valid symbols with an execution price and shows an inline reason when the Place Paper Order button is disabled.

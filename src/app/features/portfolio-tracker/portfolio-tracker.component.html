@@ -485,7 +485,7 @@
           </td>
 
           <!-- Total Invested (neutral) -->
-          <td class="val-cell target-cell mono">{{ formatCurrency(row.investment) }}</td>
+          <td class="val-cell target-cell mono">{{ formatCurrency(getTargetTotalInvested(row)) }}</td>
           <td class="val-cell actual-cell neutral mono" [ngClass]="getActualPrincipalClass(row)">{{ getActualPrincipalDisplay(row) }}</td>
 
           <!-- Ending Balance (neutral) -->

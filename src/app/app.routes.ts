@@ -35,6 +35,12 @@ export const routes: Routes = [
     title: 'Watchlists'
   },
   {
+    path: 'watchlists/:watchlistId',
+    loadComponent: () => import('./features/watchlists/watchlist-detail.component').then(m => m.WatchlistDetailComponent),
+    canActivate: [authGuard],
+    title: 'Watchlist Stocks'
+  },
+  {
     path: 'portfolio',
     loadComponent: () => import('./features/portfolio-tracker/portfolio-tracker.component').then(m => m.PortfolioTrackerComponent),
     canActivate: [authGuard],

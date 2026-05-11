@@ -49,6 +49,7 @@ export interface WatchlistItem {
 export class WatchlistService {
   private auth = inject(AuthService);
   private http = inject(HttpClient);
+  private readonly watchlistOrderStoragePrefix = 'stock-screener.watchlist-order';
 
   private get db() { return this.auth.supabaseClient; }
 
@@ -105,7 +106,7 @@ export class WatchlistService {
         })
         .filter(Boolean) as Watchlist[];
 
-      const mapped = [...owned, ...shared];
+      const mapped = this.applyStoredWatchlistOrder([...owned, ...shared]);
       this.watchlists.set(mapped);
 
       const current = this.selectedWatchlist();
@@ -216,6 +217,8 @@ export class WatchlistService {
   }
 
   async saveOrder(order: { id: string; sort_order: number }[]): Promise<void> {
+    this.persistWatchlistOrder(order.map(item => item.id));
+
     for (const item of order.filter(entry => this.canManageWatchlist(entry.id))) {
       await this.db.from('watchlists').update({ sort_order: item.sort_order }).eq('id', item.id);
     }
@@ -224,6 +227,15 @@ export class WatchlistService {
   selectWatchlist(wl: Watchlist): void {
     this.selectedWatchlist.set(wl);
     this.loadItems(wl.id);
+  }
+
+  async selectWatchlistById(watchlistId: string): Promise<boolean> {
+    const watchlist = this.watchlists().find(wl => wl.id === watchlistId) ?? null;
+    if (!watchlist) return false;
+
+    this.selectedWatchlist.set(watchlist);
+    await this.loadItems(watchlist.id);
+    return true;
   }
 
   canEditWatchlist(watchlistId: string): boolean {
@@ -285,6 +297,50 @@ export class WatchlistService {
 
   private findWatchlist(watchlistId: string): Watchlist | undefined {
     return this.watchlists().find(w => w.id === watchlistId);
+  }
+
+  private applyStoredWatchlistOrder(watchlists: Watchlist[]): Watchlist[] {
+    const storedOrder = this.readStoredWatchlistOrder();
+    if (storedOrder.length === 0) return watchlists;
+
+    const byId = new Map(watchlists.map(watchlist => [watchlist.id, watchlist]));
+    const ordered = storedOrder
+      .map(id => byId.get(id))
+      .filter((watchlist): watchlist is Watchlist => !!watchlist);
+    const orderedIds = new Set(ordered.map(watchlist => watchlist.id));
+    const remaining = watchlists.filter(watchlist => !orderedIds.has(watchlist.id));
+
+    return [...ordered, ...remaining];
+  }
+
+  private persistWatchlistOrder(watchlistIds: string[]): void {
+    const storageKey = this.getWatchlistOrderStorageKey();
+    if (!storageKey) return;
+
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(watchlistIds));
+    } catch {
+      // Local persistence is a convenience; Supabase sort_order still stores owned-list order.
+    }
+  }
+
+  private readStoredWatchlistOrder(): string[] {
+    const storageKey = this.getWatchlistOrderStorageKey();
+    if (!storageKey) return [];
+
+    try {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return [];
+      const parsed: unknown = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === 'string') : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private getWatchlistOrderStorageKey(): string | null {
+    const userId = this.auth.user()?.id;
+    return userId ? `${this.watchlistOrderStoragePrefix}.${userId}` : null;
   }
 
   private async authHeaders(): Promise<{ Authorization: string }> {

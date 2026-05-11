@@ -102,6 +102,8 @@ describe('PortfolioTrackerComponent', () => {
     component.portfolioData[1].actualAdded = 3500;
 
     expect(component.getTargetStartingBalance(component.portfolioData[0])).toBe(100000);
+    expect(component.getTargetTotalInvested(component.portfolioData[0])).toBe(103500);
+    expect(component.getTargetTotalInvested(component.portfolioData[1])).toBe(108656);
     expect(component.getStartOfMonth(component.portfolioData[0])).toBe(107000);
     expect(component.getStartOfMonth(component.portfolioData[1])).toBe(112268);
     expect(component.getActualMonthlyReturn(component.portfolioData[0])).toBe('+1.6%');

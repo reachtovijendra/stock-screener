@@ -18,7 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Automated paper trading results tab on the recommendations page showing score-based simulated investment, triggered trades, monthly P/L, win rate, and a detailed trade ledger for day-trade picks.
 - Manual Paper Trading page with authenticated Supabase-backed paper accounts, order entry, open positions, trade history, cash/equity summaries, and separate US/India starting balances.
 - Supabase schema script for `paper_accounts`, `paper_positions`, and `paper_trades` tables with row-level security policies for user-owned manual paper trading data.
-- Watchlist table now includes 1M, 3M, and 6M percentage change columns populated from Yahoo daily historical closes through the stock search API.
+- Watchlist table now includes 1M, 3M, 6M, and 1Y percentage change columns populated from Yahoo daily historical closes through the stock search API.
 - PostHog-ready analytics foundation with a typed Angular `AnalyticsService`, SPA route pageview tracking, authenticated user identity sync, and conservative defaults that disable autocapture, session replay, and feature flag requests until explicitly configured.
 - New luxury-themed Market News V2 page accessible at `/v2/news` with editorial card grid layout, category filter chips, and animated news cards
 - New luxury-themed Breakouts V2 page accessible at `/v2/breakouts` with Top Picks section, signal filtering (bullish/bearish), and refined breakout cards
@@ -41,6 +41,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Watchlists now use separate `/watchlists` and `/watchlists/:watchlistId` pages, replacing the collapsible sidebar and dock with a compact summary-and-table index and full-width stock detail view.
+- Watchlist rows now use the watchlist name as the stocks-page link and remove the extra row description and Open button.
+- Watchlists index table now removes the extra "All watchlists" panel header so rows start immediately below the summary.
+- Watchlists index rows now expose an owner-only share icon that opens the collaborator sharing dialog.
+- Watchlists index now renames the stock count column to "#Stocks" and centers its values for cleaner alignment.
+- Watchlists index table now uses explicit column sizing so the name column, stock counts, and action icons are better balanced.
+- Watchlist drag-and-drop now preserves the combined owned/shared display order after page refresh while still syncing owned-list `sort_order` to Supabase.
+- Watchlist stocks page table headers now match the compact translucent header styling used on the Watchlists index table.
+- Watchlist stocks page now refreshes only the 1D percentage column every 60 seconds while visible, expands the add-stock search field, and labels the owner share action as "Share Watchlist."
+- Watchlist stocks page hero now removes the "Focused watchlist" eyebrow, uses the open space for a watchlist switcher dropdown, and removes the duplicate toolbar date.
+- Watchlist stocks page switcher now uses a custom dark dropdown menu instead of the browser-native select popup.
+- Fixed the watchlist stocks page switcher menu being clipped by the hero card when opened.
+- Fixed the watchlist stocks page table header stacking above the open watchlist switcher menu.
+- Watchlist stocks page hero now places the descriptive note beside the watchlist name and uses shorter, more consistent right-side controls.
+- Watchlist stocks page hero no longer shows the visible "Switch watchlist" label above the dropdown.
+- Portfolio Tracker Target Total Invested now displays starting balance plus target additions for the month.
 - Portfolio Tracker performance summary now shows average monthly profit/loss and average monthly return for completed rows.
 - Portfolio Tracker Return Radar chart now uses one color per return category and dotted target lines with solid actual lines for clearer comparison.
 - Portfolio Tracker table columns now follow the sequence Starting Balance, Added, Total Invested, Ending Balance, Monthly Profit / Loss, Monthly Return %, and Overall Return %.
@@ -75,10 +91,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Stock detail header metrics now use grouped responsive sections for performance, valuation, trading range, and research data to improve desktop alignment and mobile readability.
 - Manual paper trading page now uses a more compact, refined visual treatment with smaller summary cards, tighter form controls, lighter panel shadows, and denser tables.
 - Stock detail header now shows 1W, 1M, 3M, 6M, YTD, and 1Y percentage changes in one row using the same color-coded styling as the Watchlists page, with earnings and analyst metrics moved below.
-- Collapsed watchlists rail now shows a rotated vertical "Click to see watchlists" prompt, total watchlist count, and keeps the dock control aligned to the right side of the expanded panel.
-- Collapsed watchlists panel now expands when clicking anywhere on the collapsed panel, not just the dock icon.
-- Watchlists panel now auto-collapses after selecting a watchlist so the stock table has more room immediately.
-- Watchlists page now includes a pin-style collapsible dock for the watchlist panel so the table can use more horizontal space.
+- Watchlists now open selected stock tables from the watchlist index instead of using the former inline watchlist panel.
 - Watchlists table now uses compact column labels, tighter spacing, and smaller readable typography so more columns fit at normal browser zoom.
 - Automated paper trading results now include simulated shares bought, bought and sold timing labels, separate entry and exit price columns, expanded exit reasons, planned amount formula details, and color-coded outcome badges for exit prices, exit reasons, and P/L.
 - Manual paper trading open positions and trade history stock names now link to each stock's detail page.

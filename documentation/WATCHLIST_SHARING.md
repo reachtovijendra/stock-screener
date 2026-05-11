@@ -39,12 +39,15 @@ All endpoints require a Supabase bearer token in the `Authorization` header and 
 
 ## Frontend Behavior
 
-`WatchlistService` loads owned and shared lists into one sidebar collection and annotates each list with `access_role`.
+`WatchlistService` loads owned and shared lists into the `/watchlists` index page and annotates each list with `access_role`. Selecting a watchlist name link opens `/watchlists/:watchlistId`, where the selected watchlist's stocks, add-stock search, and sharing controls are displayed without the former sidebar or dock rail.
 
-- Owner lists show `Owner` badges and a Share action.
+- Owner lists show `Owner` badges and an index-row Share icon that opens the collaborator dialog.
 - Shared lists show `Viewer` or `Editor` badges.
 - Viewer lists hide add-stock and remove controls and display a view-only notice.
-- Editor lists allow item changes but do not expose rename, delete, sorting persistence, or sharing controls.
+- Editor lists allow item changes but do not expose rename, delete, or sharing controls.
+- Drag-and-drop ordering on the watchlists index is stored as a per-user display preference in browser storage so the combined owned/shared order is restored after refresh. Owner watchlists also continue to sync their `sort_order` values to Supabase for database-backed ordering.
+- The stocks page displays live quote-derived performance columns, including 1D, 1M, 3M, 6M, and 1Y change. After initial load, only the 1D column refreshes every 60 seconds while the browser tab is visible.
+- The stocks page hero includes a watchlist selector so users can switch between available watchlists without returning to the index.
 
 ## Configuration
 

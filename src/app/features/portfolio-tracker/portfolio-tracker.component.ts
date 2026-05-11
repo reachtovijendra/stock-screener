@@ -1094,6 +1094,10 @@ export class PortfolioTrackerComponent implements OnInit {
     return row.investment;
   }
 
+  getTargetTotalInvested(row: PortfolioRow): number {
+    return row.total_investment;
+  }
+
   getActualTotalInvestment(actualInvestment: number | null, actualAdded: number | null): string {
     if (actualInvestment === null || actualAdded === null) return '-';
     return this.formatCurrency(actualInvestment + actualAdded);

@@ -788,7 +788,7 @@
 }
 
 // Alternating group backgrounds for visual grouping
-// Groups: Added(3-4), Start(5-6), End(7-8), Monthly(9-10), TotalInv(11-12), PL(13-14), Overall(15-16)
+// Groups: Start(3-4), Added(5-6), TotalInv(7-8), Ending(9-10), PL(11-12), Monthly(13-14), Overall(15-16)
 // Odd groups get a subtle tint, even groups stay default
 .group-header-row .group-th:nth-of-type(odd) {
   background: rgba(148, 163, 184, 0.08);
@@ -803,7 +803,7 @@
   background: rgba(148, 163, 184, 0.04);
 }
 
-// Apply to body rows: cols 3-4, 7-8, 11-12, 15-16 get tint
+// Apply to body rows: groups 1, 3, 5, and 7 get tint
 ::ng-deep .portfolio-table .p-datatable-tbody > tr {
   > td:nth-child(3), > td:nth-child(4),
   > td:nth-child(7), > td:nth-child(8),
@@ -854,7 +854,7 @@
 }
 
 .val-cell.actual-cell {
-  // Neutral values: white/light — just facts (Added, Start/End of Month, Total Invested)
+  // Neutral values: white/light - just facts (Start/Added/Ending Balance, Total Invested)
   &.neutral {
     color: #e2e8f0;
     font-weight: 500;

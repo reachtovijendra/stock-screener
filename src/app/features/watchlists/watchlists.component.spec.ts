@@ -311,6 +311,28 @@ describe('WatchlistsComponent', () => {
     expect(headerText).not.toContain('COMPANY');
   });
 
+  it('uses the company name as the ticker tooltip with a symbol fallback', () => {
+    expect(component.getTickerTooltip({
+      id: 'item-1',
+      watchlist_id: 'watchlist-1',
+      symbol: 'AAON',
+      name: 'AAON, Inc.',
+      market: 'US',
+      price_when_added: 80,
+      added_at: '2026-04-01T00:00:00Z',
+    })).toBe('AAON, Inc.');
+
+    expect(component.getTickerTooltip({
+      id: 'item-2',
+      watchlist_id: 'watchlist-1',
+      symbol: 'RELIANCE.NS',
+      name: '   ',
+      market: 'IN',
+      price_when_added: 100,
+      added_at: '2026-04-01T00:00:00Z',
+    })).toBe('RELIANCE');
+  });
+
   it('sorts enriched watchlist rows by sortable header fields', () => {
     watchlistItems.set([
       {

@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Portfolio Tracker table columns now follow the sequence Starting Balance, Added, Total Invested, Ending Balance, Profit / Loss, Monthly Return %, and Overall Return %.
+- Watchlist ticker labels now show the saved company name in a PrimeNG tooltip on hover, with a symbol fallback when no company name is stored.
 - FIRE Goals page now uses a single carousel-style wizard panel with overview metrics, side arrow navigation, clickable Assets/Loans/Income summary rows, and animated transitions into detail panels.
 - FIRE Goals Goal & Income panel now displays currency context as an inline note and no longer blocks saving when retirement age is not greater than current age.
 - FIRE Goals overview income details now include taxation, with a saved tax-rate assumption used to calculate available-to-invest cash flow.

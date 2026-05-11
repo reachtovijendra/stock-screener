@@ -107,6 +107,39 @@ describe('PortfolioTrackerComponent', () => {
     expect(component.getActualMonthlyReturn(component.portfolioData[0])).toBe('+1.6%');
   });
 
+  it('shows the requested Portfolio Tracker table column order', () => {
+    fixture.detectChanges();
+    component.showSetup = false;
+    (component as any).loadPortfolioData([
+      {
+        year: 2026,
+        month: 1,
+        investment: 100000,
+        added: 3500,
+        principal: 103500,
+        total_investment: 103500,
+        return_percent: 1.6,
+        profit: 1656,
+        total: 105156,
+      },
+    ], []);
+    fixture.detectChanges();
+
+    const groupHeaders = Array.from(
+      fixture.nativeElement.querySelectorAll('.group-header-row .group-th') as NodeListOf<HTMLElement>
+    ).map(header => header.textContent?.trim());
+
+    expect(groupHeaders).toEqual([
+      'Starting Balance',
+      'Added',
+      'Total Invested',
+      'Ending Balance',
+      'Profit / Loss',
+      'Monthly Return %',
+      'Overall Return %',
+    ]);
+  });
+
   it('clears setup fields when switching to a market with no saved portfolio setup', () => {
     component.targetInitialContribution = 100000;
     component.monthlyAddition = 10000;

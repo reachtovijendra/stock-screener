@@ -335,7 +335,12 @@ const WATCHLIST_ENRICHMENT_BATCH_SIZE = 10;
                     [style.animation-delay]="(i * 40) + 'ms'">
                   <td class="col-ticker">
                     <div class="ticker-cell">
-                      <span class="ticker">{{ formatSymbol(item.symbol) }}</span>
+                      <span
+                        class="ticker"
+                        [pTooltip]="getTickerTooltip(item)"
+                        tooltipPosition="top">
+                        {{ formatSymbol(item.symbol) }}
+                      </span>
                       <span class="market-flag">{{ item.market }}</span>
                       <div class="ticker-actions">
                         <a class="ticker-icon detail"
@@ -1591,6 +1596,10 @@ export class WatchlistsComponent implements OnInit {
 
   formatSymbol(symbol: string): string {
     return symbol.replace('.NS', '').replace('.BO', '');
+  }
+
+  getTickerTooltip(item: WatchlistItem): string {
+    return item.name?.trim() || this.formatSymbol(item.symbol);
   }
 
   getCurrency(market: string): string {

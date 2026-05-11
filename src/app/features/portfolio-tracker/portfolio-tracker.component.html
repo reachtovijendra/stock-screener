@@ -309,18 +309,18 @@
         <colgroup>
           <col style="width: 50px">   <!-- Year -->
           <col style="width: 55px">   <!-- Month -->
-          <col style="width: 75px">   <!-- Added Target -->
-          <col style="width: 75px">   <!-- Added Actual -->
           <col style="width: 85px">   <!-- Start Target -->
           <col style="width: 85px">   <!-- Start Actual -->
-          <col style="width: 85px">   <!-- End Target -->
-          <col style="width: 85px">   <!-- End Actual -->
-          <col style="width: 60px">   <!-- Monthly Ret Target -->
-          <col style="width: 65px">   <!-- Monthly Ret Actual -->
+          <col style="width: 75px">   <!-- Added Target -->
+          <col style="width: 75px">   <!-- Added Actual -->
           <col style="width: 85px">   <!-- Total Inv Target -->
           <col style="width: 85px">   <!-- Total Inv Actual -->
+          <col style="width: 85px">   <!-- End Target -->
+          <col style="width: 85px">   <!-- End Actual -->
           <col style="width: 75px">   <!-- P/L Target -->
           <col style="width: 80px">   <!-- P/L Actual -->
+          <col style="width: 60px">   <!-- Monthly Ret Target -->
+          <col style="width: 65px">   <!-- Monthly Ret Actual -->
           <col style="width: 60px">   <!-- Overall Ret Target -->
           <col style="width: 65px">   <!-- Overall Ret Actual -->
         </colgroup>
@@ -331,12 +331,12 @@
         <tr class="group-header-row">
           <th rowspan="2" class="col-year">Year</th>
           <th rowspan="2" class="col-month">Month</th>
-          <th colspan="2" class="group-th">Added</th>
           <th colspan="2" class="group-th">Starting Balance</th>
-          <th colspan="2" class="group-th">End of Month</th>
-          <th colspan="2" class="group-th">Monthly Return %</th>
+          <th colspan="2" class="group-th">Added</th>
           <th colspan="2" class="group-th">Total Invested</th>
+          <th colspan="2" class="group-th">Ending Balance</th>
           <th colspan="2" class="group-th">Profit / Loss</th>
+          <th colspan="2" class="group-th">Monthly Return %</th>
           <th colspan="2" class="group-th">Overall Return %</th>
         </tr>
         <!-- Row 2: Target / Actual sub-headers -->
@@ -368,6 +368,10 @@
                (click)="clearRowData(row)"></i>
           </td>
 
+          <!-- Starting Balance (neutral) -->
+          <td class="val-cell target-cell mono">{{ formatCurrency(getTargetStartingBalance(row)) }}</td>
+          <td class="val-cell actual-cell neutral mono" [ngClass]="getStartOfMonthClass(row)">{{ getStartOfMonthDisplay(row) }}</td>
+
           <!-- Added (neutral) -->
           <td class="val-cell target-cell mono">{{ formatCurrency(row.added) }}</td>
           <td class="val-cell actual-cell neutral">
@@ -381,11 +385,11 @@
             </p-inputNumber>
           </td>
 
-          <!-- Starting Balance (neutral) -->
-          <td class="val-cell target-cell mono">{{ formatCurrency(getTargetStartingBalance(row)) }}</td>
-          <td class="val-cell actual-cell neutral mono" [ngClass]="getStartOfMonthClass(row)">{{ getStartOfMonthDisplay(row) }}</td>
+          <!-- Total Invested (neutral) -->
+          <td class="val-cell target-cell mono">{{ formatCurrency(row.investment) }}</td>
+          <td class="val-cell actual-cell neutral mono" [ngClass]="getActualPrincipalClass(row)">{{ getActualPrincipalDisplay(row) }}</td>
 
-          <!-- End of Month (neutral) -->
+          <!-- Ending Balance (neutral) -->
           <td class="val-cell target-cell mono">{{ formatCurrency(row.total) }}</td>
           <td class="val-cell actual-cell neutral">
             <p-inputNumber
@@ -398,17 +402,13 @@
             </p-inputNumber>
           </td>
 
-          <!-- Monthly Return % (performance) -->
-          <td class="val-cell target-cell mono center">{{ row.return_percent }}%</td>
-          <td class="val-cell actual-cell performance mono center" [ngClass]="getMonthlyReturnClass(row)">{{ getActualMonthlyReturn(row) }}</td>
-
-          <!-- Total Invested (neutral) -->
-          <td class="val-cell target-cell mono">{{ formatCurrency(row.investment) }}</td>
-          <td class="val-cell actual-cell neutral mono" [ngClass]="getActualPrincipalClass(row)">{{ getActualPrincipalDisplay(row) }}</td>
-
           <!-- Profit / Loss (performance) -->
           <td class="val-cell target-cell mono">{{ formatCurrency(row.profit) }}</td>
           <td class="val-cell actual-cell performance mono" [ngClass]="getProfitClass(row)">{{ getActualProfit(row) }}</td>
+
+          <!-- Monthly Return % (performance) -->
+          <td class="val-cell target-cell mono center">{{ row.return_percent }}%</td>
+          <td class="val-cell actual-cell performance mono center" [ngClass]="getMonthlyReturnClass(row)">{{ getActualMonthlyReturn(row) }}</td>
 
           <!-- Overall Return % (performance) -->
           <td class="val-cell target-cell mono center">{{ getTargetOverallReturn(row) }}</td>

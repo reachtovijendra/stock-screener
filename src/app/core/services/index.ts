@@ -4,4 +4,6 @@ export * from './market.service';
 export * from './theme.service';
 export * from './portfolio-tracker.service';
 export * from './paper-trading.service';
+export * from './fire-goals.service';
+export * from './currency-conversion.service';
 export * from './analytics.service';

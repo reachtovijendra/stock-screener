@@ -41,6 +41,12 @@ export const routes: Routes = [
     title: 'Portfolio Tracker'
   },
   {
+    path: 'fire-goals',
+    loadComponent: () => import('./features/fire-goals/fire-goals.component').then(m => m.FireGoalsComponent),
+    canActivate: [authGuard],
+    title: 'FIRE Goals'
+  },
+  {
     path: 'paper-trading',
     loadComponent: () => import('./features/paper-trading/paper-trading.component').then(m => m.PaperTradingComponent),
     canActivate: [authGuard],

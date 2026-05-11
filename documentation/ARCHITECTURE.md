@@ -112,6 +112,7 @@ The application uses Angular Signals for reactive state management:
 - `MarketService`: Handles market selection (US/India) with localStorage persistence
 - `PortfolioTrackerService`: Persists market-specific portfolio targets and actuals in Supabase
 - `PaperTradingService`: Persists market-specific manual paper trading accounts, positions, and trade history in Supabase
+- `FireGoalsService`: Persists authenticated FIRE goals, assets, and liabilities in Supabase while client-side utilities calculate net worth, target gaps, required contributions, and yearly projections
 - `WatchlistService`: Loads owned and shared watchlists from Supabase, annotates access roles, and routes owner-only sharing actions through Vercel APIs
 - `AnalyticsService`: Owns PostHog initialization, SPA route pageviews, typed event capture, and authenticated identity sync
 - `ThemeService`: Manages dark/light theme with persistence
@@ -179,6 +180,18 @@ Manual paper trading is an authenticated feature at `/paper-trading`. It uses Su
 - `paper_trades`: filled order history with realized P/L on sell orders.
 
 The page starts users with USD 100,000 in the US market and INR 10,00,000 in the India market. Order prices default from the quote API and remain editable before confirmation.
+
+### FIRE Goals
+
+FIRE Goals is an authenticated feature at `/fire-goals`. It uses `FireGoalsService` with the authenticated Supabase client to load and save a user's primary retirement plan, assets, and liabilities. The first version keeps projection calculations in the Angular client so edits remain responsive and no additional serverless API endpoint is required.
+
+The persistence schema is defined in `supabase/fire-goals-schema.sql`:
+
+- `fire_goals`: stores the retirement timeline, target FIRE amount, expected annual return, inflation assumption, income, spending, and preferred currency.
+- `fire_assets`: stores user-owned asset rows linked to a goal, with category, current value, and optional growth override.
+- `fire_liabilities`: stores user-owned liability rows linked to a goal, with balance, APR, monthly payment, and optional payoff metadata.
+
+All three tables enable row-level security and restrict reads and writes to rows owned by `auth.uid()`. See `documentation/FIRE_GOALS.md` for calculation assumptions and user workflow details.
 
 ### Watchlists
 

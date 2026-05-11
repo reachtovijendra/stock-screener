@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Authenticated FIRE Goals page at `/fire-goals` with Supabase-backed goal, asset, and liability persistence, client-side retirement projections, required monthly/yearly contribution targets, and polished mission-control styling.
+- Supabase schema script for `fire_goals`, `fire_assets`, and `fire_liabilities` tables with row-level security policies for user-owned FIRE planning data.
+- Documentation for the FIRE Goals calculation model, persistence tables, and assumptions in `documentation/FIRE_GOALS.md`.
 - Shared watchlists with owner-managed Viewer/Editor collaborator roles, email-based sharing through authenticated Vercel APIs, and Supabase RLS support in `supabase/watchlist-sharing-schema.sql`.
 - Documentation for the shared watchlist model in `documentation/WATCHLIST_SHARING.md`.
 - Raising Stocks quick view on the Screener page, backed by `/api/stocks?action=raising`, to find large-cap stocks with positive accelerating returns where 1M > 3M > 6M > 1Y.
@@ -37,6 +40,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- FIRE Goals page now uses a single carousel-style wizard panel with overview metrics, side arrow navigation, clickable Assets/Loans/Income summary rows, and animated transitions into detail panels.
+- FIRE Goals overview income details now include taxation, with a saved tax-rate assumption used to calculate available-to-invest cash flow.
+- FIRE Goals overview summary rows now allocate more horizontal space to detail chips so typical asset, loan, and income breakdowns stay on one line.
+- FIRE Goals header now spells out FIRE as "Financial Independence, Retire Early."
+- FIRE Goals Loans panel now uses modern grouped loan cards with clearer identity, balance, payment, APR, and payoff sections.
+- FIRE Goals Investments panel now uses matching grouped investment cards with clearer identity, type, and current value sections.
+- FIRE Goals investment cards now use a compact one-line desktop ledger with a sticky header for number, name, type, value, and removal, with neutral value-cell styling.
+- FIRE Goals Assets panel now combines the duplicate page and panel headings into one top-level header with the investment summary and action.
+- FIRE Goals now converts saved USD/INR plan amounts when the selected market changes, using a live USD/INR quote and preserving the plan's saved base currency.
+- FIRE Goals loan editor now keeps APR in a full-width content column instead of squeezing it into the remove-action column.
+- FIRE Goals asset and loan builders now show visible field labels and loan payoff timeline controls so users can identify balance, APR, monthly payment, remaining months, and payoff date inputs.
+- FIRE Goals asset rows now use the plan-level expected return only, removing the per-asset growth override field from the UI.
+- FIRE Goals Assets header now displays the current total asset value for faster review while editing rows.
 - Node engine configuration now allows Node 20 or newer so Vercel can use the project-level Node 24 runtime for serverless functions.
 - Watchlists now load owned and shared lists with role badges, show owner-only share controls, and gate add/remove actions for Viewer versus Editor access.
 - Watchlist tables now support sortable column headers, default to live 1D percent change descending, remove the separate company-name column, and include a live 1D percent change column from quote data.
@@ -90,6 +106,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed FIRE Goals draft loss on browser refresh by preserving unsaved goal, asset, and liability edits in user-scoped local browser storage until `Save Plan` syncs them to Supabase.
 - Fixed shared watchlist collaborator lists to refresh immediately after share, role update, or revoke actions instead of showing stale cached results.
 - Fixed the local API dev server to route watchlist sharing endpoints so the Share dialog can be tested locally with Vercel-style handlers.
 - Fixed Stock Detail mobile News & Analysis filters so the type and source controls fit within the card instead of being clipped on narrow screens.

@@ -20,6 +20,10 @@ import { AuthService } from './core/services/auth.service';
             <i class="pi pi-wallet"></i>
             <span class="nav-label">Portfolio</span>
           </a>
+          <a class="nav-item premium fire" routerLink="/fire-goals" routerLinkActive="active" title="FIRE Goals">
+            <i class="pi pi-sparkles"></i>
+            <span class="nav-label">FIRE</span>
+          </a>
           <a class="nav-item premium" routerLink="/watchlists" routerLinkActive="active" title="Watchlists">
             <i class="pi pi-bookmark"></i>
             <span class="nav-label">Watchlists</span>
@@ -159,6 +163,13 @@ import { AuthService } from './core/services/auth.service';
         -webkit-text-fill-color: transparent;
         background-clip: text;
       }
+    }
+
+    .nav-item.fire i {
+      background: linear-gradient(135deg, #f59e0b, #f97316 45%, #60a5fa);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .nav-label {

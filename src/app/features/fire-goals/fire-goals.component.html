@@ -1,0 +1,263 @@
+<section class="fire-page">
+  <div class="loading-panel" *ngIf="fireService.loading()">
+    <p-progressSpinner ariaLabel="Loading FIRE plan"></p-progressSpinner>
+    <span>Loading your FIRE mission...</span>
+  </div>
+
+  <section class="wizard-card" *ngIf="!fireService.loading()">
+    <header class="wizard-shell-header">
+      <div>
+        <span class="eyebrow">Financial Independence, Retire Early</span>
+        <h1>{{ activePanelLabel() }}</h1>
+        <ng-container [ngSwitch]="activePanel()">
+          <p *ngSwitchCase="'assets'" class="header-panel-summary">
+            <strong>{{ formatMoney(projection().summary.totalAssets) }} across {{ assets().length }} investment{{ assets().length === 1 ? '' : 's' }}</strong>
+            <span>Catalog each investment bucket and keep the current value aligned with your FIRE progress.</span>
+          </p>
+          <p *ngSwitchDefault>Use the overview to inspect the plan, then jump into each section to tune the details.</p>
+        </ng-container>
+      </div>
+
+      <div class="wizard-actions">
+        <button *ngIf="activePanel() === 'assets'" type="button" class="ghost-button" (click)="addAsset()">Add Investment</button>
+        <button pButton type="button" class="save-button" (click)="savePlan()" [disabled]="saving()">
+          <i class="pi pi-save"></i>
+          {{ saving() ? 'Saving...' : 'Save Plan' }}
+        </button>
+      </div>
+    </header>
+
+    <div class="status-row" *ngIf="saveMessage() || saveError()">
+      <span class="save-note success" *ngIf="saveMessage()">{{ saveMessage() }}</span>
+      <span class="save-note error" *ngIf="saveError()">{{ saveError() }}</span>
+    </div>
+
+    <div class="carousel-shell" [class.no-previous]="activePanel() === 'overview'" aria-label="FIRE goals carousel">
+      <button *ngIf="activePanel() !== 'overview'" type="button" class="carousel-button carousel-button--previous" (click)="goToPreviousPanel()" aria-label="Previous FIRE panel">
+        <i class="pi pi-arrow-left"></i>
+      </button>
+
+      <div class="wizard-panel" [class.backward]="panelDirection() === 'backward'" [attr.data-panel]="activePanel()">
+        <ng-container [ngSwitch]="activePanel()">
+          <section *ngSwitchCase="'overview'" class="panel-content overview-panel">
+            <div class="metric-strip">
+              <article>
+                <span>FIRE Goal</span>
+                <strong>{{ formatMoney(currentGoal().fire_amount) }}</strong>
+              </article>
+              <article>
+                <span>Net Worth</span>
+                <strong>{{ formatMoney(projection().summary.netWorth) }}</strong>
+              </article>
+              <article>
+                <span>Freedom Gap</span>
+                <strong>{{ formatMoney(projection().summary.fireGap) }}</strong>
+              </article>
+              <article>
+                <span>Time Left</span>
+                <strong>{{ timeLeftLabel() }}</strong>
+              </article>
+            </div>
+
+            <div class="overview-rows">
+              <button type="button" class="summary-row" (click)="goToPanel('assets')">
+                <div>
+                  <span class="row-kicker">Assets Summary</span>
+                  <strong>{{ formatMoney(projection().summary.totalAssets) }}</strong>
+                </div>
+                <div class="category-list">
+                  <span *ngFor="let item of assetSummaries()">{{ item.label }}: {{ formatMoney(item.value) }}</span>
+                  <span *ngIf="assetSummaries().length === 0">No assets added yet</span>
+                </div>
+                <i class="pi pi-arrow-right"></i>
+              </button>
+
+              <button type="button" class="summary-row" (click)="goToPanel('loans')">
+                <div>
+                  <span class="row-kicker">Loans</span>
+                  <strong>{{ formatMoney(projection().summary.totalLiabilities) }}</strong>
+                </div>
+                <div class="category-list">
+                  <span *ngFor="let item of liabilitySummaries()">{{ item.label }}: {{ formatMoney(item.value) }}</span>
+                  <span *ngIf="liabilitySummaries().length === 0">No loans added yet</span>
+                </div>
+                <i class="pi pi-arrow-right"></i>
+              </button>
+
+              <button type="button" class="summary-row" (click)="goToPanel('goalIncome')">
+                <div>
+                  <span class="row-kicker">Income</span>
+                  <strong>{{ formatMoney(currentGoal().annual_income) }}</strong>
+                </div>
+                <div class="category-list">
+                  <span *ngFor="let item of incomeSummary()">{{ item.label }}: {{ formatMoney(item.value) }}</span>
+                </div>
+                <i class="pi pi-arrow-right"></i>
+              </button>
+            </div>
+          </section>
+
+          <section *ngSwitchCase="'goalIncome'" class="panel-content setup-card" [formGroup]="goalForm">
+            <div class="panel-heading">
+              <span>Goal & Income</span>
+              <h2>Set the destination and cash-flow assumptions.</h2>
+            </div>
+
+            <div class="form-grid">
+              <label>
+                Plan name
+                <input formControlName="name" type="text" />
+              </label>
+              <label>
+                FIRE amount
+                <span class="money-input">
+                  <span class="currency-prefix">{{ currencySymbol() }}</span>
+                  <input type="number" min="0" [value]="displayAmount(goalForm.controls.fire_amount.value)" (input)="updateGoalMoneyField('fire_amount', $any($event.target).value)" />
+                </span>
+              </label>
+              <label>
+                Current age
+                <input formControlName="current_age" type="number" min="0" />
+              </label>
+              <label>
+                Retire by age
+                <input formControlName="target_retirement_age" type="number" min="1" />
+              </label>
+              <label>
+                Expected return %
+                <input formControlName="expected_annual_return" type="number" step="0.1" />
+              </label>
+              <label>
+                Inflation %
+                <input formControlName="inflation_rate" type="number" step="0.1" min="0" />
+              </label>
+              <label>
+                Annual income
+                <span class="money-input">
+                  <span class="currency-prefix">{{ currencySymbol() }}</span>
+                  <input type="number" min="0" [value]="displayAmount(goalForm.controls.annual_income.value)" (input)="updateGoalMoneyField('annual_income', $any($event.target).value)" />
+                </span>
+              </label>
+              <label>
+                Tax rate %
+                <input formControlName="tax_rate" type="number" step="0.1" min="0" max="100" />
+              </label>
+              <label>
+                Annual spending
+                <span class="money-input">
+                  <span class="currency-prefix">{{ currencySymbol() }}</span>
+                  <input type="number" min="0" [value]="displayAmount(goalForm.controls.annual_spending.value)" (input)="updateGoalMoneyField('annual_spending', $any($event.target).value)" />
+                </span>
+              </label>
+              <label>
+                Currency
+                <span class="currency-pill">{{ currencySymbol() }} {{ displayCurrency() }} from {{ marketInfo().name }} market - {{ exchangeRateLabel() }}</span>
+              </label>
+            </div>
+
+            <p class="validation" *ngIf="invalidTimeline">Retirement age must be greater than current age.</p>
+          </section>
+
+          <section *ngSwitchCase="'assets'" class="panel-content">
+            <div class="investment-ledger">
+              <div class="investment-ledger-header" aria-hidden="true">
+                <span>#</span>
+                <span>Investment name</span>
+                <span>Type</span>
+                <span>Current value</span>
+                <span></span>
+              </div>
+
+              <article class="investment-card" *ngFor="let asset of assets(); let i = index; trackBy: trackByIndex">
+                <span class="investment-index">{{ i + 1 | number:'2.0-0' }}</span>
+                <label class="entry-field investment-name-field">
+                  <span class="sr-only">Investment name</span>
+                  <input [ngModel]="asset.name" (ngModelChange)="updateAsset(i, { name: $event })" placeholder="401(k), brokerage, cash" aria-label="Asset name" />
+                </label>
+                <label class="entry-field investment-row-field">
+                  <span class="sr-only">Investment type</span>
+                  <select [ngModel]="asset.category" (ngModelChange)="updateAsset(i, { category: $event })" aria-label="Asset category">
+                    <option *ngFor="let category of assetCategories" [value]="category.value">{{ category.label }}</option>
+                  </select>
+                </label>
+                <label class="entry-field investment-row-field">
+                  <span class="sr-only">Current value</span>
+                  <span class="money-input">
+                    <span class="currency-prefix">{{ currencySymbol() }}</span>
+                    <input type="number" min="0" [ngModel]="displayAmount(asset.current_value)" (ngModelChange)="updateAssetValue(i, $event)" placeholder="250000" aria-label="Asset value" />
+                  </span>
+                </label>
+                <button type="button" class="remove-button investment-remove" (click)="removeAsset(i)" aria-label="Remove asset"><i class="pi pi-trash"></i></button>
+              </article>
+            </div>
+          </section>
+
+          <section *ngSwitchCase="'loans'" class="panel-content">
+            <div class="panel-heading with-action">
+              <div>
+                <span>Loans</span>
+                <h2>{{ formatMoney(projection().summary.totalLiabilities) }} remaining across {{ liabilities().length }} item{{ liabilities().length === 1 ? '' : 's' }}</h2>
+                <p class="panel-subtitle">Track balances, payoff timing, and monthly debt commitments in one place.</p>
+              </div>
+              <button type="button" class="ghost-button" (click)="addLiability()">Add Loan</button>
+            </div>
+
+            <div class="loan-stack">
+              <article class="loan-card" *ngFor="let liability of liabilities(); let i = index; trackBy: trackByIndex">
+                <div class="loan-card-header">
+                  <div class="loan-heading">
+                    <span class="loan-index">{{ i + 1 | number:'2.0-0' }}</span>
+                    <label class="entry-field loan-name-field">
+                      <span>Loan name</span>
+                      <input [ngModel]="liability.name" (ngModelChange)="updateLiability(i, { name: $event })" placeholder="Mortgage, car loan" aria-label="Loan name" />
+                    </label>
+                  </div>
+                  <button type="button" class="remove-button loan-remove" (click)="removeLiability(i)" aria-label="Remove loan"><i class="pi pi-trash"></i></button>
+                </div>
+
+                <div class="loan-detail-grid">
+                  <label class="entry-field">
+                    <span>Loan type</span>
+                    <select [ngModel]="liability.category" (ngModelChange)="updateLiability(i, { category: $event })" aria-label="Loan category">
+                      <option *ngFor="let category of liabilityCategories" [value]="category.value">{{ category.label }}</option>
+                    </select>
+                  </label>
+                  <label class="entry-field featured-field">
+                    <span>Remaining balance</span>
+                    <span class="money-input">
+                      <span class="currency-prefix">{{ currencySymbol() }}</span>
+                      <input type="number" min="0" [ngModel]="displayAmount(liability.balance)" (ngModelChange)="updateLiabilityMoneyField(i, 'balance', $event)" placeholder="160000" aria-label="Loan balance" />
+                    </span>
+                  </label>
+                  <label class="entry-field">
+                    <span>APR %</span>
+                    <input type="number" step="0.1" [ngModel]="liability.interest_rate" (ngModelChange)="updateLiability(i, { interest_rate: +$event || 0 })" placeholder="2.5" aria-label="Loan annual interest rate" />
+                  </label>
+                  <label class="entry-field featured-field">
+                    <span>Monthly payment</span>
+                    <span class="money-input">
+                      <span class="currency-prefix">{{ currencySymbol() }}</span>
+                      <input type="number" min="0" [ngModel]="displayAmount(liability.monthly_payment)" (ngModelChange)="updateLiabilityMoneyField(i, 'monthly_payment', $event)" placeholder="1900" aria-label="Loan monthly payment" />
+                    </span>
+                  </label>
+                  <label class="entry-field">
+                    <span>Remaining months</span>
+                    <input type="number" min="0" [ngModel]="liability.payoff_months" (ngModelChange)="updateLiability(i, { payoff_months: $event === '' ? null : +$event })" placeholder="Optional" aria-label="Loan remaining months" />
+                  </label>
+                  <label class="entry-field">
+                    <span>Payoff date</span>
+                    <input type="date" [ngModel]="liability.payoff_date" (ngModelChange)="updateLiability(i, { payoff_date: $event || null })" aria-label="Loan payoff date" />
+                  </label>
+                </div>
+              </article>
+            </div>
+          </section>
+        </ng-container>
+      </div>
+
+      <button type="button" class="carousel-button carousel-button--next" (click)="goToNextPanel()" aria-label="Next FIRE panel">
+        <i class="pi pi-arrow-right"></i>
+      </button>
+    </div>
+  </section>
+</section>

@@ -41,13 +41,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - FIRE Goals page now uses a single carousel-style wizard panel with overview metrics, side arrow navigation, clickable Assets/Loans/Income summary rows, and animated transitions into detail panels.
+- FIRE Goals Goal & Income panel now displays currency context as an inline note and no longer blocks saving when retirement age is not greater than current age.
 - FIRE Goals overview income details now include taxation, with a saved tax-rate assumption used to calculate available-to-invest cash flow.
 - FIRE Goals overview summary rows now allocate more horizontal space to detail chips so typical asset, loan, and income breakdowns stay on one line.
 - FIRE Goals header now spells out FIRE as "Financial Independence, Retire Early."
+- FIRE Goals now starts brand-new users with an empty plan and uses placeholders instead of seeded demo amounts, assets, and loans.
 - FIRE Goals Loans panel now uses modern grouped loan cards with clearer identity, balance, payment, APR, and payoff sections.
 - FIRE Goals Investments panel now uses matching grouped investment cards with clearer identity, type, and current value sections.
-- FIRE Goals investment cards now use a compact one-line desktop ledger with a sticky header for number, name, type, value, and removal, with neutral value-cell styling.
+- FIRE Goals investment cards now use a compact one-line desktop ledger with a sticky header for number, name, type, value, and the add action, with neutral value-cell styling.
+- FIRE Goals Assets panel now shows a compact non-duplicative empty action state instead of a blank ledger or repeated summary when no investments have been added.
+- FIRE Goals Loans panel now uses the same compact non-duplicative empty action state when no loans have been added.
+- FIRE Goals loan cards now keep the add action in a matching sticky card-stack header instead of the top page action cluster.
 - FIRE Goals Assets panel now combines the duplicate page and panel headings into one top-level header with the investment summary and action.
+- FIRE Goals Loans panel now combines the duplicate page and panel headings into one top-level header with the loan summary and action.
 - FIRE Goals now converts saved USD/INR plan amounts when the selected market changes, using a live USD/INR quote and preserving the plan's saved base currency.
 - FIRE Goals loan editor now keeps APR in a full-width content column instead of squeezing it into the remove-action column.
 - FIRE Goals asset and loan builders now show visible field labels and loan payoff timeline controls so users can identify balance, APR, monthly payment, remaining months, and payoff date inputs.

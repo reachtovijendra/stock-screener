@@ -19,15 +19,15 @@ interface CategorySummary {
 }
 
 const DEFAULT_GOAL: FireGoal = {
-  name: 'My FIRE Plan',
-  current_age: 35,
-  target_retirement_age: 50,
-  fire_amount: 1_500_000,
-  expected_annual_return: 7,
-  inflation_rate: 3,
-  annual_income: 180_000,
-  tax_rate: 20,
-  annual_spending: 90_000,
+  name: '',
+  current_age: 0,
+  target_retirement_age: 0,
+  fire_amount: 0,
+  expected_annual_return: 0,
+  inflation_rate: 0,
+  annual_income: 0,
+  tax_rate: 0,
+  annual_spending: 0,
   preferred_currency: 'USD',
 };
 const DRAFT_KEY_PREFIX = 'fire-goals-draft';
@@ -55,13 +55,8 @@ export class FireGoalsComponent implements OnInit {
   private readonly currencyConversion = inject(CurrencyConversionService);
   readonly fireService = inject(FireGoalsService);
 
-  readonly assets = signal<FireAsset[]>([
-    { name: 'Brokerage', category: 'brokerage', current_value: 125_000, annual_growth_rate: null },
-    { name: 'Retirement accounts', category: 'retirement', current_value: 220_000, annual_growth_rate: null },
-  ]);
-  readonly liabilities = signal<FireLiability[]>([
-    { name: 'Mortgage', category: 'mortgage', balance: 240_000, interest_rate: 4.5, monthly_payment: 1_900, payoff_months: null, payoff_date: null },
-  ]);
+  readonly assets = signal<FireAsset[]>([]);
+  readonly liabilities = signal<FireLiability[]>([]);
   readonly saving = signal(false);
   readonly saveMessage = signal<string | null>(null);
   readonly saveError = signal<string | null>(null);
@@ -71,7 +66,7 @@ export class FireGoalsComponent implements OnInit {
   private readonly formVersion = signal(0);
 
   readonly goalForm = this.fb.nonNullable.group({
-    name: this.fb.nonNullable.control(DEFAULT_GOAL.name, Validators.required),
+    name: this.fb.nonNullable.control(DEFAULT_GOAL.name),
     current_age: this.fb.nonNullable.control(DEFAULT_GOAL.current_age, [Validators.required, Validators.min(0), Validators.max(120)]),
     target_retirement_age: this.fb.nonNullable.control(DEFAULT_GOAL.target_retirement_age, [Validators.required, Validators.min(1), Validators.max(120)]),
     fire_amount: this.fb.nonNullable.control(DEFAULT_GOAL.fire_amount, [Validators.required, Validators.min(0)]),
@@ -170,11 +165,6 @@ export class FireGoalsComponent implements OnInit {
     }
   }
 
-  get invalidTimeline(): boolean {
-    const value = this.goalForm.getRawValue();
-    return value.target_retirement_age <= value.current_age;
-  }
-
   currentGoal(): FireGoal {
     this.formVersion();
     return this.goalForm.getRawValue();
@@ -183,7 +173,7 @@ export class FireGoalsComponent implements OnInit {
   addAsset(): void {
     this.assets.update(assets => [
       ...assets,
-      { name: 'New asset', category: 'brokerage', current_value: 0, annual_growth_rate: null },
+      { name: '', category: 'brokerage', current_value: 0, annual_growth_rate: null },
     ]);
     this.persistDraft();
   }
@@ -205,7 +195,7 @@ export class FireGoalsComponent implements OnInit {
   addLiability(): void {
     this.liabilities.update(liabilities => [
       ...liabilities,
-      { name: 'New loan', category: 'personal', balance: 0, interest_rate: 0, monthly_payment: 0, payoff_months: null, payoff_date: null },
+      { name: '', category: 'personal', balance: 0, interest_rate: 0, monthly_payment: 0, payoff_months: null, payoff_date: null },
     ]);
     this.persistDraft();
   }
@@ -231,8 +221,8 @@ export class FireGoalsComponent implements OnInit {
   async savePlan(): Promise<void> {
     this.saveMessage.set(null);
     this.saveError.set(null);
-    if (this.goalForm.invalid || this.invalidTimeline) {
-      this.saveError.set('Check the plan inputs before saving. Retirement age must be greater than current age.');
+    if (this.goalForm.invalid) {
+      this.saveError.set('Check the plan inputs before saving.');
       return;
     }
 

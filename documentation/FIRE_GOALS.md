@@ -11,9 +11,9 @@ The screen is implemented as a standalone Angular feature with a polished missio
 The FIRE Goals screen uses a single wizard panel:
 
 - `Overview`: Shows FIRE Goal, Net Worth, Freedom Gap, and Time Left. It also provides clickable summary rows for Assets, Loans, and Income, including annual taxation in the income detail chips.
-- `Goal & Income`: Edits the FIRE target, timeline, return assumptions, income, tax rate, spending, and currency.
-- `Assets`: Adds, removes, and edits modern compact investment rows with a single sticky header for identity, type, and current value fields. The Assets page header carries the total investment summary and add action to avoid duplicate section headings.
-- `Loans`: Adds, removes, and edits modern loan cards with identity, balance, APR, payment, and payoff timeline fields.
+- `Goal & Income`: Edits the FIRE target, timeline, return assumptions, income, tax rate, spending, and currency. Currency context appears as an inline note rather than a form control.
+- `Assets`: Adds, removes, and edits modern compact investment rows with a single sticky header for identity, type, current value fields, and the add action. When no investments exist, the panel shows a compact empty action state instead of an empty ledger or repeated summary.
+- `Loans`: Adds, removes, and edits modern loan cards with identity, balance, APR, payment, and payoff timeline fields. When no loans exist, the panel shows the same compact empty action state used for investments.
 
 Users move between panels with carousel arrow controls. The Overview panel starts the carousel and does not show a back arrow. Clicking the Assets, Loans, or Income rows in the overview jumps directly to the corresponding edit panel.
 
@@ -52,9 +52,9 @@ The first version calculates:
 
 ## Assumptions
 
-- Default expected annual return is `7%`.
-- Default inflation rate is `3%`.
-- Default tax rate is `20%`.
+- New users start with an empty FIRE plan. Example values are shown only as input placeholders and are not used in calculations or saved unless the user enters them.
+- Default expected annual return, inflation, income, spending, tax, asset, and loan values are `0` until the user enters plan data.
+- Retirement age can match or be less than current age; calculations clamp the timeline to zero remaining months instead of blocking the save.
 - Asset rows without a growth override use the plan expected annual return.
 - Display currency is derived from the active market selection instead of being manually selected inside the FIRE form. Saved numeric values remain in the plan's stored `preferred_currency`.
 - Liability balances amortize monthly using APR and monthly payment.

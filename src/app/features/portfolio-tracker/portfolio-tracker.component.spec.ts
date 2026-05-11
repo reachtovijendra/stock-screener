@@ -134,10 +134,156 @@ describe('PortfolioTrackerComponent', () => {
       'Added',
       'Total Invested',
       'Ending Balance',
-      'Profit / Loss',
+      'Monthly Profit / Loss',
       'Monthly Return %',
       'Overall Return %',
     ]);
+  });
+
+  it('calculates actual monthly profit loss from ending balance after starting balance and additions', () => {
+    (component as any).loadPortfolioData([
+      {
+        year: 2026,
+        month: 1,
+        investment: 100000,
+        added: 3500,
+        principal: 103500,
+        total_investment: 103500,
+        return_percent: 1.6,
+        profit: 1656,
+        total: 105156,
+      },
+      {
+        year: 2026,
+        month: 2,
+        investment: 105156,
+        added: 3500,
+        principal: 108656,
+        total_investment: 108656,
+        return_percent: 1.6,
+        profit: 1738,
+        total: 110394,
+      },
+    ], []);
+
+    component.portfolioData[0].actualInvestment = 107000;
+    component.portfolioData[0].actualAdded = 3500;
+    component.portfolioData[0].actualTotal = 112268;
+    component.portfolioData[1].actualAdded = 3500;
+    component.portfolioData[1].actualTotal = 118000;
+
+    expect(component.getActualProfitValue(component.portfolioData[0])).toBe(1768);
+    expect(component.getActualProfitValue(component.portfolioData[1])).toBe(2232);
+    expect(component.getActualProfit(component.portfolioData[1])).toBe('₹2,232');
+    component.filteredData = [...component.portfolioData];
+    expect(component.getAverageMonthlyProfit()).toBe(2000);
+    expect(component.getAverageMonthlyReturnPercent()).toBe('1.76');
+  });
+
+  it('opens the Growth Lens dialog from the header action', () => {
+    fixture.detectChanges();
+    component.showSetup = false;
+    (component as any).loadPortfolioData([
+      {
+        year: 2026,
+        month: 1,
+        investment: 100000,
+        added: 3500,
+        principal: 103500,
+        total_investment: 103500,
+        return_percent: 1.6,
+        profit: 1656,
+        total: 105156,
+      },
+    ], []);
+    fixture.detectChanges();
+
+    const button = fixture.nativeElement.querySelector('.growth-lens-btn') as HTMLButtonElement;
+    expect(button?.textContent).toContain('Growth Lens');
+
+    button.click();
+
+    expect(component.showGrowthDialog).toBeTrue();
+    expect(component.growthChartMode).toBe('growth');
+  });
+
+  it('builds portfolio growth chart data from target and actual rows', () => {
+    (component as any).loadPortfolioData([
+      {
+        year: 2026,
+        month: 1,
+        investment: 100000,
+        added: 3500,
+        principal: 103500,
+        total_investment: 103500,
+        return_percent: 1.6,
+        profit: 1656,
+        total: 105156,
+      },
+      {
+        year: 2026,
+        month: 2,
+        investment: 105156,
+        added: 3500,
+        principal: 108656,
+        total_investment: 108656,
+        return_percent: 1.6,
+        profit: 1738,
+        total: 110394,
+      },
+    ], []);
+    component.portfolioData[0].actualInvestment = 107000;
+    component.portfolioData[0].actualAdded = 3500;
+    component.portfolioData[0].actualTotal = 112268;
+    component.portfolioData[1].actualAdded = 3500;
+    component.portfolioData[1].actualTotal = 118000;
+    component.filteredData = [...component.portfolioData];
+
+    const chartData = component.growthChartData;
+
+    expect(chartData.labels).toEqual(['Jan 2026', 'Feb 2026']);
+    expect(chartData.datasets[0].label).toBe('Target Ending Balance');
+    expect(chartData.datasets[0].data).toEqual([105156, 110394]);
+    expect(chartData.datasets[1].label).toBe('Actual Ending Balance');
+    expect(chartData.datasets[1].data).toEqual([112268, 118000]);
+    expect(chartData.datasets[2].label).toBe('Total Invested');
+    expect(chartData.datasets[2].data).toEqual([110500, 114000]);
+
+    const profitChartData = component.profitChartData;
+    expect(profitChartData.datasets[0].label).toBe('Target Monthly Profit / Loss');
+    expect(profitChartData.datasets[0].data).toEqual([1656, 1738]);
+    expect(profitChartData.datasets[1].label).toBe('Actual Monthly Profit / Loss');
+    expect(profitChartData.datasets[1].data).toEqual([1768, 2232]);
+  });
+
+  it('uses color for return category and dashes for target versus actual in Return Radar', () => {
+    (component as any).loadPortfolioData([
+      {
+        year: 2026,
+        month: 1,
+        investment: 100000,
+        added: 3500,
+        principal: 103500,
+        total_investment: 103500,
+        return_percent: 1.6,
+        profit: 1656,
+        total: 105156,
+      },
+    ], []);
+    component.portfolioData[0].actualInvestment = 107000;
+    component.portfolioData[0].actualAdded = 3500;
+    component.portfolioData[0].actualTotal = 112268;
+    component.filteredData = [...component.portfolioData];
+
+    const [targetMonthly, actualMonthly, targetOverall, actualOverall] = component.returnsChartData.datasets;
+
+    expect(targetMonthly.borderColor).toBe(actualMonthly.borderColor);
+    expect(targetMonthly.borderDash).toEqual([6, 5]);
+    expect(actualMonthly.borderDash).toBeUndefined();
+    expect(targetOverall.borderColor).toBe(actualOverall.borderColor);
+    expect(targetOverall.borderDash).toEqual([6, 5]);
+    expect(actualOverall.borderDash).toBeUndefined();
+    expect(targetMonthly.borderColor).not.toBe(targetOverall.borderColor);
   });
 
   it('clears setup fields when switching to a market with no saved portfolio setup', () => {

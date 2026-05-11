@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Portfolio Tracker Growth Lens popup with a PrimeNG dialog, Chart.js-backed growth/profit/return charts, KPI cards, and no-actual-data guidance.
 - Authenticated FIRE Goals page at `/fire-goals` with Supabase-backed goal, asset, and liability persistence, client-side retirement projections, required monthly/yearly contribution targets, and polished mission-control styling.
 - Supabase schema script for `fire_goals`, `fire_assets`, and `fire_liabilities` tables with row-level security policies for user-owned FIRE planning data.
 - Documentation for the FIRE Goals calculation model, persistence tables, and assumptions in `documentation/FIRE_GOALS.md`.
@@ -40,7 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
-- Portfolio Tracker table columns now follow the sequence Starting Balance, Added, Total Invested, Ending Balance, Profit / Loss, Monthly Return %, and Overall Return %.
+- Portfolio Tracker performance summary now shows average monthly profit/loss and average monthly return for completed rows.
+- Portfolio Tracker Return Radar chart now uses one color per return category and dotted target lines with solid actual lines for clearer comparison.
+- Portfolio Tracker table columns now follow the sequence Starting Balance, Added, Total Invested, Ending Balance, Monthly Profit / Loss, Monthly Return %, and Overall Return %.
+- Portfolio Tracker Profit / Loss values now represent monthly performance as ending balance minus starting balance and additions.
 - Watchlist ticker labels now show the saved company name in a PrimeNG tooltip on hover, with a symbol fallback when no company name is stored.
 - FIRE Goals page now uses a single carousel-style wizard panel with overview metrics, side arrow navigation, clickable Assets/Loans/Income summary rows, and animated transitions into detail panels.
 - FIRE Goals Goal & Income panel now displays currency context as an inline note and no longer blocks saving when retirement age is not greater than current age.

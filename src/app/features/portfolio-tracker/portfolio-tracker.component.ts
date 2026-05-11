@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 import * as XLSX from 'xlsx';
 
 import { TableModule } from 'primeng/table';
@@ -8,6 +9,8 @@ import { ButtonModule } from 'primeng/button';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { ToastModule } from 'primeng/toast';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
+import { DialogModule } from 'primeng/dialog';
+import { ChartModule } from 'primeng/chart';
 import { MessageService } from 'primeng/api';
 
 import { Market, PortfolioActualEntry, PortfolioTargetEntry } from '../../core/models';
@@ -21,6 +24,8 @@ interface PortfolioRow extends PortfolioTargetEntry {
   actualTotal: number | null;
 }
 
+type GrowthChartMode = 'growth' | 'profit' | 'returns';
+
 @Component({
   selector: 'app-portfolio-tracker',
   standalone: true,
@@ -31,7 +36,9 @@ interface PortfolioRow extends PortfolioTargetEntry {
     ButtonModule,
     InputNumberModule,
     ToastModule,
-    ProgressSpinnerModule
+    ProgressSpinnerModule,
+    DialogModule,
+    ChartModule
   ],
   providers: [MessageService],
   templateUrl: './portfolio-tracker.component.html',
@@ -47,6 +54,8 @@ export class PortfolioTrackerComponent implements OnInit {
   filteredData: PortfolioRow[] = [];
   showConfirmModal = false;
   showRowClearModal = false;
+  showGrowthDialog = false;
+  growthChartMode: GrowthChartMode = 'growth';
   rowToClear: PortfolioRow | null = null;
   yearOptions: { label: string; value: number }[] = [];
   selectedYears: number[] = [];
@@ -74,6 +83,11 @@ export class PortfolioTrackerComponent implements OnInit {
     { label: 'Dec', value: 12 },
   ];
   showSetup = false;
+  readonly growthChartModes: { label: string; value: GrowthChartMode; icon: string }[] = [
+    { label: 'Growth', value: 'growth', icon: 'pi pi-chart-line' },
+    { label: 'Monthly P/L', value: 'profit', icon: 'pi pi-wallet' },
+    { label: 'Returns', value: 'returns', icon: 'pi pi-percentage' },
+  ];
 
   private dataLoaded = false;
   private initialLoadDone = false;
@@ -160,12 +174,400 @@ export class PortfolioTrackerComponent implements OnInit {
     return this.marketService.currentMarket() === 'IN' ? 'en-IN' : 'en-US';
   }
 
+  get portfolioMarketLabel(): string {
+    return this.marketService.marketInfo().name;
+  }
+
   get startingInvestmentPlaceholder(): string {
     return this.marketService.currentMarket() === 'IN' ? 'e.g. 1,00,000' : 'e.g. 100,000';
   }
 
   get monthlyContributionPlaceholder(): string {
     return this.marketService.currentMarket() === 'IN' ? 'e.g. 3,500' : 'e.g. 3,500';
+  }
+
+  openGrowthDialog(): void {
+    this.growthChartMode = 'growth';
+    this.showGrowthDialog = true;
+  }
+
+  closeGrowthDialog(): void {
+    this.showGrowthDialog = false;
+  }
+
+  setGrowthChartMode(mode: GrowthChartMode): void {
+    this.growthChartMode = mode;
+  }
+
+  get hasPortfolioRows(): boolean {
+    return this.growthRows.length > 0;
+  }
+
+  get hasActualGrowthData(): boolean {
+    return this.growthRows.some(row => row.actualTotal !== null);
+  }
+
+  get activeGrowthChartType(): 'line' | 'bar' {
+    return this.growthChartMode === 'profit' ? 'bar' : 'line';
+  }
+
+  get activeGrowthChartData(): ChartData<'line'> | ChartData<'bar'> {
+    switch (this.growthChartMode) {
+      case 'profit':
+        return this.profitChartData;
+      case 'returns':
+        return this.returnsChartData;
+      default:
+        return this.growthChartData;
+    }
+  }
+
+  get activeGrowthChartOptions(): ChartOptions<'line'> | ChartOptions<'bar'> {
+    if (this.growthChartMode === 'profit') return this.currencyBarChartOptions;
+    if (this.growthChartMode === 'returns') return this.percentLineChartOptions;
+    return this.currencyLineChartOptions;
+  }
+
+  get activeGrowthChartAriaLabel(): string {
+    switch (this.growthChartMode) {
+      case 'profit':
+        return 'Portfolio target and actual monthly profit loss bar chart';
+      case 'returns':
+        return 'Portfolio monthly and overall return trend chart';
+      default:
+        return 'Portfolio target actual and invested growth chart';
+    }
+  }
+
+  get growthChartData(): ChartData<'line'> {
+    const rows = this.growthRows;
+    return {
+      labels: rows.map(row => this.getChartLabel(row)),
+      datasets: [
+        {
+          label: 'Target Ending Balance',
+          data: rows.map(row => row.total),
+          borderColor: '#60a5fa',
+          backgroundColor: 'rgba(96, 165, 250, 0.12)',
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: 0.35,
+          fill: true,
+        },
+        {
+          label: 'Actual Ending Balance',
+          data: rows.map(row => row.actualTotal),
+          borderColor: '#34d399',
+          backgroundColor: 'rgba(52, 211, 153, 0.16)',
+          borderWidth: 3,
+          pointRadius: 2,
+          pointHoverRadius: 5,
+          tension: 0.35,
+          spanGaps: false,
+        },
+        {
+          label: 'Total Invested',
+          data: rows.map(row => this.getActualInvestedForChart(row) ?? row.principal),
+          borderColor: '#fbbf24',
+          backgroundColor: 'rgba(251, 191, 36, 0.08)',
+          borderWidth: 2,
+          borderDash: [6, 5],
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: 0.3,
+        },
+      ],
+    };
+  }
+
+  get profitChartData(): ChartData<'bar'> {
+    const rows = this.growthRows;
+    return {
+      labels: rows.map(row => this.getChartLabel(row)),
+      datasets: [
+        {
+          label: 'Target Monthly Profit / Loss',
+          data: rows.map(row => this.getTargetMonthlyProfitValue(row)),
+          backgroundColor: 'rgba(96, 165, 250, 0.58)',
+          borderColor: '#60a5fa',
+          borderWidth: 1,
+          borderRadius: 5,
+        },
+        {
+          label: 'Actual Monthly Profit / Loss',
+          data: rows.map(row => this.getActualProfitValue(row)),
+          backgroundColor: rows.map(row => {
+            const profit = this.getActualProfitValue(row);
+            return profit !== null && profit < 0 ? 'rgba(248, 113, 113, 0.7)' : 'rgba(52, 211, 153, 0.72)';
+          }),
+          borderColor: rows.map(row => {
+            const profit = this.getActualProfitValue(row);
+            return profit !== null && profit < 0 ? '#f87171' : '#34d399';
+          }),
+          borderWidth: 1,
+          borderRadius: 5,
+        },
+      ],
+    };
+  }
+
+  get returnsChartData(): ChartData<'line'> {
+    const rows = this.growthRows;
+    const monthlyReturnColor = '#38bdf8';
+    const overallReturnColor = '#f59e0b';
+    return {
+      labels: rows.map(row => this.getChartLabel(row)),
+      datasets: [
+        {
+          label: 'Target Monthly Return %',
+          data: rows.map(row => row.return_percent),
+          borderColor: monthlyReturnColor,
+          backgroundColor: 'rgba(56, 189, 248, 0.1)',
+          borderWidth: 2,
+          borderDash: [6, 5],
+          pointRadius: 0,
+          tension: 0.25,
+        },
+        {
+          label: 'Actual Monthly Return %',
+          data: rows.map(row => this.getActualMonthlyReturnValue(row)),
+          borderColor: monthlyReturnColor,
+          backgroundColor: 'rgba(56, 189, 248, 0.14)',
+          borderWidth: 3,
+          pointRadius: 2,
+          tension: 0.3,
+          spanGaps: false,
+        },
+        {
+          label: 'Target Overall Return %',
+          data: rows.map(row => this.getTargetOverallReturnValue(row)),
+          borderColor: overallReturnColor,
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          borderWidth: 2,
+          borderDash: [6, 5],
+          pointRadius: 0,
+          tension: 0.3,
+        },
+        {
+          label: 'Actual Overall Return %',
+          data: rows.map(row => this.getActualOverallReturnValue(row)),
+          borderColor: overallReturnColor,
+          backgroundColor: 'rgba(245, 158, 11, 0.14)',
+          borderWidth: 3,
+          pointRadius: 2,
+          tension: 0.3,
+          spanGaps: false,
+        },
+      ],
+    };
+  }
+
+  get growthLensKpis(): { label: string; value: string; tone: 'accent' | 'positive' | 'negative' | 'neutral'; detail: string }[] {
+    const latest = this.latestActualRow ?? this.latestTargetRow;
+    const monthlyProfit = this.latestActualRow ? this.getActualProfitValue(this.latestActualRow) : null;
+    const overallProfit = this.getTotalActualProfit();
+    const variance = this.getOverallVariance();
+
+    return [
+      {
+        label: 'Portfolio Value',
+        value: this.formatCurrency(this.getLatestActualTotal() || (latest?.total ?? null)),
+        tone: 'accent',
+        detail: latest ? `${this.getMonthName(latest.month)} ${latest.year}` : 'No rows',
+      },
+      {
+        label: 'Total Invested',
+        value: this.formatCurrency(this.getActualTotalInvested() || (latest?.principal ?? null)),
+        tone: 'neutral',
+        detail: 'Cumulative principal',
+      },
+      {
+        label: 'Monthly Profit / Loss',
+        value: this.formatCurrency(monthlyProfit),
+        tone: monthlyProfit === null ? 'neutral' : monthlyProfit >= 0 ? 'positive' : 'negative',
+        detail: latest ? `${this.getMonthName(latest.month)} ${latest.year}` : 'Latest month',
+      },
+      {
+        label: 'Return',
+        value: `${this.getOverallReturnPercent()}%`,
+        tone: overallProfit >= 0 ? 'positive' : 'negative',
+        detail: 'Profit over invested',
+      },
+      {
+        label: 'vs Target',
+        value: `${variance >= 0 ? '+' : ''}${this.formatCurrency(variance)}`,
+        tone: variance >= 0 ? 'positive' : 'negative',
+        detail: 'Latest actual gap',
+      },
+    ];
+  }
+
+  get growthInsightText(): string {
+    if (!this.hasPortfolioRows) {
+      return 'Generate a projection to unlock the growth lens.';
+    }
+    if (!this.hasActualGrowthData) {
+      return 'Target projection is ready. Actual trend lines appear after ending balances are entered.';
+    }
+    const variance = this.getOverallVariance();
+    const direction = variance >= 0 ? 'ahead of' : 'behind';
+    return `Latest actual value is ${this.formatCurrency(Math.abs(variance))} ${direction} target across the selected timeline.`;
+  }
+
+  private get growthRows(): PortfolioRow[] {
+    return this.filteredData.length > 0 ? this.filteredData : this.portfolioData;
+  }
+
+  private get latestActualRow(): PortfolioRow | null {
+    const rows = this.growthRows.filter(row => row.actualTotal !== null);
+    return rows[rows.length - 1] ?? null;
+  }
+
+  private get latestTargetRow(): PortfolioRow | null {
+    return this.growthRows[this.growthRows.length - 1] ?? null;
+  }
+
+  private get currencyLineChartOptions(): ChartOptions<'line'> {
+    const currencyFormatter = (value: number) => this.formatCompactCurrency(value);
+    return this.getBaseChartOptions<'line'>('currency', currencyFormatter);
+  }
+
+  private get percentLineChartOptions(): ChartOptions<'line'> {
+    return this.getBaseChartOptions<'line'>('percent', value => `${value.toFixed(1)}%`);
+  }
+
+  private get currencyBarChartOptions(): ChartOptions<'bar'> {
+    return {
+      ...this.getBaseChartOptions<'bar'>('currency', value => this.formatCompactCurrency(value)),
+      scales: {
+        x: this.getXAxisOptions(),
+        y: {
+          ...this.getYAxisOptions(value => this.formatCompactCurrency(value)),
+          grid: { color: 'rgba(148, 163, 184, 0.12)' },
+        },
+      },
+    };
+  }
+
+  private getBaseChartOptions<TType extends 'line' | 'bar'>(
+    unit: 'currency' | 'percent',
+    tickFormatter: (value: number) => string
+  ): ChartOptions<TType> {
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: {
+            color: '#cbd5e1',
+            boxWidth: 10,
+            boxHeight: 10,
+            usePointStyle: true,
+            padding: 18,
+          },
+        },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.96)',
+          borderColor: 'rgba(96, 165, 250, 0.35)',
+          borderWidth: 1,
+          titleColor: '#f8fafc',
+          bodyColor: '#cbd5e1',
+          padding: 12,
+          callbacks: {
+            label: (context: TooltipItem<TType>) => {
+              const dataset = context.dataset as { label?: string };
+              const parsed = context.parsed as { y?: number };
+              const label = dataset.label ?? 'Value';
+              const value = Number(parsed.y ?? 0);
+              const formatted = unit === 'percent' ? `${value.toFixed(1)}%` : this.formatCurrency(value);
+              return `${label}: ${formatted}`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: this.getXAxisOptions(),
+        y: this.getYAxisOptions(tickFormatter),
+      },
+    } as unknown as ChartOptions<TType>;
+  }
+
+  private getXAxisOptions() {
+    return {
+      ticks: {
+        color: '#94a3b8',
+        maxRotation: 0,
+        autoSkip: true,
+        maxTicksLimit: 10,
+      },
+      grid: {
+        color: 'rgba(148, 163, 184, 0.08)',
+      },
+      border: {
+        color: 'rgba(148, 163, 184, 0.18)',
+      },
+    };
+  }
+
+  private getYAxisOptions(tickFormatter: (value: number) => string) {
+    return {
+      ticks: {
+        color: '#94a3b8',
+        callback: (value: string | number) => tickFormatter(Number(value)),
+      },
+      grid: {
+        color: 'rgba(148, 163, 184, 0.1)',
+      },
+      border: {
+        color: 'rgba(148, 163, 184, 0.18)',
+      },
+    };
+  }
+
+  private getChartLabel(row: PortfolioRow): string {
+    return `${this.getMonthName(row.month)} ${row.year}`;
+  }
+
+  private getActualInvestedForChart(row: PortfolioRow): number | null {
+    return this.getCumulativeActualPrincipal(row);
+  }
+
+  getActualProfitValue(row: PortfolioRow): number | null {
+    if (row.actualTotal === null) return null;
+    const startOfMonth = this.getStartOfMonth(row);
+    if (startOfMonth === null || row.actualAdded === null) return null;
+    return row.actualTotal - (startOfMonth + row.actualAdded);
+  }
+
+  getTargetMonthlyProfitValue(row: PortfolioRow): number {
+    return row.total - (row.investment + row.added);
+  }
+
+  getActualMonthlyReturnValue(row: PortfolioRow): number | null {
+    if (row.actualTotal === null) return null;
+    const startOfMonth = this.getStartOfMonth(row);
+    if (startOfMonth === null || row.actualAdded === null) return null;
+    const investedThisMonth = startOfMonth + row.actualAdded;
+    if (investedThisMonth === 0) return null;
+    return ((row.actualTotal - investedThisMonth) / investedThisMonth) * 100;
+  }
+
+  getTargetOverallReturnValue(row: PortfolioRow): number | null {
+    if (row.principal === 0) return null;
+    return ((row.total - row.principal) / row.principal) * 100;
+  }
+
+  getActualOverallReturnValue(row: PortfolioRow): number | null {
+    if (row.actualTotal === null) return null;
+    const cumulativePrincipal = this.getCumulativeActualPrincipal(row);
+    if (cumulativePrincipal === null || cumulativePrincipal === 0) return null;
+    return ((row.actualTotal - cumulativePrincipal) / cumulativePrincipal) * 100;
   }
 
   async completeSetup(): Promise<void> {
@@ -599,6 +1001,16 @@ export class PortfolioTrackerComponent implements OnInit {
     }).format(value);
   }
 
+  formatCompactCurrency(value: number | null): string {
+    if (value === null) return '-';
+    return new Intl.NumberFormat(this.portfolioLocale, {
+      style: 'currency',
+      currency: this.portfolioCurrency,
+      notation: 'compact',
+      maximumFractionDigits: 1
+    }).format(value);
+  }
+
   getActualInitialContribution(): string {
     if (this.actualInitialContribution !== null) {
       return this.formatCurrency(this.actualInitialContribution);
@@ -699,11 +1111,7 @@ export class PortfolioTrackerComponent implements OnInit {
   }
 
   getActualProfit(row: PortfolioRow): string {
-    if (row.actualTotal === null) return '-';
-    const cumulativePrincipal = this.getCumulativeActualPrincipal(row);
-    if (cumulativePrincipal === null) return '-';
-    const profit = row.actualTotal - cumulativePrincipal;
-    return this.formatCurrency(profit);
+    return this.formatCurrency(this.getActualProfitValue(row));
   }
 
   /**
@@ -772,12 +1180,18 @@ export class PortfolioTrackerComponent implements OnInit {
   }
 
   getProfitClass(row: PortfolioRow): string {
-    if (row.actualTotal === null) return 'no-data';
-    const cumulativePrincipal = this.getCumulativeActualPrincipal(row);
-    if (cumulativePrincipal === null) return 'no-data';
-    const profit = row.actualTotal - cumulativePrincipal;
+    const profit = this.getActualProfitValue(row);
+    if (profit === null) return 'no-data';
     if (profit > 0) return 'profit-positive';
     if (profit < 0) return 'profit-negative';
+    return 'has-data';
+  }
+
+  getActualOverallReturnClass(row: PortfolioRow): string {
+    const overallReturn = this.getActualOverallReturnValue(row);
+    if (overallReturn === null) return 'no-data';
+    if (overallReturn > 0) return 'profit-positive';
+    if (overallReturn < 0) return 'profit-negative';
     return 'has-data';
   }
 
@@ -799,6 +1213,31 @@ export class PortfolioTrackerComponent implements OnInit {
     const filledRows = this.filteredData.filter(row => row.actualTotal !== null);
     if (filledRows.length === 0) return 0;
     return filledRows[filledRows.length - 1].actualTotal ?? 0;
+  }
+
+  getLatestActualMonthlyProfit(): number {
+    const latest = this.latestActualRow;
+    if (!latest) return 0;
+    return this.getActualProfitValue(latest) ?? 0;
+  }
+
+  getAverageMonthlyProfit(): number {
+    const profits = this.filteredData
+      .map(row => this.getActualProfitValue(row))
+      .filter((value): value is number => value !== null);
+
+    if (profits.length === 0) return 0;
+    return profits.reduce((sum, value) => sum + value, 0) / profits.length;
+  }
+
+  getAverageMonthlyReturnPercent(): string {
+    const returns = this.filteredData
+      .map(row => this.getActualMonthlyReturnValue(row))
+      .filter((value): value is number => value !== null);
+
+    if (returns.length === 0) return '0.00';
+    const average = returns.reduce((sum, value) => sum + value, 0) / returns.length;
+    return average.toFixed(2);
   }
 
   getTotalActualProfit(): number {
@@ -968,7 +1407,7 @@ export class PortfolioTrackerComponent implements OnInit {
   exportToExcel(): void {
     const exportData = this.portfolioData.map(row => {
       const actualTotalInvestment = (row.actualInvestment ?? 0) + (row.actualAdded ?? 0);
-      const actualProfit = row.actualTotal ? row.actualTotal - actualTotalInvestment : null;
+      const actualProfit = this.getActualProfitValue(row);
       const actualReturnPercent = actualTotalInvestment > 0 && row.actualTotal
         ? ((row.actualTotal - actualTotalInvestment) / actualTotalInvestment) * 100
         : null;
@@ -987,8 +1426,8 @@ export class PortfolioTrackerComponent implements OnInit {
         'Actual Total Invested': row.actualInvestment !== null && row.actualAdded !== null ? actualTotalInvestment : null,
         'Target Return %': row.return_percent,
         'Actual Return %': actualReturnPercent !== null ? Number(actualReturnPercent.toFixed(2)) : null,
-        'Target Profit': row.profit,
-        'Actual Profit': actualProfit,
+        'Target Monthly Profit': this.getTargetMonthlyProfitValue(row),
+        'Actual Monthly Profit': actualProfit,
         'Target Total': row.total,
         'Actual Total': row.actualTotal,
         'Variance': variance

@@ -60,6 +60,102 @@
     </div>
   </div>
 
+  <p-dialog
+    [(visible)]="showGrowthDialog"
+    [modal]="true"
+    [maximizable]="true"
+    [draggable]="false"
+    [style]="{ width: 'min(1180px, 94vw)' }"
+    [contentStyle]="{ padding: '0' }"
+    styleClass="growth-dialog">
+    <ng-template pTemplate="header">
+      <div class="growth-dialog-header">
+        <div class="growth-orb">
+          <i class="pi pi-chart-line"></i>
+        </div>
+        <div>
+          <h2>Portfolio Growth Lens</h2>
+          <p>{{ getProjectionRangeLabel() }} &middot; {{ portfolioMarketLabel }} &middot; {{ portfolioCurrency }}</p>
+        </div>
+      </div>
+    </ng-template>
+
+    <div class="growth-dialog-body">
+      <section class="growth-hero">
+        <div>
+          <span class="eyebrow">Trajectory cockpit</span>
+          <h3>Target path, invested capital, and real performance in one view.</h3>
+          <p>{{ growthInsightText }}</p>
+        </div>
+        <div class="growth-hero-stat">
+          <span>Actual rows</span>
+          <strong>{{ getFilledRowsCount() }}</strong>
+        </div>
+      </section>
+
+      <section class="growth-kpi-grid">
+        @for (kpi of growthLensKpis; track kpi.label) {
+          <article
+            class="growth-kpi"
+            [class.accent]="kpi.tone === 'accent'"
+            [class.positive]="kpi.tone === 'positive'"
+            [class.negative]="kpi.tone === 'negative'"
+            [class.neutral]="kpi.tone === 'neutral'">
+            <span>{{ kpi.label }}</span>
+            <strong>{{ kpi.value }}</strong>
+            <small>{{ kpi.detail }}</small>
+          </article>
+        }
+      </section>
+
+      <section class="growth-chart-shell">
+        <div class="growth-chart-toolbar">
+          <div>
+            <span class="eyebrow">Chart mode</span>
+            <h4>{{ growthChartMode === 'growth' ? 'Growth Stack' : growthChartMode === 'profit' ? 'Monthly Profit Pulse' : 'Return Radar' }}</h4>
+          </div>
+          <div class="growth-mode-switch" role="tablist" aria-label="Portfolio growth chart mode">
+            @for (mode of growthChartModes; track mode.value) {
+              <button
+                type="button"
+                role="tab"
+                [attr.aria-selected]="growthChartMode === mode.value"
+                [class.active]="growthChartMode === mode.value"
+                (click)="setGrowthChartMode(mode.value)">
+                <i [class]="mode.icon"></i>
+                {{ mode.label }}
+              </button>
+            }
+          </div>
+        </div>
+
+        @if (hasPortfolioRows) {
+          @if (!hasActualGrowthData) {
+            <div class="growth-empty-note">
+              <i class="pi pi-info-circle"></i>
+              <span>Target projection is visible now. Enter ending balances to unlock actual growth, profit, and return overlays.</span>
+            </div>
+          }
+          <div class="growth-chart-frame">
+            <p-chart
+              [type]="activeGrowthChartType"
+              [data]="activeGrowthChartData"
+              [options]="activeGrowthChartOptions"
+              height="360px"
+              [ariaLabel]="activeGrowthChartAriaLabel">
+            </p-chart>
+          </div>
+        } @else {
+          <div class="growth-empty-state">
+            <i class="pi pi-chart-line"></i>
+            <h4>No projection yet</h4>
+            <p>Complete the tracker setup to generate the 10-year growth projection.</p>
+          </div>
+        }
+      </section>
+    </div>
+  </p-dialog>
+
   <!-- Setup Screen for new users -->
   @if (showSetup) {
     <div class="setup-container">
@@ -155,6 +251,9 @@
     </div>
     <div class="header-actions">
       <input type="file" #fileInput accept=".xlsx,.xls" style="display: none" (change)="onFileSelect($event)">
+      <button class="action-btn growth-lens-btn" (click)="openGrowthDialog()" title="View portfolio growth charts">
+        <i class="pi pi-chart-line"></i> Growth Lens
+      </button>
       <button class="action-btn" (click)="fileInput.click()" title="Import from Excel">
         <i class="pi pi-upload"></i> Import
       </button>
@@ -205,13 +304,13 @@
         <div class="summary-label">Portfolio Value</div>
         <div class="summary-value mono">{{ formatCurrency(getLatestActualTotal()) }}</div>
       </div>
-      <div class="summary-card perf-card" [class.positive]="getTotalActualProfit() > 0" [class.negative]="getTotalActualProfit() < 0">
-        <div class="summary-label">Profit / Loss</div>
-        <div class="summary-value mono">{{ formatCurrency(getTotalActualProfit()) }}</div>
+      <div class="summary-card perf-card" [class.positive]="getAverageMonthlyProfit() > 0" [class.negative]="getAverageMonthlyProfit() < 0">
+        <div class="summary-label">Avg Monthly P/L</div>
+        <div class="summary-value mono">{{ formatCurrency(getAverageMonthlyProfit()) }}</div>
       </div>
-      <div class="summary-card perf-card" [class.positive]="getTotalActualProfit() > 0" [class.negative]="getTotalActualProfit() < 0">
-        <div class="summary-label">Return</div>
-        <div class="summary-value mono">{{ getOverallReturnPercent() }}%</div>
+      <div class="summary-card perf-card" [class.positive]="+getAverageMonthlyReturnPercent() > 0" [class.negative]="+getAverageMonthlyReturnPercent() < 0">
+        <div class="summary-label">Avg Monthly Return</div>
+        <div class="summary-value mono">{{ getAverageMonthlyReturnPercent() }}%</div>
       </div>
       <div class="summary-card perf-card" [class.positive]="getOverallVariance() > 0" [class.negative]="getOverallVariance() < 0">
         <div class="summary-label">vs Target</div>
@@ -317,8 +416,8 @@
           <col style="width: 85px">   <!-- Total Inv Actual -->
           <col style="width: 85px">   <!-- End Target -->
           <col style="width: 85px">   <!-- End Actual -->
-          <col style="width: 75px">   <!-- P/L Target -->
-          <col style="width: 80px">   <!-- P/L Actual -->
+          <col style="width: 85px">   <!-- Monthly P/L Target -->
+          <col style="width: 90px">   <!-- Monthly P/L Actual -->
           <col style="width: 60px">   <!-- Monthly Ret Target -->
           <col style="width: 65px">   <!-- Monthly Ret Actual -->
           <col style="width: 60px">   <!-- Overall Ret Target -->
@@ -335,7 +434,7 @@
           <th colspan="2" class="group-th">Added</th>
           <th colspan="2" class="group-th">Total Invested</th>
           <th colspan="2" class="group-th">Ending Balance</th>
-          <th colspan="2" class="group-th">Profit / Loss</th>
+          <th colspan="2" class="group-th">Monthly Profit / Loss</th>
           <th colspan="2" class="group-th">Monthly Return %</th>
           <th colspan="2" class="group-th">Overall Return %</th>
         </tr>
@@ -402,8 +501,8 @@
             </p-inputNumber>
           </td>
 
-          <!-- Profit / Loss (performance) -->
-          <td class="val-cell target-cell mono">{{ formatCurrency(row.profit) }}</td>
+          <!-- Monthly Profit / Loss (performance) -->
+          <td class="val-cell target-cell mono">{{ formatCurrency(getTargetMonthlyProfitValue(row)) }}</td>
           <td class="val-cell actual-cell performance mono" [ngClass]="getProfitClass(row)">{{ getActualProfit(row) }}</td>
 
           <!-- Monthly Return % (performance) -->
@@ -412,7 +511,7 @@
 
           <!-- Overall Return % (performance) -->
           <td class="val-cell target-cell mono center">{{ getTargetOverallReturn(row) }}</td>
-          <td class="val-cell actual-cell performance mono center" [ngClass]="getProfitClass(row)">{{ getActualReturnPercent(row) }}</td>
+          <td class="val-cell actual-cell performance mono center" [ngClass]="getActualOverallReturnClass(row)">{{ getActualReturnPercent(row) }}</td>
         </tr>
       </ng-template>
     </p-table>

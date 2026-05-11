@@ -56,6 +56,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fixed the watchlist stocks page table header stacking above the open watchlist switcher menu.
 - Watchlist stocks page hero now places the descriptive note beside the watchlist name and uses shorter, more consistent right-side controls.
 - Watchlist stocks page hero no longer shows the visible "Switch watchlist" label above the dropdown.
+- Watchlist stocks page mobile layout no longer stretches the table card into unused vertical space.
+- Watchlist stocks page mobile table now keeps the ticker column sticky while horizontally scrolling and tightens table panel spacing, including the add-stock search row height.
+- Watchlist stocks page table headers now remain sticky while scrolling through long stock lists.
 - Portfolio Tracker Target Total Invested now displays starting balance plus target additions for the month.
 - Portfolio Tracker performance summary now shows average monthly profit/loss and average monthly return for completed rows.
 - Portfolio Tracker Return Radar chart now uses one color per return category and dotted target lines with solid actual lines for clearer comparison.

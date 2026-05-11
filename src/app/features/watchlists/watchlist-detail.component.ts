@@ -653,7 +653,10 @@ const WATCHLIST_PRICE_REFRESH_INTERVAL_MS = 60_000;
 
     /* ── Premium Table ── */
     .wl-table {
-      overflow-x: auto;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
     }
 
     .wl-table table {
@@ -674,8 +677,9 @@ const WATCHLIST_PRICE_REFRESH_INTERVAL_MS = 60_000;
       white-space: nowrap;
       position: sticky;
       top: 0;
-      background: rgba(2, 6, 23, 0.18);
-      z-index: 1;
+      background: linear-gradient(180deg, #0b1120 0%, #0f172a 100%);
+      box-shadow: 0 1px 0 rgba(148, 163, 184, 0.16), 0 10px 18px rgba(2, 6, 23, 0.22);
+      z-index: 5;
     }
 
     .sort-header {
@@ -1297,21 +1301,79 @@ const WATCHLIST_PRICE_REFRESH_INTERVAL_MS = 60_000;
     .metric-pill strong { color: #f8fafc; font-size: 0.95rem; line-height: 1; }
     .metric-pill span { color: #94a3b8; font-size: 0.58rem; font-weight: 800; text-transform: uppercase; letter-spacing: 0.08em; }
     .detail-content { min-height: 0; flex: 1; display: flex; }
-    .detail-content .wl-main { width: 100%; border-radius: 20px; background: rgba(15, 23, 42, 0.74); }
+    .detail-content .wl-main {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      width: 100%;
+      border-radius: 20px;
+      background: rgba(15, 23, 42, 0.74);
+    }
     .detail-missing-state { display: grid; place-items: center; gap: 0.6rem; min-height: 18rem; border: 1px solid rgba(148, 163, 184, 0.14); border-radius: 20px; background: rgba(15, 23, 42, 0.68); color: #cbd5e1; text-align: center; }
     .detail-missing-state h2 { margin: 0; color: #f8fafc; }
     .detail-missing-state p { margin: 0; color: #94a3b8; }
 
     @media (max-width: 768px) {
-      .watchlists-page { padding: 0.75rem; }
+      .watchlists-page {
+        height: auto;
+        min-height: calc(100vh - 56px);
+        padding: 0.75rem;
+      }
       .page-header { margin-bottom: 0.75rem; }
       .page-header h1 { font-size: 1.1rem; }
       .detail-hero { grid-template-columns: 1fr; align-items: flex-start; }
       .hero-metrics { justify-content: flex-start; }
-      .wl-main { padding: 12px; }
-      .wl-table { overflow-x: auto; }
-      .table-header { flex-direction: column; align-items: flex-start; gap: 8px; }
-      .add-stock-search { min-width: 100%; }
+      .detail-content { flex: 0 0 auto; display: block; }
+      .detail-content .wl-main {
+        display: block;
+        flex: 0 0 auto;
+        min-height: 0;
+        overflow: visible;
+      }
+      .wl-main {
+        padding: 10px;
+        overflow: visible;
+      }
+      .wl-table {
+        flex: 0 0 auto;
+        max-height: min(62vh, 34rem);
+        overflow: auto;
+        border-radius: 12px;
+      }
+      .wl-table table { min-width: 980px; }
+      .wl-table thead th.col-ticker,
+      .wl-table tbody td.col-ticker {
+        position: sticky;
+        left: 0;
+        width: 128px;
+        min-width: 128px;
+        max-width: 128px;
+        background: #0f172a;
+        z-index: 4;
+        box-shadow: 1px 0 0 rgba(148, 163, 184, 0.1), 14px 0 18px rgba(2, 6, 23, 0.22);
+      }
+      .wl-table thead th.col-ticker {
+        z-index: 8;
+        background: #0b1120;
+      }
+      .table-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.45rem;
+        margin-bottom: 0.55rem;
+      }
+      .table-header-left {
+        gap: 0.45rem;
+        flex-wrap: wrap;
+      }
+      .table-header h2 { font-size: 1rem; }
+      .stock-count { font-size: 11px; }
+      .add-stock-search {
+        flex: 0 0 auto;
+        width: 100%;
+        min-width: 100%;
+        max-width: none;
+      }
       .share-form, .collaborator-row { grid-template-columns: 1fr; }
       .share-dialog { width: calc(100vw - 24px); padding: 18px; }
       .today-date { font-size: 11px; }
@@ -1319,7 +1381,8 @@ const WATCHLIST_PRICE_REFRESH_INTERVAL_MS = 60_000;
     }
 
     @media (max-width: 480px) {
-      .watchlists-page { padding: 0.5rem; }
+      .watchlists-page { padding: 0.5rem; gap: 0.7rem; }
+      .detail-content .wl-main { border-radius: 16px; padding: 8px; }
       .ticker { font-size: 12px; }
     }
   `]

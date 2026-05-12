@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Watchlist sharing schema now includes a covering index for the `shared_by_user_id` foreign key to support future collaborator-management growth.
 - Watchlists now use separate `/watchlists` and `/watchlists/:watchlistId` pages, replacing the collapsible sidebar and dock with a compact summary-and-table index and full-width stock detail view.
 - Watchlist rows now use the watchlist name as the stocks-page link and remove the extra row description and Open button.
 - Watchlists index table now removes the extra "All watchlists" panel header so rows start immediately below the summary.
@@ -69,6 +70,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FIRE Goals Goal & Income panel now displays currency context as an inline note and no longer blocks saving when retirement age is not greater than current age.
 - FIRE Goals overview income details now include taxation, with a saved tax-rate assumption used to calculate available-to-invest cash flow.
 - FIRE Goals overview summary rows now allocate more horizontal space to detail chips so typical asset, loan, and income breakdowns stay on one line.
+- FIRE Goals now autosaves when edit fields lose focus or the browser tab/window is left, replacing the visible Save Plan action and restored-draft success note.
 - FIRE Goals header now spells out FIRE as "Financial Independence, Retire Early."
 - FIRE Goals now starts brand-new users with an empty plan and uses placeholders instead of seeded demo amounts, assets, and loans.
 - FIRE Goals Loans panel now uses modern grouped loan cards with clearer identity, balance, payment, APR, and payoff sections.

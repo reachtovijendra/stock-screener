@@ -48,6 +48,9 @@ create index if not exists watchlist_shares_watchlist_idx
 create index if not exists watchlist_shares_shared_user_idx
   on public.watchlist_shares (shared_with_user_id);
 
+create index if not exists watchlist_shares_shared_by_user_idx
+  on public.watchlist_shares (shared_by_user_id);
+
 create index if not exists watchlist_shares_watchlist_role_idx
   on public.watchlist_shares (watchlist_id, role);
 

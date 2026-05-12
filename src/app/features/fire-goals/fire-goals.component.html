@@ -4,7 +4,7 @@
     <span>Loading your FIRE mission...</span>
   </div>
 
-  <section class="wizard-card" *ngIf="!fireService.loading()">
+  <section class="wizard-card" *ngIf="!fireService.loading()" (focusout)="handleEditorFocusOut($event)">
     <header class="wizard-shell-header">
       <div>
         <span class="eyebrow">Financial Independence, Retire Early</span>
@@ -22,16 +22,9 @@
         </ng-container>
       </div>
 
-      <div class="wizard-actions">
-        <button pButton type="button" class="save-button" (click)="savePlan()" [disabled]="saving()">
-          <i class="pi pi-save"></i>
-          {{ saving() ? 'Saving...' : 'Save Plan' }}
-        </button>
-      </div>
     </header>
 
-    <div class="status-row" *ngIf="saveMessage() || saveError()">
-      <span class="save-note success" *ngIf="saveMessage()">{{ saveMessage() }}</span>
+    <div class="status-row" *ngIf="saveError()">
       <span class="save-note error" *ngIf="saveError()">{{ saveError() }}</span>
     </div>
 

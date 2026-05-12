@@ -1,5 +1,5 @@
 import { computed, signal } from '@angular/core';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { ComponentFixture, fakeAsync, flushMicrotasks, TestBed, tick } from '@angular/core/testing';
 
 import { FireAsset, FireGoal, FireLiability, MARKETS, Market } from '../../core/models';
 import { CurrencyConversionService, FireGoalsService, MarketService } from '../../core/services';
@@ -115,6 +115,46 @@ describe('FireGoalsComponent', () => {
       component.liabilities()
     );
     expect(localStorage.getItem(draftKey)).toBeNull();
+  });
+
+  it('autosaves when an editor field loses focus', fakeAsync(() => {
+    fixture.detectChanges();
+    component.goalForm.patchValue({ current_age: 40, target_retirement_age: 55 });
+    component.addAsset();
+    component.goToPanel('assets');
+    fixture.detectChanges();
+
+    const assetName = fixture.nativeElement.querySelector('input[aria-label="Asset name"]') as HTMLInputElement;
+    assetName.dispatchEvent(new FocusEvent('focusout', { bubbles: true }));
+    tick(250);
+    flushMicrotasks();
+
+    expect(fireGoalsService.savePlan).toHaveBeenCalledWith(
+      jasmine.objectContaining({ current_age: 40, target_retirement_age: 55 }),
+      component.assets(),
+      component.liabilities()
+    );
+  }));
+
+  it('autosaves when the browser window loses focus', fakeAsync(() => {
+    fixture.detectChanges();
+    component.goalForm.patchValue({ current_age: 41, target_retirement_age: 56 });
+
+    window.dispatchEvent(new Event('blur'));
+    flushMicrotasks();
+
+    expect(fireGoalsService.savePlan).toHaveBeenCalledWith(
+      jasmine.objectContaining({ current_age: 41, target_retirement_age: 56 }),
+      component.assets(),
+      component.liabilities()
+    );
+  }));
+
+  it('hides the manual save button and success notes', () => {
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.save-button')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.status-row')).toBeNull();
   });
 
   it('renders the overview metrics and clickable summary rows', () => {
@@ -325,6 +365,6 @@ describe('FireGoalsComponent', () => {
     expect(component.goalForm.controls.name.value).toBe('Draft FIRE');
     expect(component.assets()[0].name).toBe('Saved browser draft');
     expect(component.hasLocalDraft()).toBeTrue();
-    expect(component.saveMessage()).toContain('Restored an unsaved local draft');
+    expect(fixture.nativeElement.textContent).not.toContain('Restored an unsaved local draft');
   });
 });

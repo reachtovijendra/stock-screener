@@ -99,17 +99,7 @@
   color: #94a3b8;
 }
 
-.wizard-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 0.65rem;
-  min-width: 140px;
-}
-
 .carousel-button,
-.save-button,
 .ghost-button,
 .summary-row,
 .remove-button {
@@ -145,7 +135,6 @@
   box-shadow: 0 20px 44px rgba(251, 191, 36, 0.13), 0 0 0 5px rgba(251, 191, 36, 0.06);
 }
 
-.save-button,
 .ghost-button {
   display: inline-flex;
   align-items: center;
@@ -154,13 +143,6 @@
   border: 0;
   border-radius: 14px;
   font-weight: 900;
-}
-
-.save-button {
-  padding: 0.85rem 1.1rem;
-  background: linear-gradient(135deg, #f59e0b, #f97316);
-  color: #111827;
-  box-shadow: 0 14px 34px rgba(249, 115, 22, 0.24);
 }
 
 .ghost-button {
@@ -194,7 +176,6 @@
   font-weight: 800;
 }
 
-.save-note.success { color: #34d399; }
 .save-note.error,
 .validation { color: #fb7185; }
 
@@ -699,11 +680,6 @@ select:focus {
   .panel-heading.with-action {
     flex-direction: column;
     align-items: stretch;
-  }
-
-  .wizard-actions {
-    justify-content: flex-start;
-    min-width: 0;
   }
 
   .carousel-shell {

@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, effect, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { FormsModule } from '@angular/forms';
@@ -48,7 +48,7 @@ interface FireGoalsDraft {
   styleUrls: ['./fire-goals.component.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class FireGoalsComponent implements OnInit {
+export class FireGoalsComponent implements OnInit, OnDestroy {
   private readonly fb = inject(FormBuilder);
   private readonly auth = inject(AuthService);
   private readonly marketService = inject(MarketService);
@@ -58,12 +58,20 @@ export class FireGoalsComponent implements OnInit {
   readonly assets = signal<FireAsset[]>([]);
   readonly liabilities = signal<FireLiability[]>([]);
   readonly saving = signal(false);
-  readonly saveMessage = signal<string | null>(null);
   readonly saveError = signal<string | null>(null);
   readonly hasLocalDraft = signal(false);
   readonly activePanel = signal<FireWizardPanel>('overview');
   readonly panelDirection = signal<'forward' | 'backward'>('forward');
   private readonly formVersion = signal(0);
+  private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private saveQueued = false;
+  private readonly handleWindowBlur = () => this.flushAutosave();
+  private readonly handlePageHide = () => this.flushAutosave();
+  private readonly handleVisibilityChange = () => {
+    if (document.visibilityState === 'hidden') {
+      this.flushAutosave();
+    }
+  };
 
   readonly goalForm = this.fb.nonNullable.group({
     name: this.fb.nonNullable.control(DEFAULT_GOAL.name),
@@ -156,6 +164,10 @@ export class FireGoalsComponent implements OnInit {
   }
 
   async ngOnInit(): Promise<void> {
+    window.addEventListener('blur', this.handleWindowBlur);
+    window.addEventListener('pagehide', this.handlePageHide);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
+
     try {
       void this.currencyConversion.loadUsdInrRate();
       await this.fireService.loadData();
@@ -163,6 +175,16 @@ export class FireGoalsComponent implements OnInit {
     } catch (error) {
       this.saveError.set(this.getErrorMessage(error, 'Unable to load FIRE plan.'));
     }
+  }
+
+  ngOnDestroy(): void {
+    if (this.autosaveTimer) {
+      clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
+    window.removeEventListener('blur', this.handleWindowBlur);
+    window.removeEventListener('pagehide', this.handlePageHide);
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
   currentGoal(): FireGoal {
@@ -218,8 +240,17 @@ export class FireGoalsComponent implements OnInit {
     this.goalForm.controls[field].setValue(this.toBaseAmount(displayValue));
   }
 
+  handleEditorFocusOut(event: FocusEvent): void {
+    if (!this.isEditableFocusTarget(event.target)) return;
+    this.scheduleAutosave();
+  }
+
   async savePlan(): Promise<void> {
-    this.saveMessage.set(null);
+    if (this.saving()) {
+      this.saveQueued = true;
+      return;
+    }
+
     this.saveError.set(null);
     if (this.goalForm.invalid) {
       this.saveError.set('Check the plan inputs before saving.');
@@ -230,11 +261,14 @@ export class FireGoalsComponent implements OnInit {
     try {
       await this.fireService.savePlan(this.currentGoal(), this.assets(), this.liabilities());
       this.clearDraft();
-      this.saveMessage.set('FIRE plan saved.');
     } catch (error) {
       this.saveError.set(this.getErrorMessage(error, 'Unable to save FIRE plan.'));
     } finally {
       this.saving.set(false);
+      if (this.saveQueued) {
+        this.saveQueued = false;
+        this.scheduleAutosave(0);
+      }
     }
   }
 
@@ -367,6 +401,31 @@ export class FireGoalsComponent implements OnInit {
     }
   }
 
+  private scheduleAutosave(delayMs = 250): void {
+    if (this.autosaveTimer) {
+      clearTimeout(this.autosaveTimer);
+    }
+
+    this.autosaveTimer = setTimeout(() => {
+      this.autosaveTimer = null;
+      void this.savePlan();
+    }, delayMs);
+  }
+
+  private flushAutosave(): void {
+    if (this.autosaveTimer) {
+      clearTimeout(this.autosaveTimer);
+      this.autosaveTimer = null;
+    }
+    void this.savePlan();
+  }
+
+  private isEditableFocusTarget(target: EventTarget | null): boolean {
+    return target instanceof HTMLInputElement
+      || target instanceof HTMLSelectElement
+      || target instanceof HTMLTextAreaElement;
+  }
+
   private persistDraft(): void {
     const draft: FireGoalsDraft = {
       updatedAt: new Date().toISOString(),
@@ -395,7 +454,7 @@ export class FireGoalsComponent implements OnInit {
     this.assets.set(draft.assets);
     this.liabilities.set(draft.liabilities);
     this.hasLocalDraft.set(true);
-    this.saveMessage.set('Restored an unsaved local draft. Click Save Plan to sync it to Supabase.');
+    this.scheduleAutosave(0);
   }
 
   private readDraft(): FireGoalsDraft | null {

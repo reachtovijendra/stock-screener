@@ -17,7 +17,7 @@ The FIRE Goals screen uses a single wizard panel:
 
 Users move between panels with carousel arrow controls. The Overview panel starts the carousel and does not show a back arrow. Clicking the Assets, Loans, or Income rows in the overview jumps directly to the corresponding edit panel.
 
-Currency display follows the app's selected market. The US market displays USD with `$`; the India market displays INR with `₹`. FIRE plans keep their saved base currency in Supabase, and the UI converts overview totals and editable money fields to the active market currency using a live USD/INR quote. Edits made in the active market currency are converted back to the saved plan currency before local draft persistence or Supabase saves.
+Currency display follows the app's selected market. The US market displays USD with `$`; the India market displays INR with `₹`. FIRE plans keep their saved base currency in Supabase, and the UI converts overview totals and editable money fields to the active market currency using a live USD/INR quote. Edits made in the active market currency are converted back to the saved plan currency before local draft persistence or autosaves.
 
 ## Persistence
 
@@ -61,8 +61,8 @@ The first version calculates:
 - Display currency is derived from the active market selection instead of being manually selected inside the FIRE form. Saved numeric values remain in the plan's stored `preferred_currency`.
 - Liability balances amortize monthly using APR and monthly payment.
 - Calculations are estimates for planning support and are not financial advice.
-- The browser keeps a user-scoped local draft while the user edits. Refreshing the page restores unsaved goal, asset, and liability changes, and `Save Plan` clears the draft after syncing to Supabase.
-- The first version saves to Supabase explicitly through the `Save Plan` action instead of auto-saving every keystroke.
+- The browser keeps a user-scoped local draft while the user edits. Autosave runs when editable fields lose focus, when the browser window loses focus, when the page is hidden, and when the page is being left. Successful autosaves clear the local draft after syncing to Supabase.
+- Autosave success is intentionally quiet. Save errors remain visible so users can correct invalid inputs or retry after transient Supabase failures.
 
 ## Verification
 
@@ -71,5 +71,5 @@ Focused coverage is included for:
 - Required monthly contribution math.
 - Liability payoff balance estimates.
 - Yearly projection summary output.
-- Component behavior for saved plan loading, invalid target ages, and saving the current draft.
+- Component behavior for saved plan loading, invalid target ages, autosaving on focus changes, and preserving local drafts until Supabase sync succeeds.
 - Wizard behavior for overview metrics, clickable summary rows, and carousel arrow navigation.

@@ -23,6 +23,8 @@ Currency display follows the app's selected market. The US market displays USD w
 
 The schema is defined in `supabase/fire-goals-schema.sql`.
 
+Existing Supabase projects that created `fire_goals` before the tax-rate field was added must rerun the schema script, or at minimum run the `alter table public.fire_goals add column if not exists tax_rate ...` statement from that file. The client retries saves without `tax_rate` when PostgREST reports that specific schema-cache miss so investments and loans can still be saved, but tax-rate persistence requires the column to exist.
+
 ### Tables
 
 - `fire_goals`: Stores one or more user-owned plans with current age, target retirement age, FIRE amount, expected annual return, inflation rate, annual income, tax rate, annual spending, and preferred currency.

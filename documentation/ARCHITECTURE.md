@@ -187,7 +187,7 @@ FIRE Goals is an authenticated feature at `/fire-goals`. It uses `FireGoalsServi
 
 The persistence schema is defined in `supabase/fire-goals-schema.sql`:
 
-- `fire_goals`: stores the retirement timeline, target FIRE amount, expected annual return, inflation assumption, income, spending, and preferred currency.
+- `fire_goals`: stores the retirement timeline, target FIRE amount, expected annual return, inflation assumption, income, tax rate, spending, and preferred currency.
 - `fire_assets`: stores user-owned asset rows linked to a goal, with category, current value, and optional growth override.
 - `fire_liabilities`: stores user-owned liability rows linked to a goal, with balance, APR, monthly payment, and optional payoff metadata.
 

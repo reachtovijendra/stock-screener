@@ -134,6 +134,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed FIRE Goals investment and loan saves against older Supabase schemas by retrying the goal save without `tax_rate` only when PostgREST reports that specific schema-cache miss.
 - Fixed FIRE Goals draft loss on browser refresh by preserving unsaved goal, asset, and liability edits in user-scoped local browser storage until `Save Plan` syncs them to Supabase.
 - Fixed shared watchlist collaborator lists to refresh immediately after share, role update, or revoke actions instead of showing stale cached results.
 - Fixed the local API dev server to route watchlist sharing endpoints so the Share dialog can be tested locally with Vercel-style handlers.

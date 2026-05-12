@@ -12,6 +12,27 @@ interface SupabaseWriteResult {
   error: { message: string } | null;
 }
 
+interface SupabaseGoalResult extends SupabaseWriteResult {
+  data: FireGoal | null;
+}
+
+interface FireGoalWritePayload {
+  user_id: string;
+  name: string;
+  current_age: number;
+  target_retirement_age: number;
+  fire_amount: number;
+  expected_annual_return: number;
+  inflation_rate: number;
+  annual_income: number;
+  tax_rate?: number;
+  annual_spending: number;
+  preferred_currency: string;
+  updated_at: string;
+}
+
+const DEFAULT_TAX_RATE = 20;
+
 @Injectable({ providedIn: 'root' })
 export class FireGoalsService {
   private auth = inject(AuthService);
@@ -43,7 +64,7 @@ export class FireGoalsService {
       throw new Error(`Failed to load FIRE goal: ${error.message}`);
     }
 
-    const goal = goals?.[0] ?? null;
+    const goal = this.normalizeGoal(goals?.[0] ?? null);
     this.goal.set(goal);
 
     if (!goal?.id) {
@@ -71,27 +92,16 @@ export class FireGoalsService {
 
     const now = new Date().toISOString();
     const existingGoal = this.goal();
-    const goalPayload = {
-      user_id: user.id,
-      name: goalInput.name.trim() || 'My FIRE Plan',
-      current_age: goalInput.current_age,
-      target_retirement_age: goalInput.target_retirement_age,
-      fire_amount: goalInput.fire_amount,
-      expected_annual_return: goalInput.expected_annual_return,
-      inflation_rate: goalInput.inflation_rate,
-      annual_income: goalInput.annual_income,
-      tax_rate: goalInput.tax_rate,
-      annual_spending: goalInput.annual_spending,
-      preferred_currency: goalInput.preferred_currency,
-      updated_at: now,
-    };
+    const goalPayload = this.buildGoalPayload(user.id, goalInput, now, true);
+    let goalResult = await this.saveGoalPayload(existingGoal?.id, goalPayload);
+    const usedLegacySchemaFallback = this.isMissingSchemaColumnError(goalResult.error, 'tax_rate');
 
-    const goalResult = existingGoal?.id
-      ? await this.db.from('fire_goals').update(goalPayload).eq('id', existingGoal.id).select().single()
-      : await this.db.from('fire_goals').insert(goalPayload).select().single();
+    if (usedLegacySchemaFallback) {
+      goalResult = await this.saveGoalPayload(existingGoal?.id, this.buildGoalPayload(user.id, goalInput, now, false));
+    }
 
     this.throwIfError(goalResult, 'Failed to save FIRE goal');
-    const savedGoal = goalResult.data as FireGoal;
+    const savedGoal = this.normalizeGoal(goalResult.data, goalInput.tax_rate);
     if (!savedGoal?.id) throw new Error('FIRE goal save did not return an id');
 
     const [deleteAssets, deleteLiabilities] = await Promise.all([
@@ -133,6 +143,53 @@ export class FireGoalsService {
     }
 
     await this.loadData();
+    if (usedLegacySchemaFallback) {
+      const loadedGoal = this.goal();
+      if (loadedGoal) {
+        this.goal.set({ ...loadedGoal, tax_rate: goalInput.tax_rate });
+      }
+    }
+  }
+
+  private buildGoalPayload(userId: string, goalInput: FireGoal, updatedAt: string, includeTaxRate: boolean): FireGoalWritePayload {
+    const payload: FireGoalWritePayload = {
+      user_id: userId,
+      name: goalInput.name.trim() || 'My FIRE Plan',
+      current_age: goalInput.current_age,
+      target_retirement_age: goalInput.target_retirement_age,
+      fire_amount: goalInput.fire_amount,
+      expected_annual_return: goalInput.expected_annual_return,
+      inflation_rate: goalInput.inflation_rate,
+      annual_income: goalInput.annual_income,
+      annual_spending: goalInput.annual_spending,
+      preferred_currency: goalInput.preferred_currency,
+      updated_at: updatedAt,
+    };
+
+    if (includeTaxRate) {
+      payload.tax_rate = goalInput.tax_rate;
+    }
+
+    return payload;
+  }
+
+  private async saveGoalPayload(goalId: string | undefined, goalPayload: FireGoalWritePayload): Promise<SupabaseGoalResult> {
+    return goalId
+      ? await this.db.from('fire_goals').update(goalPayload).eq('id', goalId).select().single()
+      : await this.db.from('fire_goals').insert(goalPayload).select().single();
+  }
+
+  private normalizeGoal(goal: FireGoal | null, taxRateFallback = DEFAULT_TAX_RATE): FireGoal | null {
+    if (!goal) return null;
+    return {
+      ...goal,
+      tax_rate: typeof goal.tax_rate === 'number' ? goal.tax_rate : taxRateFallback,
+    };
+  }
+
+  private isMissingSchemaColumnError(error: { message: string } | null, column: string): boolean {
+    const message = error?.message.toLowerCase() ?? '';
+    return message.includes(column.toLowerCase()) && message.includes('schema cache');
   }
 
   private clearState(): void {

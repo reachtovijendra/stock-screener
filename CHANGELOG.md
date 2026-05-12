@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Day trade recommendations now reject very low-ATR candidates before saving picks, preventing stale or merger-pinned quotes such as HOLX from recurring as unrealistic no-trigger setups.
 - Watchlist sharing schema now includes a covering index for the `shared_by_user_id` foreign key to support future collaborator-management growth.
 - Watchlists now use separate `/watchlists` and `/watchlists/:watchlistId` pages, replacing the collapsible sidebar and dock with a compact summary-and-table index and full-width stock detail view.
 - Watchlist rows now use the watchlist name as the stocks-page link and remove the extra row description and Open button.

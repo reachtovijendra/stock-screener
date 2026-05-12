@@ -285,6 +285,8 @@ function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+const MIN_DAY_TRADE_ATR_PERCENT = 0.5;
+
 // ---------------------------------------------------------------------------
 // Compute full technicals for a single stock (enhanced)
 // ---------------------------------------------------------------------------
@@ -476,6 +478,18 @@ export function fullScore(input: FullScoreInput): FullScoreResult {
   if (tech.rsi != null && tech.rsi > 80) {
     return {
       score: 0, signals: ['RSI > 80 REJECTED'], rsi: tech.rsi,
+      macdHistogram: tech.macdHistogram, atr: tech.atr, atrPercent: tech.atrPercent,
+      entryTrigger: 0, buyPrice: 0, sellPrice: 0, stopLoss: 0, rewardRiskRatio: 0,
+      relativeStrength: 0, entryRule: '', consolidationTightness: tech.consolidationTightness,
+      hasCatalyst: false, catalystLabel: null, setupType: 'momentum', extensionPercent: 0,
+    };
+  }
+
+  // Very low ATR% names are often stale, pinned, or merger-arb style quotes.
+  // They repeatedly score on trend/RVOL but rarely offer a realistic intraday trigger.
+  if (tech.atrPercent != null && tech.atrPercent < MIN_DAY_TRADE_ATR_PERCENT) {
+    return {
+      score: 0, signals: [`ATR ${tech.atrPercent.toFixed(2)}% REJECTED`], rsi: tech.rsi,
       macdHistogram: tech.macdHistogram, atr: tech.atr, atrPercent: tech.atrPercent,
       entryTrigger: 0, buyPrice: 0, sellPrice: 0, stopLoss: 0, rewardRiskRatio: 0,
       relativeStrength: 0, entryRule: '', consolidationTightness: tech.consolidationTightness,

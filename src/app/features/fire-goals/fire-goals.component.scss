@@ -102,7 +102,8 @@
 .carousel-button,
 .ghost-button,
 .summary-row,
-.remove-button {
+.remove-button,
+.dialog-button {
   font-family: inherit;
   cursor: pointer;
 }
@@ -653,6 +654,143 @@ select:focus {
   background: rgba(248, 113, 113, 0.16);
 }
 
+.delete-dialog-backdrop {
+  position: fixed;
+  z-index: 40;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(248, 113, 113, 0.18), transparent 22rem),
+    rgba(2, 6, 23, 0.68);
+  backdrop-filter: blur(10px);
+  animation: dialogBackdropIn 160ms ease-out both;
+}
+
+.delete-dialog {
+  position: relative;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 1rem;
+  width: min(520px, calc(100vw - 2rem));
+  padding: clamp(1.1rem, 3vw, 1.45rem);
+  border: 1px solid rgba(248, 113, 113, 0.24);
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 0 0, rgba(248, 113, 113, 0.16), transparent 18rem),
+    linear-gradient(135deg, rgba(15, 23, 42, 0.98), rgba(2, 6, 23, 0.94));
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  animation: dialogIn 190ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.delete-dialog::after {
+  content: '';
+  position: absolute;
+  right: -4rem;
+  bottom: -5rem;
+  width: 14rem;
+  height: 14rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(251, 191, 36, 0.12), transparent 68%);
+  pointer-events: none;
+}
+
+.delete-dialog-icon {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  width: 3.25rem;
+  height: 3.25rem;
+  place-items: center;
+  border: 1px solid rgba(248, 113, 113, 0.32);
+  border-radius: 18px;
+  background: rgba(248, 113, 113, 0.12);
+  color: #fb7185;
+  box-shadow: 0 0 0 6px rgba(248, 113, 113, 0.05);
+}
+
+.delete-dialog-copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.dialog-kicker {
+  color: #fbbf24;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.delete-dialog h2 {
+  margin: 0;
+  color: #f8fafc;
+  font-size: clamp(1.45rem, 4vw, 2rem);
+  line-height: 1;
+  letter-spacing: -0.05em;
+}
+
+.delete-dialog p {
+  max-width: 34rem;
+  margin: 0;
+  color: #cbd5e1;
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+.delete-dialog-actions {
+  position: relative;
+  z-index: 1;
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+  margin-top: 0.35rem;
+}
+
+.dialog-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 2.75rem;
+  padding: 0.72rem 1rem;
+  border-radius: 14px;
+  font-weight: 900;
+  transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease;
+}
+
+.dialog-button:hover {
+  transform: translateY(-1px);
+}
+
+.dialog-button-secondary {
+  border: 1px solid rgba(148, 163, 184, 0.24);
+  background: rgba(15, 23, 42, 0.72);
+  color: #e2e8f0;
+}
+
+.dialog-button-secondary:hover {
+  border-color: rgba(148, 163, 184, 0.42);
+  background: rgba(30, 41, 59, 0.82);
+}
+
+.dialog-button-danger {
+  border: 1px solid rgba(248, 113, 113, 0.38);
+  background: linear-gradient(135deg, #fb7185, #f97316);
+  color: #111827;
+  box-shadow: 0 16px 34px rgba(248, 113, 113, 0.22);
+}
+
+.dialog-button-danger:hover {
+  border-color: rgba(254, 202, 202, 0.6);
+  box-shadow: 0 20px 42px rgba(248, 113, 113, 0.28);
+}
+
 @keyframes slideForward {
   from {
     opacity: 0;
@@ -672,6 +810,22 @@ select:focus {
   to {
     opacity: 1;
     transform: translateX(0) scale(1);
+  }
+}
+
+@keyframes dialogBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes dialogIn {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
   }
 }
 
@@ -758,6 +912,18 @@ select:focus {
   .investment-remove,
   .loan-remove {
     align-self: stretch;
+    width: 100%;
+  }
+
+  .delete-dialog {
+    grid-template-columns: 1fr;
+  }
+
+  .delete-dialog-actions {
+    flex-direction: column-reverse;
+  }
+
+  .dialog-button {
     width: 100%;
   }
 }

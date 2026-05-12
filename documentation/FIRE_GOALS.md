@@ -12,8 +12,8 @@ The FIRE Goals screen uses a single wizard panel:
 
 - `Overview`: Shows FIRE Goal, Net Worth, Freedom Gap, and Time Left. It also provides clickable summary rows for Assets, Loans, and Income, including annual taxation in the income detail chips.
 - `Goal & Income`: Edits the FIRE target, timeline, return assumptions, income, tax rate, spending, and currency. Currency context appears as an inline note rather than a form control.
-- `Assets`: Adds, removes, and edits modern compact investment rows with a single sticky header for identity, type, current value fields, and the add action. When no investments exist, the panel shows a compact empty action state instead of an empty ledger or repeated summary.
-- `Loans`: Adds, removes, and edits modern loan cards with identity, balance, APR, payment, and payoff timeline fields. When no loans exist, the panel shows the same compact empty action state used for investments.
+- `Assets`: Adds, removes, and edits modern compact investment rows with a single sticky header for identity, type, current value fields, and the add action. Investment deletion opens a styled in-page confirmation dialog before removal. When no investments exist, the panel shows a compact empty action state instead of an empty ledger or repeated summary.
+- `Loans`: Adds, removes, and edits modern loan cards with identity, balance, APR, payment, and payoff timeline fields. Loan deletion opens the same styled in-page confirmation dialog before removal. When no loans exist, the panel shows the same compact empty action state used for investments.
 
 Users move between panels with carousel arrow controls. The Overview panel starts the carousel and does not show a back arrow. Clicking the Assets, Loans, or Income rows in the overview jumps directly to the corresponding edit panel.
 
@@ -61,7 +61,7 @@ The first version calculates:
 - Display currency is derived from the active market selection instead of being manually selected inside the FIRE form. Saved numeric values remain in the plan's stored `preferred_currency`.
 - Liability balances amortize monthly using APR and monthly payment.
 - Calculations are estimates for planning support and are not financial advice.
-- The browser keeps a user-scoped local draft while the user edits. Autosave runs when editable fields lose focus, when the browser window loses focus, when the page is hidden, and when the page is being left. Successful autosaves clear the local draft after syncing to Supabase.
+- The browser keeps a user-scoped local draft while the user edits. Autosave runs when editable fields lose focus, when the browser window loses focus, when the page is hidden, and when the page is being left. Confirmed investment and loan deletions autosave immediately after the in-page confirmation dialog so removed rows do not return after refresh. Successful autosaves clear the local draft after syncing to Supabase without reloading the full FIRE plan view.
 - Autosave success is intentionally quiet. Save errors remain visible so users can correct invalid inputs or retry after transient Supabase failures.
 
 ## Verification
@@ -71,5 +71,5 @@ Focused coverage is included for:
 - Required monthly contribution math.
 - Liability payoff balance estimates.
 - Yearly projection summary output.
-- Component behavior for saved plan loading, invalid target ages, autosaving on focus changes, and preserving local drafts until Supabase sync succeeds.
+- Component behavior for saved plan loading, invalid target ages, autosaving on focus changes, styled deletion confirmation, and preserving local drafts until Supabase sync succeeds.
 - Wizard behavior for overview metrics, clickable summary rows, and carousel arrow navigation.

@@ -111,7 +111,7 @@ export class FireGoalsService {
     this.throwIfError(deleteAssets, 'Failed to replace FIRE assets');
     this.throwIfError(deleteLiabilities, 'Failed to replace FIRE liabilities');
 
-    const assetRows = assets
+    const savedAssets: FireAsset[] = assets
       .filter(asset => asset.name.trim() && asset.current_value >= 0)
       .map(asset => ({
         goal_id: savedGoal.id,
@@ -121,7 +121,7 @@ export class FireGoalsService {
         current_value: asset.current_value,
         annual_growth_rate: asset.annual_growth_rate,
       }));
-    const liabilityRows = liabilities
+    const savedLiabilities: FireLiability[] = liabilities
       .filter(liability => liability.name.trim() && liability.balance >= 0)
       .map(liability => ({
         goal_id: savedGoal.id,
@@ -135,20 +135,16 @@ export class FireGoalsService {
         payoff_date: liability.payoff_date,
       }));
 
-    if (assetRows.length > 0) {
-      this.throwIfError(await this.db.from('fire_assets').insert(assetRows), 'Failed to save FIRE assets');
+    if (savedAssets.length > 0) {
+      this.throwIfError(await this.db.from('fire_assets').insert(savedAssets), 'Failed to save FIRE assets');
     }
-    if (liabilityRows.length > 0) {
-      this.throwIfError(await this.db.from('fire_liabilities').insert(liabilityRows), 'Failed to save FIRE liabilities');
+    if (savedLiabilities.length > 0) {
+      this.throwIfError(await this.db.from('fire_liabilities').insert(savedLiabilities), 'Failed to save FIRE liabilities');
     }
 
-    await this.loadData();
-    if (usedLegacySchemaFallback) {
-      const loadedGoal = this.goal();
-      if (loadedGoal) {
-        this.goal.set({ ...loadedGoal, tax_rate: goalInput.tax_rate });
-      }
-    }
+    this.goal.set(usedLegacySchemaFallback ? { ...savedGoal, tax_rate: goalInput.tax_rate } : savedGoal);
+    this.assets.set(savedAssets);
+    this.liabilities.set(savedLiabilities);
   }
 
   private buildGoalPayload(userId: string, goalInput: FireGoal, updatedAt: string, includeTaxRate: boolean): FireGoalWritePayload {

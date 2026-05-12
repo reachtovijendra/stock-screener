@@ -262,5 +262,35 @@
         <i class="pi pi-arrow-right"></i>
       </button>
     </div>
+
   </section>
+
+  <div class="delete-dialog-backdrop" *ngIf="pendingDelete()" (click)="cancelDelete()">
+    <section
+      class="delete-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="fire-delete-title"
+      aria-describedby="fire-delete-description"
+      (click)="$event.stopPropagation()"
+    >
+      <div class="delete-dialog-icon" aria-hidden="true">
+        <i class="pi pi-trash"></i>
+      </div>
+      <div class="delete-dialog-copy">
+        <span class="dialog-kicker">Confirm Removal</span>
+        <h2 id="fire-delete-title">Remove {{ pendingDelete()!.name }}?</h2>
+        <p id="fire-delete-description">
+          This {{ pendingDelete()!.kind }} will be removed from your FIRE plan and autosaved immediately.
+        </p>
+      </div>
+      <div class="delete-dialog-actions">
+        <button type="button" class="dialog-button dialog-button-secondary" (click)="cancelDelete()">Keep it</button>
+        <button type="button" class="dialog-button dialog-button-danger" (click)="confirmDelete()">
+          <i class="pi pi-check"></i>
+          Remove
+        </button>
+      </div>
+    </section>
+  </div>
 </section>

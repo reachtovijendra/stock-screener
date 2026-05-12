@@ -71,6 +71,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FIRE Goals overview income details now include taxation, with a saved tax-rate assumption used to calculate available-to-invest cash flow.
 - FIRE Goals overview summary rows now allocate more horizontal space to detail chips so typical asset, loan, and income breakdowns stay on one line.
 - FIRE Goals now autosaves when edit fields lose focus or the browser tab/window is left, replacing the visible Save Plan action and restored-draft success note.
+- FIRE Goals investment and loan deletion confirmations now use a styled in-page dialog instead of the browser-native confirmation popup.
 - FIRE Goals header now spells out FIRE as "Financial Independence, Retire Early."
 - FIRE Goals now starts brand-new users with an empty plan and uses placeholders instead of seeded demo amounts, assets, and loans.
 - FIRE Goals Loans panel now uses modern grouped loan cards with clearer identity, balance, payment, APR, and payoff sections.
@@ -136,6 +137,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed FIRE Goals row deletion so confirmed investment and loan removals autosave immediately instead of reappearing after refresh.
+- Fixed FIRE Goals autosave refreshing the page by updating local saved state without reloading the full FIRE plan after each save.
 - Fixed FIRE Goals investment and loan saves against older Supabase schemas by retrying the goal save without `tax_rate` only when PostgREST reports that specific schema-cache miss.
 - Fixed FIRE Goals draft loss on browser refresh by preserving unsaved goal, asset, and liability edits in user-scoped local browser storage until `Save Plan` syncs them to Supabase.
 - Fixed shared watchlist collaborator lists to refresh immediately after share, role update, or revoke actions instead of showing stale cached results.

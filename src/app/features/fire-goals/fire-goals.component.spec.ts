@@ -150,6 +150,74 @@ describe('FireGoalsComponent', () => {
     );
   }));
 
+  it('opens a styled confirmation dialog before investment deletion', fakeAsync(() => {
+    fixture.detectChanges();
+    component.goalForm.patchValue({ current_age: 40, target_retirement_age: 55 });
+    component.addAsset();
+    component.updateAsset(0, { name: 'Old brokerage', current_value: 25_000 });
+
+    component.removeAsset(0);
+    fixture.detectChanges();
+
+    const dialog = fixture.nativeElement.querySelector('.delete-dialog') as HTMLElement;
+    expect(dialog).not.toBeNull();
+    expect(dialog.textContent).toContain('Remove Old brokerage?');
+    expect(component.assets().length).toBe(1);
+
+    (dialog.querySelector('.dialog-button-danger') as HTMLButtonElement).click();
+    flushMicrotasks();
+
+    expect(component.assets()).toEqual([]);
+    expect(component.pendingDelete()).toBeNull();
+    expect(fireGoalsService.savePlan).toHaveBeenCalledWith(
+      component.currentGoal(),
+      [],
+      component.liabilities()
+    );
+  }));
+
+  it('does not remove or autosave an investment when deletion dialog is cancelled', fakeAsync(() => {
+    fixture.detectChanges();
+    component.goalForm.patchValue({ current_age: 40, target_retirement_age: 55 });
+    component.addAsset();
+    component.updateAsset(0, { name: 'Keep brokerage', current_value: 25_000 });
+    fireGoalsService.savePlan.calls.reset();
+
+    component.removeAsset(0);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('.dialog-button-secondary') as HTMLButtonElement).click();
+    flushMicrotasks();
+
+    expect(component.assets()[0].name).toBe('Keep brokerage');
+    expect(component.pendingDelete()).toBeNull();
+    expect(fireGoalsService.savePlan).not.toHaveBeenCalled();
+  }));
+
+  it('opens a styled confirmation dialog before loan deletion', fakeAsync(() => {
+    fixture.detectChanges();
+    component.goalForm.patchValue({ current_age: 40, target_retirement_age: 55 });
+    component.addLiability();
+    component.updateLiability(0, { name: 'Old mortgage', balance: 120_000 });
+
+    component.removeLiability(0);
+    fixture.detectChanges();
+
+    const dialog = fixture.nativeElement.querySelector('.delete-dialog') as HTMLElement;
+    expect(dialog).not.toBeNull();
+    expect(dialog.textContent).toContain('Remove Old mortgage?');
+
+    (dialog.querySelector('.dialog-button-danger') as HTMLButtonElement).click();
+    flushMicrotasks();
+
+    expect(component.liabilities()).toEqual([]);
+    expect(component.pendingDelete()).toBeNull();
+    expect(fireGoalsService.savePlan).toHaveBeenCalledWith(
+      component.currentGoal(),
+      component.assets(),
+      []
+    );
+  }));
+
   it('hides the manual save button and success notes', () => {
     fixture.detectChanges();
 

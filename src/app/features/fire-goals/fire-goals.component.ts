@@ -11,11 +11,18 @@ import { AuthService } from '../../core/services/auth.service';
 import { calculateFireProjection } from '../../core/utils/fire-goals-calculations';
 
 type FireWizardPanel = 'overview' | 'goalIncome' | 'assets' | 'loans';
+type FireDeleteKind = 'investment' | 'loan';
 
 interface CategorySummary {
   label: string;
   value: number;
   count: number;
+}
+
+interface PendingDelete {
+  kind: FireDeleteKind;
+  index: number;
+  name: string;
 }
 
 const DEFAULT_GOAL: FireGoal = {
@@ -62,6 +69,7 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
   readonly hasLocalDraft = signal(false);
   readonly activePanel = signal<FireWizardPanel>('overview');
   readonly panelDirection = signal<'forward' | 'backward'>('forward');
+  readonly pendingDelete = signal<PendingDelete | null>(null);
   private readonly formVersion = signal(0);
   private autosaveTimer: ReturnType<typeof setTimeout> | null = null;
   private saveQueued = false;
@@ -201,8 +209,9 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
   }
 
   removeAsset(index: number): void {
-    this.assets.update(assets => assets.filter((_, itemIndex) => itemIndex !== index));
-    this.persistDraft();
+    const asset = this.assets()[index];
+    if (!asset) return;
+    this.pendingDelete.set({ kind: 'investment', index, name: asset.name.trim() || 'this investment' });
   }
 
   updateAsset(index: number, patch: Partial<FireAsset>): void {
@@ -223,8 +232,9 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
   }
 
   removeLiability(index: number): void {
-    this.liabilities.update(liabilities => liabilities.filter((_, itemIndex) => itemIndex !== index));
-    this.persistDraft();
+    const liability = this.liabilities()[index];
+    if (!liability) return;
+    this.pendingDelete.set({ kind: 'loan', index, name: liability.name.trim() || 'this loan' });
   }
 
   updateLiability(index: number, patch: Partial<FireLiability>): void {
@@ -311,6 +321,25 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
     const previousIndex = (this.activePanelIndex() - 1 + FIRE_WIZARD_PANELS.length) % FIRE_WIZARD_PANELS.length;
     this.panelDirection.set('backward');
     this.activePanel.set(FIRE_WIZARD_PANELS[previousIndex]);
+  }
+
+  cancelDelete(): void {
+    this.pendingDelete.set(null);
+  }
+
+  confirmDelete(): void {
+    const pendingDelete = this.pendingDelete();
+    if (!pendingDelete) return;
+
+    if (pendingDelete.kind === 'investment') {
+      this.assets.update(assets => assets.filter((_, itemIndex) => itemIndex !== pendingDelete.index));
+    } else {
+      this.liabilities.update(liabilities => liabilities.filter((_, itemIndex) => itemIndex !== pendingDelete.index));
+    }
+
+    this.pendingDelete.set(null);
+    this.persistDraft();
+    this.flushAutosave();
   }
 
   private getErrorMessage(error: unknown, fallback: string): string {

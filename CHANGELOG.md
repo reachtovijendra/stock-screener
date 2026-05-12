@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Screener Top Losers and Top Gainers quick-view buttons with selectable 1D, 1M, and 1Y ranking periods backed by a full-market movers API.
 - Portfolio Tracker Growth Lens popup with a PrimeNG dialog, Chart.js-backed growth/profit/return charts, KPI cards, and no-actual-data guidance.
 - Authenticated FIRE Goals page at `/fire-goals` with Supabase-backed goal, asset, and liability persistence, client-side retirement projections, required monthly/yearly contribution targets, and polished mission-control styling.
 - Supabase schema script for `fire_goals`, `fire_assets`, and `fire_liabilities` tables with row-level security policies for user-owned FIRE planning data.
@@ -142,6 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed the local API dev server to route Screener Top Losers and Top Gainers quick-view requests instead of returning an invalid request error.
 - Fixed FIRE Goals asset ledger header alignment so investment row values line up with their column labels.
 - Fixed FIRE Goals row deletion so confirmed investment and loan removals autosave immediately instead of reappearing after refresh.
 - Fixed FIRE Goals autosave refreshing the page by updating local saved state without reloading the full FIRE plan after each save.

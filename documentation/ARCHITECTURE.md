@@ -140,6 +140,7 @@ See `documentation/ANALYTICS.md` for provider recommendation, configuration, and
 | `/api/stocks?action=search` | GET | Symbol/name search |
 | `/api/stocks?action=screen` | POST | Run screening with filters |
 | `/api/stocks?action=raising` | GET | Run the Raising Stocks quick view for the selected market |
+| `/api/stocks?action=movers` | GET | Run Top Gainers or Top Losers quick views for the selected market and period |
 | `/api/stocks?action=list` | GET | Get available stock list |
 | `/api/stocks?action=indices` | GET | Market index data |
 | `/api/watchlists/share` | GET/POST | List collaborators for an owned watchlist or share by email |

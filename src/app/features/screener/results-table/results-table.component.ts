@@ -43,7 +43,7 @@ import { SortConfig } from '../../../core/models/filter.model';
       <!-- Results Header -->
       <div class="results-header">
         <div class="header-left">
-          <h2>{{ screenerService.activeQuickView() === 'raising-stocks' ? 'Raising Stocks' : 'Results' }}</h2>
+          <h2>{{ quickViewTitle() }}</h2>
           @if (!screenerService.loading() && screenerService.totalCount() > 0) {
             <span class="stock-count">{{ screenerService.totalCount() | number }} stocks</span>
           }
@@ -177,8 +177,8 @@ import { SortConfig } from '../../../core/models/filter.model';
           scrollDirection="vertical"
           [showCurrentPageReport]="true"
           currentPageReportTemplate="{first}–{last} of {totalRecords}"
-          [sortField]="screenerService.activeQuickView() === 'raising-stocks' ? 'oneMonthChangePercent' : 'marketCap'"
-          [sortOrder]="-1"
+          [sortField]="screenerService.sort().field"
+          [sortOrder]="screenerService.sort().direction === 'asc' ? 1 : -1"
           scrollHeight="calc(100vh - 260px)"
           styleClass="compact-table"
           responsiveLayout="scroll"
@@ -196,7 +196,7 @@ import { SortConfig } from '../../../core/models/filter.model';
               <th pSortableColumn="changePercent" class="col-change text-right">
                 Change <p-sortIcon field="changePercent"></p-sortIcon>
               </th>
-              @if (screenerService.activeQuickView() === 'raising-stocks') {
+              @if (screenerService.showPerformanceColumns()) {
                 <th pSortableColumn="oneMonthChangePercent" class="col-period text-right">
                   1M <p-sortIcon field="oneMonthChangePercent"></p-sortIcon>
                 </th>
@@ -271,7 +271,7 @@ import { SortConfig } from '../../../core/models/filter.model';
                 </span>
               </td>
 
-              @if (screenerService.activeQuickView() === 'raising-stocks') {
+              @if (screenerService.showPerformanceColumns()) {
                 <td class="col-period text-right">
                   <span class="period-value" [ngClass]="periodClass(stock.oneMonthChangePercent)">
                     {{ formatPeriodChange(stock.oneMonthChangePercent) }}
@@ -390,7 +390,7 @@ import { SortConfig } from '../../../core/models/filter.model';
 
           <ng-template pTemplate="emptymessage">
             <tr>
-              <td [attr.colspan]="screenerService.activeQuickView() === 'raising-stocks' ? 19 : 15" class="text-center p-4">No stocks match your criteria.</td>
+              <td [attr.colspan]="screenerService.showPerformanceColumns() ? 19 : 15" class="text-center p-4">No stocks match your criteria.</td>
             </tr>
           </ng-template>
         </p-table>
@@ -958,6 +958,19 @@ export class ResultsTableComponent {
       return '—';
     }
     return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
+  }
+
+  quickViewTitle(): string {
+    switch (this.screenerService.activeQuickView()) {
+      case 'raising-stocks':
+        return 'Raising Stocks';
+      case 'top-gainers':
+        return `Top Gainers (${this.screenerService.getMoverPeriodLabel(this.screenerService.activeMoverPeriod())})`;
+      case 'top-losers':
+        return `Top Losers (${this.screenerService.getMoverPeriodLabel(this.screenerService.activeMoverPeriod())})`;
+      default:
+        return 'Results';
+    }
   }
 
   periodClass(value: number | null | undefined): string {

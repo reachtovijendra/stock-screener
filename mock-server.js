@@ -1783,6 +1783,34 @@ function isRaisingStock(stock, minMarketCap) {
     && sixMonth > oneYear;
 }
 
+function getTopMoverValue(stock, period) {
+  switch (period) {
+    case '1d':
+      return stock.changePercent ?? null;
+    case '1m':
+      return stock.oneMonthChangePercent ?? null;
+    case '1y':
+      return stock.oneYearChangePercent ?? null;
+    default:
+      return null;
+  }
+}
+
+function selectTopMovers(stocks, type, period, minMarketCap) {
+  return stocks
+    .filter(stock => {
+      const value = getTopMoverValue(stock, period);
+      return (stock.marketCap || 0) >= minMarketCap
+        && value != null
+        && Number.isFinite(value);
+    })
+    .sort((a, b) => {
+      const aValue = getTopMoverValue(a, period) ?? 0;
+      const bValue = getTopMoverValue(b, period) ?? 0;
+      return type === 'gainers' ? bValue - aValue : aValue - bValue;
+    });
+}
+
 async function mapWithConcurrency(items, limit, worker) {
   const results = new Array(items.length);
   let nextIndex = 0;
@@ -2054,6 +2082,66 @@ const server = http.createServer(async (req, res) => {
           sequence: ['1M', '3M', '6M', '1Y'],
         },
         timestamp: new Date().toISOString()
+      }));
+      return;
+    }
+
+    if (path === '/api/stocks' && action === 'movers' && req.method === 'GET') {
+      const startTime = Date.now();
+      const market = (url.searchParams.get('market') || 'US').toUpperCase();
+      const type = (url.searchParams.get('type') || 'gainers').toLowerCase();
+      const period = (url.searchParams.get('period') || '1d').toLowerCase();
+
+      if (!['gainers', 'losers'].includes(type)) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ message: 'Invalid movers type. Use gainers or losers.' }));
+        return;
+      }
+
+      if (!['1d', '1m', '1y'].includes(period)) {
+        res.writeHead(400);
+        res.end(JSON.stringify({ message: 'Invalid movers period. Use 1d, 1m, or 1y.' }));
+        return;
+      }
+
+      const minMarketCap = market === 'IN' ? 83e9 : 1e9;
+      const stocks = await fetchMarketStocks(market, {
+        marketCap: {
+          mode: 'custom',
+          categories: [],
+          customRange: { min: minMarketCap },
+        },
+      });
+
+      const eligibleStocks = stocks.filter(stock =>
+        stock.price > 0 && (stock.marketCap || 0) >= minMarketCap
+      );
+
+      const stocksToRank = period === '1d'
+        ? eligibleStocks
+        : await mapWithConcurrency(eligibleStocks, 8, async stock => {
+          try {
+            return await enrichWithPerformance({ ...stock });
+          } catch {
+            return stock;
+          }
+        });
+
+      const movers = selectTopMovers(stocksToRank, type, period, minMarketCap);
+
+      res.writeHead(200);
+      res.end(JSON.stringify({
+        stocks: movers,
+        totalCount: movers.length,
+        universeCount: eligibleStocks.length,
+        executionTimeMs: Date.now() - startTime,
+        quickView: type === 'gainers' ? 'top-gainers' : 'top-losers',
+        criteria: {
+          minMarketCap,
+          type,
+          period,
+        },
+        timestamp: new Date().toISOString(),
       }));
       return;
     }

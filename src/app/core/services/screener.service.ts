@@ -13,7 +13,9 @@ import {
 } from '../models/filter.model';
 import { environment } from '../../../environments/environment';
 
-export type ScreenerQuickView = 'raising-stocks' | null;
+export type ScreenerQuickView = 'raising-stocks' | 'top-gainers' | 'top-losers' | null;
+export type TopMoverType = 'gainers' | 'losers';
+export type TopMoverPeriod = '1d' | '1m' | '1y';
 
 /**
  * Service for stock screening functionality
@@ -74,11 +76,30 @@ export class ScreenerService {
   private _activeQuickView = signal<ScreenerQuickView>(null);
   public activeQuickView = this._activeQuickView.asReadonly();
 
+  private _activeMoverPeriod = signal<TopMoverPeriod>('1d');
+  public activeMoverPeriod = this._activeMoverPeriod.asReadonly();
+
+  public isTopMoversQuickView = computed(() =>
+    this._activeQuickView() === 'top-gainers' || this._activeQuickView() === 'top-losers'
+  );
+
+  public showPerformanceColumns = computed(() =>
+    this._activeQuickView() === 'raising-stocks'
+    || (this.isTopMoversQuickView() && this._activeMoverPeriod() !== '1d')
+  );
+
   public quickViewContext = computed(() => {
     if (this._activeQuickView() === 'raising-stocks') {
       const market = this._filters().market;
       const minCap = market === 'IN' ? '₹8,300 Cr' : '$1B';
       return `Raising Stocks: 1M positive and 1M > 3M > 6M > 1Y, min ${minCap} market cap`;
+    }
+    if (this.isTopMoversQuickView()) {
+      const market = this._filters().market;
+      const minCap = market === 'IN' ? '₹8,300 Cr' : '$1B';
+      const direction = this._activeQuickView() === 'top-gainers' ? 'Top Gainers' : 'Top Losers';
+      const period = this.getMoverPeriodLabel(this._activeMoverPeriod());
+      return `${direction}: full ${market} market ranked by ${period} price change, min ${minCap} market cap`;
     }
     return null;
   });
@@ -156,6 +177,7 @@ export class ScreenerService {
     };
     
     this._activeQuickView.set(null);
+    this._activeMoverPeriod.set('1d');
     this._filters.set(newFilters);
     this.resetPagination();
     this.runScreen();
@@ -166,6 +188,7 @@ export class ScreenerService {
    */
   updateFilters(partialFilters: Partial<ScreenerFilters>, runScreen: boolean = true): void {
     this._activeQuickView.set(null);
+    this._activeMoverPeriod.set('1d');
     this._filters.update(current => ({
       ...current,
       ...partialFilters
@@ -194,6 +217,7 @@ export class ScreenerService {
     this._hasClientFilters = false;
     this._totalCount.set(0);
     this._activeQuickView.set(null);
+    this._activeMoverPeriod.set('1d');
   }
 
   /**
@@ -206,6 +230,7 @@ export class ScreenerService {
     this._cachedStocks.set([]);
     this._totalCount.set(0);
     this._activeQuickView.set(null);
+    this._activeMoverPeriod.set('1d');
   }
 
   /**
@@ -351,6 +376,28 @@ export class ScreenerService {
     return true;
   }
 
+  private getMoverSortField(period: TopMoverPeriod): keyof Stock {
+    switch (period) {
+      case '1d':
+        return 'changePercent';
+      case '1m':
+        return 'oneMonthChangePercent';
+      case '1y':
+        return 'oneYearChangePercent';
+    }
+  }
+
+  getMoverPeriodLabel(period: TopMoverPeriod): string {
+    switch (period) {
+      case '1d':
+        return '1D';
+      case '1m':
+        return '1M';
+      case '1y':
+        return '1Y';
+    }
+  }
+
   /**
    * Paginate from a specific source array
    */
@@ -413,6 +460,7 @@ export class ScreenerService {
     this._loading.set(true);
     this._error.set(null);
     this._activeQuickView.set(null);
+    this._activeMoverPeriod.set('1d');
     
     // Clear cache and reset all filter states
     this._cachedStocks.set([]);
@@ -485,6 +533,7 @@ export class ScreenerService {
     this._loading.set(true);
     this._error.set(null);
     this._activeQuickView.set('raising-stocks');
+    this._activeMoverPeriod.set('1d');
 
     this._cachedStocks.set([]);
     this._filteredStocks.set([]);
@@ -530,6 +579,63 @@ export class ScreenerService {
   }
 
   /**
+   * Run the Top Gainers or Top Losers quick view using the current Screener market.
+   */
+  runTopMovers(type: TopMoverType, period: TopMoverPeriod = '1d'): void {
+    this._loading.set(true);
+    this._error.set(null);
+    this._activeQuickView.set(type === 'gainers' ? 'top-gainers' : 'top-losers');
+    this._activeMoverPeriod.set(period);
+
+    this._cachedStocks.set([]);
+    this._filteredStocks.set([]);
+    this._hasClientFilters = false;
+    this._technicalsCalculated = false;
+    this._rsiFilter.set(null);
+    this._macdFilter.set(null);
+    this._sectorFilter.set([]);
+    this._industryFilter.set([]);
+    this._sort.set({
+      field: this.getMoverSortField(period),
+      direction: type === 'gainers' ? 'desc' : 'asc',
+    });
+
+    const startTime = performance.now();
+    const market = this._filters().market;
+
+    this.http.get<ScreenResult & { error?: string; message?: string }>(
+      `/api/stocks?action=movers&market=${market}&type=${type}&period=${period}`
+    ).pipe(
+      tap(result => {
+        if (result.error) {
+          throw new Error(result.message || result.error);
+        }
+
+        this._cachedStocks.set(result.stocks);
+        this._totalCount.set(result.totalCount);
+        this._pagination.update(current => ({
+          ...current,
+          page: 0,
+          totalRecords: result.totalCount
+        }));
+
+        this.paginateFromCache();
+        this._executionTime.set(result.executionTimeMs || performance.now() - startTime);
+        this._loading.set(false);
+      }),
+      catchError(error => {
+        this._loading.set(false);
+        this._error.set(error.message || 'An error occurred while loading Top Movers');
+        this._results.set([]);
+        this._cachedStocks.set([]);
+        this._totalCount.set(0);
+        console.error('Top movers error:', error);
+        return of(null);
+      })
+    ).subscribe();
+  }
+
+  /**
    * Export current results to CSV
    */
   exportToCsv(): void {
@@ -540,7 +646,7 @@ export class ScreenerService {
     
     const headers = [
       'Symbol', 'Name', 'Price', 'Change', 'Change %',
-      ...(this._activeQuickView() === 'raising-stocks' ? ['1M %', '3M %', '6M %', '1Y %'] : []),
+      ...(this.showPerformanceColumns() ? ['1M %', '3M %', '6M %', '1Y %'] : []),
       'Market Cap',
       'P/E Ratio', 'Forward P/E', 'EPS', '52W High', '52W Low',
       '% From High', 'Volume', 'Avg Volume', 'Sector', 'Industry'
@@ -552,7 +658,7 @@ export class ScreenerService {
       stock.price,
       stock.change,
       stock.changePercent.toFixed(2),
-      ...(this._activeQuickView() === 'raising-stocks' ? [
+      ...(this.showPerformanceColumns() ? [
         stock.oneMonthChangePercent ?? '',
         stock.threeMonthChangePercent ?? '',
         stock.sixMonthChangePercent ?? '',

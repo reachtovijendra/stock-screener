@@ -20,6 +20,13 @@ type StockLike = {
   marketCap?: number | null;
 };
 
+export type TopMoverType = 'gainers' | 'losers';
+export type TopMoverPeriod = '1d' | '1m' | '1y';
+
+type MoverStockLike = StockLike & Partial<PerformanceFields> & {
+  changePercent?: number | null;
+};
+
 function httpsRequest(options: https.RequestOptions): Promise<{ statusCode: number; body: string }> {
   return new Promise((resolve, reject) => {
     const req = https.request(options, (res) => {
@@ -148,4 +155,35 @@ export function isRaisingStock(stock: StockLike & Partial<PerformanceFields>, mi
     && oneMonth > threeMonth
     && threeMonth > sixMonth
     && sixMonth > oneYear;
+}
+
+export function getTopMoverValue(stock: MoverStockLike, period: TopMoverPeriod): number | null {
+  switch (period) {
+    case '1d':
+      return stock.changePercent ?? null;
+    case '1m':
+      return stock.oneMonthChangePercent ?? null;
+    case '1y':
+      return stock.oneYearChangePercent ?? null;
+  }
+}
+
+export function selectTopMovers<T extends MoverStockLike>(
+  stocks: T[],
+  type: TopMoverType,
+  period: TopMoverPeriod,
+  minMarketCap: number
+): T[] {
+  return stocks
+    .filter(stock => {
+      const value = getTopMoverValue(stock, period);
+      return (stock.marketCap ?? 0) >= minMarketCap
+        && value != null
+        && Number.isFinite(value);
+    })
+    .sort((a, b) => {
+      const aValue = getTopMoverValue(a, period) ?? 0;
+      const bValue = getTopMoverValue(b, period) ?? 0;
+      return type === 'gainers' ? bValue - aValue : aValue - bValue;
+    });
 }

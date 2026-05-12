@@ -19,7 +19,7 @@ import { RippleModule } from 'primeng/ripple';
 import { FloatLabelModule } from 'primeng/floatlabel';
 import { OverlayPanelModule, OverlayPanel } from 'primeng/overlaypanel';
 
-import { ScreenerService, MarketService } from '../../../core/services';
+import { ScreenerService, MarketService, TopMoverPeriod, TopMoverType } from '../../../core/services';
 import { 
   ScreenerFilters, 
   FilterPreset,
@@ -323,6 +323,86 @@ interface FilterOption<T> {
 
       <!-- Action Buttons -->
       <div class="filter-actions">
+        <div class="mover-action-group loser">
+          <button
+            class="mover-action loser"
+            [class.active]="screenerService.activeQuickView() === 'top-losers'"
+            [class.loading]="screenerService.loading() && screenerService.activeQuickView() === 'top-losers'"
+            [disabled]="screenerService.loading()"
+            (click)="runTopMovers('losers')"
+            title="Rank the full selected market by the worst price changes">
+            @if (screenerService.loading() && screenerService.activeQuickView() === 'top-losers') {
+              <i class="pi pi-spin pi-spinner"></i>
+            } @else {
+              <i class="pi pi-arrow-down"></i>
+            }
+            <span>Top Losers</span>
+            <span class="period-badge">{{ screenerService.getMoverPeriodLabel(topLosersPeriod()) }}</span>
+          </button>
+          <button
+            class="mover-period-trigger loser"
+            [disabled]="screenerService.loading()"
+            (click)="opTopLosers.toggle($event)"
+            aria-label="Change Top Losers period">
+            <i class="pi pi-chevron-down"></i>
+          </button>
+        </div>
+        <p-overlayPanel #opTopLosers [style]="{'width': '190px'}" appendTo="body">
+          <div class="mover-period-menu">
+            <div class="overlay-title">Top Losers Period</div>
+            @for (period of moverPeriods; track period.value) {
+              <button
+                type="button"
+                class="period-option loser"
+                [class.active]="topLosersPeriod() === period.value"
+                (click)="selectTopMoverPeriod('losers', period.value, opTopLosers)">
+                <span>{{ period.label }}</span>
+                <small>{{ period.description }}</small>
+              </button>
+            }
+          </div>
+        </p-overlayPanel>
+
+        <div class="mover-action-group gainer">
+          <button
+            class="mover-action gainer"
+            [class.active]="screenerService.activeQuickView() === 'top-gainers'"
+            [class.loading]="screenerService.loading() && screenerService.activeQuickView() === 'top-gainers'"
+            [disabled]="screenerService.loading()"
+            (click)="runTopMovers('gainers')"
+            title="Rank the full selected market by the strongest price changes">
+            @if (screenerService.loading() && screenerService.activeQuickView() === 'top-gainers') {
+              <i class="pi pi-spin pi-spinner"></i>
+            } @else {
+              <i class="pi pi-arrow-up"></i>
+            }
+            <span>Top Gainers</span>
+            <span class="period-badge">{{ screenerService.getMoverPeriodLabel(topGainersPeriod()) }}</span>
+          </button>
+          <button
+            class="mover-period-trigger gainer"
+            [disabled]="screenerService.loading()"
+            (click)="opTopGainers.toggle($event)"
+            aria-label="Change Top Gainers period">
+            <i class="pi pi-chevron-down"></i>
+          </button>
+        </div>
+        <p-overlayPanel #opTopGainers [style]="{'width': '190px'}" appendTo="body">
+          <div class="mover-period-menu">
+            <div class="overlay-title">Top Gainers Period</div>
+            @for (period of moverPeriods; track period.value) {
+              <button
+                type="button"
+                class="period-option gainer"
+                [class.active]="topGainersPeriod() === period.value"
+                (click)="selectTopMoverPeriod('gainers', period.value, opTopGainers)">
+                <span>{{ period.label }}</span>
+                <small>{{ period.description }}</small>
+              </button>
+            }
+          </div>
+        </p-overlayPanel>
+
         <button
           class="quick-view-action"
           [class.active]="screenerService.activeQuickView() === 'raising-stocks'"
@@ -432,6 +512,156 @@ interface FilterOption<T> {
       gap: 0.5rem;
       margin-left: auto;
       flex-shrink: 0;
+    }
+
+    .mover-action-group {
+      display: inline-flex;
+      align-items: stretch;
+      border-radius: 9px;
+      overflow: hidden;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.04) inset;
+
+      &.loser {
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        background: rgba(239, 68, 68, 0.07);
+      }
+
+      &.gainer {
+        border: 1px solid rgba(34, 197, 94, 0.35);
+        background: rgba(34, 197, 94, 0.08);
+      }
+    }
+
+    .mover-action,
+    .mover-period-trigger {
+      border: none;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      white-space: nowrap;
+
+      &:disabled {
+        opacity: 0.7;
+        cursor: not-allowed;
+      }
+    }
+
+    .mover-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.45rem 0.62rem;
+      background: transparent;
+      font-size: 0.78rem;
+      font-weight: 800;
+
+      i {
+        font-size: 0.74rem;
+      }
+
+      &.loser {
+        color: #ef4444;
+      }
+
+      &.gainer {
+        color: #16a34a;
+      }
+
+      &:hover:not(:disabled),
+      &.active {
+        background: rgba(255, 255, 255, 0.06);
+      }
+
+      &.active.loser {
+        color: #f87171;
+      }
+
+      &.active.gainer {
+        color: #22c55e;
+      }
+    }
+
+    .period-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      padding: 0.1rem 0.3rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--text-color);
+      font-size: 0.66rem;
+      font-weight: 800;
+      letter-spacing: 0.03em;
+    }
+
+    .mover-period-trigger {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 28px;
+      background: rgba(0, 0, 0, 0.12);
+      border-left: 1px solid rgba(255, 255, 255, 0.08);
+
+      i {
+        font-size: 0.62rem;
+      }
+
+      &.loser {
+        color: #f87171;
+      }
+
+      &.gainer {
+        color: #22c55e;
+      }
+
+      &:hover:not(:disabled) {
+        background: rgba(255, 255, 255, 0.08);
+      }
+    }
+
+    .mover-period-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .period-option {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.12rem;
+      width: 100%;
+      padding: 0.55rem 0.65rem;
+      border-radius: 8px;
+      border: 1px solid var(--surface-border);
+      background: var(--surface-ground);
+      color: var(--text-color);
+      cursor: pointer;
+      transition: all 0.15s ease;
+
+      span {
+        font-size: 0.8rem;
+        font-weight: 800;
+      }
+
+      small {
+        color: var(--text-color-secondary);
+        font-size: 0.68rem;
+      }
+
+      &:hover {
+        background: var(--surface-hover);
+      }
+
+      &.active.loser {
+        border-color: rgba(239, 68, 68, 0.65);
+        background: rgba(239, 68, 68, 0.12);
+      }
+
+      &.active.gainer {
+        border-color: rgba(34, 197, 94, 0.65);
+        background: rgba(34, 197, 94, 0.14);
+      }
     }
 
     .reset-action {
@@ -855,6 +1085,15 @@ export class FilterPanelComponent implements OnInit {
 
   sectorOptions = SECTORS.map(sector => ({ label: sector, value: sector }));
 
+  moverPeriods: Array<{ label: string; value: TopMoverPeriod; description: string }> = [
+    { label: '1D', value: '1d', description: 'Previous session' },
+    { label: '1M', value: '1m', description: 'Last 21 trading days' },
+    { label: '1Y', value: '1y', description: 'Last 252 trading days' }
+  ];
+
+  topLosersPeriod = signal<TopMoverPeriod>('1d');
+  topGainersPeriod = signal<TopMoverPeriod>('1d');
+
   // Industry filter (column-level, not part of screening API)
   selectedIndustries: string[] = [];
 
@@ -937,6 +1176,22 @@ export class FilterPanelComponent implements OnInit {
   runRaisingStocks(): void {
     this.screenerService.runRaisingStocks();
     this.screenRun.emit();
+  }
+
+  runTopMovers(type: TopMoverType): void {
+    const period = type === 'gainers' ? this.topGainersPeriod() : this.topLosersPeriod();
+    this.screenerService.runTopMovers(type, period);
+    this.screenRun.emit();
+  }
+
+  selectTopMoverPeriod(type: TopMoverType, period: TopMoverPeriod, overlay: OverlayPanel): void {
+    if (type === 'gainers') {
+      this.topGainersPeriod.set(period);
+    } else {
+      this.topLosersPeriod.set(period);
+    }
+    overlay.hide();
+    this.runTopMovers(type);
   }
 
   toggleRsiZone(zoneId: 'oversold' | 'approaching_oversold' | 'neutral' | 'approaching_overbought' | 'overbought'): void {

@@ -57,10 +57,24 @@ describe('ScreenerService', () => {
     expect(service.sort()).toEqual({ field: 'oneMonthChangePercent', direction: 'desc' });
   });
 
+  it('loads Top Losers with the selected mover period', () => {
+    service.runTopMovers('losers', '1y');
+
+    expect(httpGet).toHaveBeenCalledWith('/api/stocks?action=movers&market=US&type=losers&period=1y');
+    expect(service.activeQuickView()).toBe('top-losers');
+    expect(service.activeMoverPeriod()).toBe('1y');
+    expect(service.quickViewContext()).toContain('Top Losers');
+    expect(service.quickViewContext()).toContain('1Y price change');
+    expect(service.showPerformanceColumns()).toBeTrue();
+    expect(service.results().map(stock => stock.symbol)).toEqual(['AAA']);
+    expect(service.sort()).toEqual({ field: 'oneYearChangePercent', direction: 'asc' });
+  });
+
   it('clears the quick view when standard filters change', () => {
-    service.runRaisingStocks();
+    service.runTopMovers('gainers', '1m');
     service.updateFilters({ price: { min: 50 } }, false);
 
     expect(service.activeQuickView()).toBeNull();
+    expect(service.activeMoverPeriod()).toBe('1d');
   });
 });

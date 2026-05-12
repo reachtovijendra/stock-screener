@@ -81,7 +81,7 @@ export class FireGoalsService {
 
     this.throwIfError(assetsResult, 'Failed to load FIRE assets');
     this.throwIfError(liabilitiesResult, 'Failed to load FIRE liabilities');
-    this.assets.set(assetsResult.data ?? []);
+    this.assets.set((assetsResult.data ?? []).map(asset => this.normalizeAsset(asset as FireAsset)));
     this.liabilities.set(liabilitiesResult.data ?? []);
     this.loading.set(false);
   }
@@ -120,6 +120,7 @@ export class FireGoalsService {
         category: asset.category,
         current_value: asset.current_value,
         annual_growth_rate: asset.annual_growth_rate,
+        exclude_from_plan: !!asset.exclude_from_plan,
       }));
     const savedLiabilities: FireLiability[] = liabilities
       .filter(liability => liability.name.trim() && liability.balance >= 0)
@@ -145,6 +146,13 @@ export class FireGoalsService {
     this.goal.set(usedLegacySchemaFallback ? { ...savedGoal, tax_rate: goalInput.tax_rate } : savedGoal);
     this.assets.set(savedAssets);
     this.liabilities.set(savedLiabilities);
+  }
+
+  private normalizeAsset(asset: FireAsset): FireAsset {
+    return {
+      ...asset,
+      exclude_from_plan: !!asset.exclude_from_plan,
+    };
   }
 
   private buildGoalPayload(userId: string, goalInput: FireGoal, updatedAt: string, includeTaxRate: boolean): FireGoalWritePayload {

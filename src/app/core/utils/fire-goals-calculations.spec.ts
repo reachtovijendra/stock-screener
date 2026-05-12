@@ -89,4 +89,15 @@ describe('fire goals calculations', () => {
     expect(projection.timeline.length).toBe(11);
     expect(projection.timeline.at(-1)?.age).toBe(50);
   });
+
+  it('excludes flagged assets from FIRE totals and projections', () => {
+    const projection = calculateFireProjection(goal, [
+      ...assets,
+      { name: 'Vacation fund', category: 'cash', current_value: 25_000, annual_growth_rate: null, exclude_from_plan: true },
+    ], liabilities);
+
+    expect(projection.summary.totalAssets).toBe(250_000);
+    expect(projection.summary.netWorth).toBe(230_000);
+    expect(projection.timeline[0].assets).toBe(250_000);
+  });
 });

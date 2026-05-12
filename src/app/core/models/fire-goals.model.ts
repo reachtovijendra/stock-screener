@@ -26,6 +26,7 @@ export interface FireAsset {
   category: FireAssetCategory;
   current_value: number;
   annual_growth_rate: number | null;
+  exclude_from_plan?: boolean;
   created_at?: string;
   updated_at?: string;
 }

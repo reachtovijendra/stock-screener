@@ -74,6 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - FIRE Goals investment and loan deletion confirmations now use a styled in-page dialog instead of the browser-native confirmation popup.
 - FIRE Goals header now spells out FIRE as "Financial Independence, Retire Early."
 - FIRE Goals now starts brand-new users with an empty plan and uses placeholders instead of seeded demo amounts, assets, and loans.
+- FIRE Goals Goal & Income now asks for monthly spending and converts it to annual spending for saved values and FIRE calculations.
+- FIRE Goals overview income chips now show annual spending while the Goal & Income form still accepts monthly spending.
+- FIRE Goals investment rows now include an Exclude from plan checkbox for assets that should be saved but omitted from FIRE calculations.
+- FIRE Goals Loans panel now uses a borderless add-action utility row instead of redundant section copy or table-style column labels.
 - FIRE Goals Loans panel now uses modern grouped loan cards with clearer identity, balance, payment, APR, and payoff sections.
 - FIRE Goals Investments panel now uses matching grouped investment cards with clearer identity, type, and current value sections.
 - FIRE Goals investment cards now use a compact one-line desktop ledger with a sticky header for number, name, type, value, and the add action, with neutral value-cell styling.
@@ -137,6 +141,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed FIRE Goals asset ledger header alignment so investment row values line up with their column labels.
 - Fixed FIRE Goals row deletion so confirmed investment and loan removals autosave immediately instead of reappearing after refresh.
 - Fixed FIRE Goals autosave refreshing the page by updating local saved state without reloading the full FIRE plan after each save.
 - Fixed FIRE Goals investment and loan saves against older Supabase schemas by retrying the goal save without `tax_rate` only when PostgREST reports that specific schema-cache miss.

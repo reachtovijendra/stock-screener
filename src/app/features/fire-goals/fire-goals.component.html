@@ -11,7 +11,10 @@
         <h1>{{ activePanelLabel() }}</h1>
         <ng-container [ngSwitch]="activePanel()">
           <p *ngSwitchCase="'assets'" class="header-panel-summary">
-            <strong>{{ formatMoney(projection().summary.totalAssets) }} across {{ assets().length }} investment{{ assets().length === 1 ? '' : 's' }}</strong>
+            <strong>
+              {{ formatMoney(projection().summary.totalAssets) }} across {{ includedAssetCount() }} included investment{{ includedAssetCount() === 1 ? '' : 's' }}
+            </strong>
+            <span *ngIf="excludedAssetCount() > 0">{{ excludedAssetCount() }} investment{{ excludedAssetCount() === 1 ? '' : 's' }} excluded from the plan.</span>
             <span>Catalog each investment bucket and keep the current value aligned with your FIRE progress.</span>
           </p>
           <p *ngSwitchCase="'loans'" class="header-panel-summary">
@@ -63,7 +66,7 @@
                 </div>
                 <div class="category-list">
                   <span *ngFor="let item of assetSummaries()">{{ item.label }}: {{ formatMoney(item.value) }}</span>
-                  <span *ngIf="assetSummaries().length === 0">No assets added yet</span>
+                  <span *ngIf="assetSummaries().length === 0">{{ assets().length === 0 ? 'No assets added yet' : 'All investments excluded from plan' }}</span>
                 </div>
                 <i class="pi pi-arrow-right"></i>
               </button>
@@ -139,10 +142,10 @@
                 <input formControlName="tax_rate" type="number" step="0.1" min="0" max="100" placeholder="20" />
               </label>
               <label>
-                Annual spending
+                Monthly spending
                 <span class="money-input">
                   <span class="currency-prefix">{{ currencySymbol() }}</span>
-                  <input type="number" min="0" [value]="displayAmount(goalForm.controls.annual_spending.value)" (input)="updateGoalMoneyField('annual_spending', $any($event.target).value)" placeholder="75000" />
+                  <input type="number" min="0" [value]="displayMonthlySpending()" (input)="updateMonthlySpendingField($any($event.target).value)" placeholder="6250" aria-label="Monthly spending" />
                 </span>
               </label>
               <label>
@@ -164,10 +167,11 @@
                 <span aria-hidden="true">Investment name</span>
                 <span aria-hidden="true">Type</span>
                 <span aria-hidden="true">Current value</span>
+                <span aria-hidden="true">Exclude from plan</span>
                 <button type="button" class="ghost-button ledger-add-button" (click)="addAsset()">Add Investment</button>
               </div>
 
-              <article class="investment-card" *ngFor="let asset of assets(); let i = index; trackBy: trackByIndex">
+              <article class="investment-card" [class.excluded-from-plan]="asset.exclude_from_plan" *ngFor="let asset of assets(); let i = index; trackBy: trackByIndex">
                 <span class="investment-index">{{ i + 1 | number:'2.0-0' }}</span>
                 <label class="entry-field investment-name-field">
                   <span class="sr-only">Investment name</span>
@@ -186,6 +190,10 @@
                     <input type="number" min="0" [ngModel]="displayAmount(asset.current_value)" (ngModelChange)="updateAssetValue(i, $event)" placeholder="250000" aria-label="Asset value" />
                   </span>
                 </label>
+                <label class="exclude-toggle">
+                  <input type="checkbox" [ngModel]="!!asset.exclude_from_plan" (ngModelChange)="updateAsset(i, { exclude_from_plan: $event })" aria-label="Exclude asset from plan calculations" />
+                  <span>Exclude</span>
+                </label>
                 <button type="button" class="remove-button investment-remove" (click)="removeAsset(i)" aria-label="Remove asset"><i class="pi pi-trash"></i></button>
               </article>
             </div>
@@ -199,10 +207,6 @@
 
             <div *ngIf="liabilities().length > 0" class="loan-stack">
               <div class="loan-stack-header">
-                <span aria-hidden="true">#</span>
-                <span aria-hidden="true">Loan name</span>
-                <span aria-hidden="true">Balance</span>
-                <span aria-hidden="true">Monthly payment</span>
                 <button type="button" class="ghost-button ledger-add-button" (click)="addLiability()">Add Loan</button>
               </div>
 

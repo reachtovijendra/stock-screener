@@ -63,7 +63,8 @@ function getPayoffMonths(liability: FireLiability): number | null {
 }
 
 export function calculateFireProjection(goal: FireGoal, assets: FireAsset[], liabilities: FireLiability[]): FirePlanProjection {
-  const totalAssets = sum(assets.map(asset => asset.current_value));
+  const includedAssets = assets.filter(asset => !asset.exclude_from_plan);
+  const totalAssets = sum(includedAssets.map(asset => asset.current_value));
   const totalLiabilities = sum(liabilities.map(liability => liability.balance));
   const netWorth = totalAssets - totalLiabilities;
   const yearsToRetirement = Math.max(0, goal.target_retirement_age - goal.current_age);
@@ -77,7 +78,7 @@ export function calculateFireProjection(goal: FireGoal, assets: FireAsset[], lia
   const requiredAnnualContribution = requiredMonthlyContribution * 12;
   const fireTargetAtRetirement = goal.fire_amount * Math.pow(1 + goal.inflation_rate / 100, yearsToRetirement);
   const coastFireNumber = goal.fire_amount / Math.pow(1 + goal.expected_annual_return / 100, yearsToRetirement || 1);
-  const timeline = buildTimeline(goal, assets, liabilities, requiredAnnualContribution, fireTargetAtRetirement);
+  const timeline = buildTimeline(goal, includedAssets, liabilities, requiredAnnualContribution, fireTargetAtRetirement);
   const projectedNetWorthAtRetirement = timeline.at(-1)?.netWorth ?? netWorth;
 
   return {

@@ -30,9 +30,13 @@ create table if not exists public.fire_assets (
   category text not null check (category in ('cash', 'brokerage', 'retirement', 'real_estate', 'business', 'other')),
   current_value numeric(18, 4) not null default 0 check (current_value >= 0),
   annual_growth_rate numeric(8, 4),
+  exclude_from_plan boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.fire_assets
+  add column if not exists exclude_from_plan boolean not null default false;
 
 create table if not exists public.fire_liabilities (
   id uuid primary key default gen_random_uuid(),

@@ -120,6 +120,8 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
   readonly freedomDate = computed(() => new Date().getFullYear() + this.projection().summary.yearsToRetirement);
   readonly timeLeftLabel = computed(() => this.formatTimeLeft(this.projection().summary.monthsToRetirement));
   readonly topMilestones = computed(() => this.projection().timeline.filter((_, index) => index % Math.max(1, Math.ceil(this.projection().timeline.length / 5)) === 0).slice(0, 5));
+  readonly includedAssetCount = computed(() => this.assets().filter(asset => !asset.exclude_from_plan).length);
+  readonly excludedAssetCount = computed(() => this.assets().filter(asset => asset.exclude_from_plan).length);
   readonly assetSummaries = computed(() => this.summarizeAssets());
   readonly liabilitySummaries = computed(() => this.summarizeLiabilities());
   readonly incomeSummary = computed(() => {
@@ -127,9 +129,9 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
     const taxes = this.annualTaxAmount(goal);
     return [
       { label: 'Annual Income', value: goal.annual_income },
-      { label: 'Taxation', value: taxes },
+      { label: 'Annual Taxation', value: taxes },
       { label: 'Annual Spending', value: goal.annual_spending },
-      { label: 'Available To Invest', value: Math.max(0, goal.annual_income - taxes - goal.annual_spending) },
+      { label: 'Annual Available To Invest', value: Math.max(0, goal.annual_income - taxes - goal.annual_spending) },
     ];
   });
 
@@ -203,7 +205,7 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
   addAsset(): void {
     this.assets.update(assets => [
       ...assets,
-      { name: '', category: 'brokerage', current_value: 0, annual_growth_rate: null },
+      { name: '', category: 'brokerage', current_value: 0, annual_growth_rate: null, exclude_from_plan: false },
     ]);
     this.persistDraft();
   }
@@ -250,6 +252,10 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
     this.goalForm.controls[field].setValue(this.toBaseAmount(displayValue));
   }
 
+  updateMonthlySpendingField(displayValue: string | number | null): void {
+    this.goalForm.controls.annual_spending.setValue(this.roundMoney(this.toBaseAmount(displayValue) * 12));
+  }
+
   handleEditorFocusOut(event: FocusEvent): void {
     if (!this.isEditableFocusTarget(event.target)) return;
     this.scheduleAutosave();
@@ -293,6 +299,11 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
 
   displayAmount(value: number | null | undefined): number {
     return this.roundMoney(this.currencyConversion.convert(Number(value) || 0, this.baseCurrency(), this.displayCurrency()));
+  }
+
+  displayMonthlySpending(): number {
+    this.formVersion();
+    return this.roundMoney(this.currencyConversion.convert(this.monthlyAmount(this.goalForm.controls.annual_spending.value), this.baseCurrency(), this.displayCurrency()));
   }
 
   formatPercent(value: number): string {
@@ -356,7 +367,7 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
       other: 'Other Assets',
     };
 
-    return this.summarizeByCategory(this.assets(), asset => asset.category, asset => asset.current_value, labels);
+    return this.summarizeByCategory(this.assets().filter(asset => !asset.exclude_from_plan), asset => asset.category, asset => asset.current_value, labels);
   }
 
   private summarizeLiabilities(): CategorySummary[] {
@@ -402,6 +413,10 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
   private parseNumber(value: string | number | null): number {
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private monthlyAmount(annualAmount: number | null | undefined): number {
+    return this.roundMoney((Number(annualAmount) || 0) / 12);
   }
 
   private roundMoney(value: number): number {

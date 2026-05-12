@@ -124,6 +124,7 @@ describe('FireGoalsService', () => {
     expect(goalPayloads[0]['tax_rate']).toBe(18);
     expect(Object.prototype.hasOwnProperty.call(goalPayloads[1], 'tax_rate')).toBeFalse();
     expect(assetPayloads.length).toBe(1);
+    expect((assetPayloads[0] as Payload[])[0]['exclude_from_plan']).toBeFalse();
     expect(service.goal()?.tax_rate).toBe(18);
   });
 });

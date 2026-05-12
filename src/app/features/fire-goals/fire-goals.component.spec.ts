@@ -259,7 +259,7 @@ describe('FireGoalsComponent', () => {
     expect(fixture.nativeElement.querySelector('.empty-ledger-state')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.empty-ledger-state h2')).toBeNull();
     expect(fixture.nativeElement.querySelector('.investment-ledger-header')).toBeNull();
-    expect(text).toContain('$0 across 0 investments');
+    expect(text).toContain('$0 across 0 included investments');
     expect(text).toContain('No investments added yet');
     expect(text).toContain('Add Investment');
   });
@@ -328,6 +328,7 @@ describe('FireGoalsComponent', () => {
     expect(fixture.nativeElement.querySelector('.loan-stack-header')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.loan-detail-grid')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.loan-stack-header .ledger-add-button')?.textContent.trim()).toBe('Add Loan');
+    expect(fixture.nativeElement.querySelector('.loan-stack-title')).toBeNull();
     expect(text).toContain('$0 remaining across 1 loan');
     expect(text).toContain('Track balances, payoff timing');
     expect(fixture.nativeElement.querySelector('.loan-index')?.textContent.trim()).toBe('01');
@@ -383,12 +384,33 @@ describe('FireGoalsComponent', () => {
     component.addLiability();
 
     component.updateGoalMoneyField('fire_amount', 190_000_000);
+    component.updateMonthlySpendingField(9_500_000);
     component.updateAssetValue(0, 47_500_000);
     component.updateLiabilityMoneyField(0, 'monthly_payment', 190_000);
 
     expect(component.goalForm.controls.fire_amount.value).toBe(2_000_000);
+    expect(component.goalForm.controls.annual_spending.value).toBe(1_200_000);
     expect(component.assets()[0].current_value).toBe(500_000);
     expect(component.liabilities()[0].monthly_payment).toBe(2_000);
+  });
+
+  it('asks for monthly spending and stores annual spending for calculations', () => {
+    component.goToPanel('goalIncome');
+    fixture.detectChanges();
+
+    const monthlySpending = fixture.nativeElement.querySelector('input[aria-label="Monthly spending"]') as HTMLInputElement;
+    expect(fixture.nativeElement.textContent).toContain('Monthly spending');
+    expect(monthlySpending.value).toBe('0');
+
+    monthlySpending.value = '6250';
+    monthlySpending.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+
+    expect(component.goalForm.controls.annual_spending.value).toBe(75_000);
+    expect(component.incomeSummary()).toEqual(jasmine.arrayContaining([
+      jasmine.objectContaining({ label: 'Annual Spending', value: 75_000 }),
+      jasmine.objectContaining({ label: 'Annual Available To Invest' }),
+    ]));
   });
 
   it('shows total assets in the assets section header', () => {
@@ -402,11 +424,29 @@ describe('FireGoalsComponent', () => {
     expect(fixture.nativeElement.querySelector('.investment-ledger-header')).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.investment-ledger-header .ledger-add-button')?.textContent.trim()).toBe('Add Investment');
     expect(fixture.nativeElement.querySelector('.investment-row-field')).not.toBeNull();
+    expect(fixture.nativeElement.querySelector('.exclude-toggle')).not.toBeNull();
     expect(text).toContain('Assets');
-    expect(text).toContain('across 1 investment');
+    expect(text).toContain('across 1 included investment');
     expect(fixture.nativeElement.querySelector('.investment-index')?.textContent.trim()).toBe('01');
     expect(text).toContain('Catalog each investment bucket');
     expect(text).toContain('$345,000');
+  });
+
+  it('excludes selected investments from the FIRE plan totals', () => {
+    component.addAsset();
+    component.updateAsset(0, { name: 'Brokerage', current_value: 345_000, category: 'brokerage' });
+    component.addAsset();
+    component.updateAsset(1, { name: 'Vacation fund', current_value: 45_000, category: 'cash', exclude_from_plan: true });
+    component.goToPanel('assets');
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent;
+
+    expect(component.projection().summary.totalAssets).toBe(345_000);
+    expect(component.includedAssetCount()).toBe(1);
+    expect(component.excludedAssetCount()).toBe(1);
+    expect(fixture.nativeElement.querySelector('.investment-card.excluded-from-plan')).not.toBeNull();
+    expect(text).toContain('$345,000 across 1 included investment');
+    expect(text).toContain('1 investment excluded from the plan.');
   });
 
   it('restores an unsaved local draft after refresh', async () => {

@@ -11,9 +11,9 @@ The screen is implemented as a standalone Angular feature with a polished missio
 The FIRE Goals screen uses a single wizard panel:
 
 - `Overview`: Shows FIRE Goal, Net Worth, Freedom Gap, and Time Left. It also provides clickable summary rows for Assets, Loans, and Income, including annual taxation in the income detail chips.
-- `Goal & Income`: Edits the FIRE target, timeline, return assumptions, income, tax rate, spending, and currency. Currency context appears as an inline note rather than a form control.
-- `Assets`: Adds, removes, and edits modern compact investment rows with a single sticky header for identity, type, current value fields, and the add action. Investment deletion opens a styled in-page confirmation dialog before removal. When no investments exist, the panel shows a compact empty action state instead of an empty ledger or repeated summary.
-- `Loans`: Adds, removes, and edits modern loan cards with identity, balance, APR, payment, and payoff timeline fields. Loan deletion opens the same styled in-page confirmation dialog before removal. When no loans exist, the panel shows the same compact empty action state used for investments.
+- `Goal & Income`: Edits the FIRE target, timeline, return assumptions, income, tax rate, monthly spending, and currency. Monthly spending is converted to annual spending for saved values and FIRE calculations. Currency context appears as an inline note rather than a form control.
+- `Assets`: Adds, removes, and edits modern compact investment rows with a single sticky header for identity, type, current value, Exclude from plan, and the add action. The header and rows share the same grid columns so labels stay aligned with editable values. Excluded investments stay saved in the ledger but are omitted from FIRE calculations, asset summaries, net worth, and projections. Investment deletion opens a styled in-page confirmation dialog before removal. When no investments exist, the panel shows a compact empty action state instead of an empty ledger or repeated summary.
+- `Loans`: Adds, removes, and edits modern loan cards with identity, balance, APR, payment, and payoff timeline fields. Because loans use a card layout instead of tabular rows, the borderless sticky utility row keeps only the add action instead of repeating section copy or column labels. Loan deletion opens the same styled in-page confirmation dialog before removal. When no loans exist, the panel shows the same compact empty action state used for investments.
 
 Users move between panels with carousel arrow controls. The Overview panel starts the carousel and does not show a back arrow. Clicking the Assets, Loans, or Income rows in the overview jumps directly to the corresponding edit panel.
 
@@ -23,12 +23,12 @@ Currency display follows the app's selected market. The US market displays USD w
 
 The schema is defined in `supabase/fire-goals-schema.sql`.
 
-Existing Supabase projects that created `fire_goals` before the tax-rate field was added must rerun the schema script, or at minimum run the `alter table public.fire_goals add column if not exists tax_rate ...` statement from that file. The client retries saves without `tax_rate` when PostgREST reports that specific schema-cache miss so investments and loans can still be saved, but tax-rate persistence requires the column to exist.
+Existing Supabase projects that created FIRE tables before later fields were added must rerun the schema script, or at minimum run the `alter table` statements for `fire_goals.tax_rate` and `fire_assets.exclude_from_plan` from that file. The client retries saves without `tax_rate` when PostgREST reports that specific schema-cache miss so investments and loans can still be saved, but tax-rate and asset exclusion persistence require their columns to exist.
 
 ### Tables
 
-- `fire_goals`: Stores one or more user-owned plans with current age, target retirement age, FIRE amount, expected annual return, inflation rate, annual income, tax rate, annual spending, and preferred currency.
-- `fire_assets`: Stores asset rows for a plan, including name, category, current value, and optional annual growth rate. The current UI uses the plan-level expected return for asset projections.
+- `fire_goals`: Stores one or more user-owned plans with current age, target retirement age, FIRE amount, expected annual return, inflation rate, annual income, tax rate, annual spending, and preferred currency. The UI collects monthly spending and saves the annualized value in `annual_spending`.
+- `fire_assets`: Stores asset rows for a plan, including name, category, current value, optional annual growth rate, and whether the asset is excluded from plan calculations. The current UI uses the plan-level expected return for included asset projections.
 - `fire_liabilities`: Stores liability rows for a plan, including name, category, balance, interest rate, monthly payment, optional payoff months, and optional payoff date.
 
 ### Security
@@ -45,6 +45,7 @@ The first version calculates:
 - Total liabilities from all liability balances.
 - Current net worth as assets minus liabilities.
 - Annual tax estimate as `annual_income * tax_rate`.
+- Annual spending from the monthly spending input multiplied by 12.
 - Months and years remaining until target retirement age.
 - FIRE gap as the target amount minus current net worth.
 - Required monthly contribution using future value of current net worth and annuity contribution math.
@@ -56,8 +57,10 @@ The first version calculates:
 
 - New users start with an empty FIRE plan. Example values are shown only as input placeholders and are not used in calculations or saved unless the user enters them.
 - Default expected annual return, inflation, income, spending, tax, asset, and loan values are `0` until the user enters plan data.
+- Monthly spending is the editable user input. The stored `annual_spending` value is recalculated from monthly spending and used for overview income chips, annual cash-flow references, and projections.
 - Retirement age can match or be less than current age; calculations clamp the timeline to zero remaining months instead of blocking the save.
 - Asset rows without a growth override use the plan expected annual return.
+- Asset rows marked Exclude from plan remain saved in the investment ledger but are omitted from total assets, category summaries, net worth, required contribution calculations, and yearly projections.
 - Display currency is derived from the active market selection instead of being manually selected inside the FIRE form. Saved numeric values remain in the plan's stored `preferred_currency`.
 - Liability balances amortize monthly using APR and monthly payment.
 - Calculations are estimates for planning support and are not financial advice.

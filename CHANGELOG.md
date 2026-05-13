@@ -42,6 +42,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Recipients: reachtovijendra@gmail.com and poojitha.challagandla@gmail.com
 
 ### Changed
+- Trades page now adopts the Watchlists and Paper visual language with a slate hero, premium summary grid, full-width segmented tabs, rounded daily recommendation cards, sticky table headers, ticker-first rows, refreshed outcome chips, and mobile-friendly horizontal tables.
+- Manual Paper Trading order ticket popup no longer shows the non-interactive "Editable quote" status pill, removing confusion with clickable actions.
+- Manual Paper Trading order ticket popup now uses polished field cards for quantity and execution price, plus a cleaner two-action footer for live quote refresh and order placement.
+- Manual Paper Trading open positions now show P/L percentage alongside currency P/L, with tighter stock-column sizing for more balanced table spacing.
+- Manual Paper Trading trade history now orders columns as Stock, Date, Action, Qty, Price, and Realized P/L for faster ticker-first review.
+- Manual Paper Trading trade history now includes a ticker/company-name search filter with a clear empty-match state.
+- Manual Paper Trading page now adopts the Watchlists visual language with a slate hero, spacious account summary cards, prominent centered Buy and Sell buttons that open the paper order ticket, rounded positions/history table shells, and mobile-friendly sticky stock columns.
+- Screener results table sortable headers now keep sort arrows on the same line as the header label, preventing wrapped arrows in narrow columns.
+- Screener header now keeps the title and descriptive copy on one baseline-aligned row at desktop widths, matching the Watchlists header treatment.
+- Screener header now removes the standalone status eyebrow and right-side status metric pills, leaving only the Watchlists-style title and descriptive copy.
+- Screener page styling now fully adopts the Watchlists visual language by using inherited typography, Watchlists-style header copy and stat cards, calmer slate surfaces, matching button/control weights, softer dropdown panels, and restrained table chrome while preserving the existing screening workflow.
+- Screener results workbench now shows the Results header bar before the first screen is run, matching the orientation cue from the previous layout.
+- Screener dropdown overlays now use a premium floating market-console visual system with deeper glass surfaces, accent rails, refined section cards, polished input chrome, upgraded preset/signal chips, and restyled nested PrimeNG multiselect menus.
+- Screener filters now use a balanced six-dropdown workstation model for Universe, Valuation, Growth & Income, Momentum, Liquidity, and Technical Signals, with compact overlay cards, quick preset chips, section-level clear actions, and aligned filtering for P/S, EPS, beta, percent-from-low, RSI, and MACD signals.
+- Screener page now uses a compact professional trading workstation layout with a single-line status header, dense filter/action rail, redesigned Top Losers, Top Gainers, and Raising Stocks command buttons, restyled filter dropdown overlays, an emphasized results summary row, and a premium responsive results table while preserving existing screening and quick-view behavior.
 - Day trade recommendations now reject very low-ATR candidates before saving picks, preventing stale or merger-pinned quotes such as HOLX from recurring as unrealistic no-trigger setups.
 - Watchlist sharing schema now includes a covering index for the `shared_by_user_id` foreign key to support future collaborator-management growth.
 - Watchlists now use separate `/watchlists` and `/watchlists/:watchlistId` pages, replacing the collapsible sidebar and dock with a compact summary-and-table index and full-width stock detail view.
@@ -143,6 +158,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vercel Cron schedule configured in `vercel.json` with `CRON_SECRET` header verification for security
 
 ### Fixed
+- Fixed Screener Universe dropdown Sector and Industry multiselect fields using the old PrimeNG field styling and sitting too close to the overlay bottom edge; the panel now has more breathing room for lower controls.
 - Fixed the local API dev server to route Screener Top Losers and Top Gainers quick-view requests instead of returning an invalid request error.
 - Fixed FIRE Goals asset ledger header alignment so investment row values line up with their column labels.
 - Fixed FIRE Goals row deletion so confirmed investment and loan removals autosave immediately instead of reappearing after refresh.

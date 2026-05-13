@@ -1,15 +1,21 @@
 <div class="paper-page">
   <p-toast position="top-right" [life]="3000"></p-toast>
 
-  <div class="page-header">
-    <div>
-      <h1><i class="pi pi-briefcase"></i> Manual Paper Trading</h1>
-      <p>Practice buying and selling stocks with a market-specific paper account.</p>
+  <header class="paper-hero">
+    <div class="hero-copy">
+      <span class="eyebrow">Manual Paper Trading</span>
+      <div class="hero-title-row">
+        <h1>Paper</h1>
+        <p>Practice trades with a market-specific simulated account.</p>
+      </div>
     </div>
-    @if (paperService.enabled()) {
-      <button pButton type="button" class="p-button-outlined p-button-danger" icon="pi pi-refresh" label="Reset Account" (click)="resetAccount()"></button>
-    }
-  </div>
+    <div class="hero-actions">
+      <span class="market-chip">{{ marketService.marketInfo().name }}</span>
+      @if (paperService.enabled()) {
+        <button pButton type="button" class="p-button-outlined p-button-danger" icon="pi pi-refresh" label="Reset Account" (click)="resetAccount()"></button>
+      }
+    </div>
+  </header>
 
   @if (paperService.loading()) {
     <div class="loading-card">
@@ -18,23 +24,26 @@
     </div>
   } @else if (!paperService.enabled()) {
     <section class="enable-card">
-      <div>
-        <span class="eyebrow">Start Manual Paper Trading</span>
-        <h2>{{ formatCurrency(startingCash()) }} starting cash for {{ marketService.marketInfo().name }}</h2>
+      <div class="enable-mark">
+        <i class="pi pi-briefcase"></i>
+      </div>
+      <div class="enable-copy">
+        <span class="eyebrow">Start Simulation</span>
+        <h2>{{ formatCurrency(startingCash()) }} starting cash</h2>
         <p>
-          Enable a simulated account for this market. Trades are saved to your signed-in profile and stay separate between US and India.
+          Enable a private paper account for {{ marketService.marketInfo().name }}. Trades are saved to your signed-in profile and remain separate across markets.
         </p>
       </div>
       <button pButton type="button" icon="pi pi-check-circle" label="Enable Paper Trading" (click)="enableAccount()"></button>
     </section>
   } @else {
-    <section class="summary-grid">
+    <section class="summary-grid" aria-label="Paper account summary">
       <div class="summary-card summary-card--cash">
         <span>Cash</span>
         <strong>{{ formatCurrency(summary().cashBalance) }}</strong>
       </div>
       <div class="summary-card summary-card--market-value">
-        <span>Market Value</span>
+        <span>Invested Value</span>
         <strong>{{ formatCurrency(summary().marketValue) }}</strong>
       </div>
       <div class="summary-card summary-card--equity">
@@ -50,29 +59,138 @@
         <strong>{{ formatCurrency(summary().unrealizedPnl) }}</strong>
       </div>
       <div class="summary-card summary-card--total-pnl" [class.positive]="summary().totalPnl > 0" [class.negative]="summary().totalPnl < 0">
-        <span>Total P/L</span>
+        <span>Total Return</span>
         <strong>{{ formatCurrency(summary().totalPnl) }}</strong>
         <small>{{ formatPercent(summary().totalReturnPercent) }}</small>
       </div>
     </section>
 
-    <section class="trade-layout">
-      <form class="order-ticket" [formGroup]="orderForm" (ngSubmit)="submitOrder()">
-        <div class="section-heading">
-          <span class="eyebrow">Order Ticket</span>
-          <h2>Buy or sell any stock</h2>
+    <section class="trade-command-bar" aria-label="Paper trading actions">
+      <div>
+        <span class="eyebrow">Trade Ticket</span>
+        <h2>Choose Buy or Sell to open the paper order ticket.</h2>
+      </div>
+      <div class="trade-command-actions">
+        <button pButton type="button" class="buy-command" icon="pi pi-arrow-up-right" label="Buy Stock" (click)="openOrderTicket('BUY')"></button>
+        <button pButton type="button" class="sell-command" icon="pi pi-arrow-down-right" label="Sell Stock" (click)="openOrderTicket('SELL')"></button>
+      </div>
+    </section>
+
+    <section class="positions-panel">
+      <div class="panel-heading table-heading">
+        <div>
+          <span class="eyebrow">Open Positions</span>
+          <h2>{{ paperService.positions().length }} holding{{ paperService.positions().length === 1 ? '' : 's' }}</h2>
+        </div>
+        <button pButton type="button" class="p-button-text p-button-sm" icon="pi pi-sync" label="Refresh Prices" [loading]="positionQuotesLoading()" (click)="refreshLivePrices()"></button>
+      </div>
+
+      @if (paperService.positions().length === 0) {
+        <div class="empty-state">
+          <i class="pi pi-chart-line"></i>
+          <strong>No open positions yet</strong>
+          <span>Use Buy to start tracking practice P/L.</span>
+        </div>
+      } @else {
+        <div class="table-wrap">
+          <table class="positions-table">
+            <thead>
+              <tr>
+                <th class="col-stock">Stock</th>
+                <th class="numeric">Qty</th>
+                <th class="numeric">Avg Cost</th>
+                <th class="numeric">Current</th>
+                <th class="numeric">Value</th>
+                <th class="numeric">P/L</th>
+                <th class="numeric">P/L %</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (position of paperService.positions(); track position.symbol) {
+                <tr>
+                  <td class="col-stock">
+                    <a class="stock-link" [routerLink]="['/stock', position.symbol]">
+                      <strong>{{ position.symbol }}</strong>
+                      <span>{{ position.name }}</span>
+                    </a>
+                  </td>
+                  <td class="numeric">{{ position.quantity | number:'1.0-6' }}</td>
+                  <td class="numeric">{{ formatCurrency(position.average_cost) }}</td>
+                  <td class="numeric">
+                    @if (getPositionCurrentPrice(position.symbol) != null) {
+                      <span class="price-stack">
+                        {{ formatCurrency(getPositionCurrentPrice(position.symbol)) }}
+                        <small>Live{{ getPositionQuoteTime(position.symbol) ? ' as of ' + getPositionQuoteTime(position.symbol) : '' }}</small>
+                      </span>
+                    } @else {
+                      <span>Loading quote...</span>
+                    }
+                  </td>
+                  <td class="numeric">{{ getPositionCurrentPrice(position.symbol) == null ? '-' : formatCurrency(getPositionMarketValue(position.symbol, position.quantity)) }}</td>
+                  <td class="numeric" [class.positive]="getPositionPnl(position.symbol, position.quantity, position.average_cost) > 0" [class.negative]="getPositionPnl(position.symbol, position.quantity, position.average_cost) < 0">
+                    {{ formatCurrency(getPositionPnl(position.symbol, position.quantity, position.average_cost)) }}
+                  </td>
+                  @let pnlPercent = getPositionPnlPercent(position.symbol, position.average_cost);
+                  <td class="numeric" [class.positive]="(pnlPercent ?? 0) > 0" [class.negative]="(pnlPercent ?? 0) < 0">
+                    {{ pnlPercent == null ? '-' : formatPercent(pnlPercent) }}
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </section>
+
+    <p-dialog
+      header="Paper Trade"
+      styleClass="paper-trade-dialog"
+      maskStyleClass="paper-trade-mask"
+      appendTo="body"
+      [visible]="orderDialogVisible()"
+      (visibleChange)="orderDialogVisible.set($event)"
+      (onHide)="closeOrderTicket()"
+      [modal]="true"
+      [draggable]="false"
+      [resizable]="false"
+      [dismissableMask]="true"
+      [blockScroll]="true"
+      [breakpoints]="tradeDialogBreakpoints"
+      closeAriaLabel="Close trade ticket"
+    >
+      <form class="order-ticket dialog-ticket" [formGroup]="orderForm" (ngSubmit)="submitOrder()">
+        <div class="panel-heading">
+          <div>
+            <span class="eyebrow">Order Ticket</span>
+            <h2>{{ orderForm.controls.action.value === 'BUY' ? 'Buy a practice position' : 'Sell a practice position' }}</h2>
+          </div>
         </div>
 
-        <label>
-          Action
-          <select formControlName="action">
-            <option value="BUY">Buy</option>
-            <option value="SELL">Sell</option>
-          </select>
-        </label>
+        <div class="side-selector" role="group" aria-label="Order action">
+          <button
+            type="button"
+            class="side-option buy"
+            [class.active]="orderForm.controls.action.value === 'BUY'"
+            [attr.aria-pressed]="orderForm.controls.action.value === 'BUY'"
+            (click)="setOrderAction('BUY')"
+          >
+            Buy
+            <span>Open or add</span>
+          </button>
+          <button
+            type="button"
+            class="side-option sell"
+            [class.active]="orderForm.controls.action.value === 'SELL'"
+            [attr.aria-pressed]="orderForm.controls.action.value === 'SELL'"
+            (click)="setOrderAction('SELL')"
+          >
+            Sell
+            <span>Trim or close</span>
+          </button>
+        </div>
 
         <label class="symbol-field">
-          Stock
+          <span>Stock</span>
           <input type="text" formControlName="symbol" placeholder="AAPL or RELIANCE.NS" autocomplete="off" (input)="searchStocks($event)" />
           @if (stockSuggestions().length > 0) {
             <div class="suggestions">
@@ -87,19 +205,24 @@
         </label>
 
         <div class="inline-fields">
-          <label>
-            Quantity
+          <label class="ticket-field">
+            <span>Quantity</span>
             <p-inputNumber formControlName="quantity" [min]="0.000001" [minFractionDigits]="0" [maxFractionDigits]="6"></p-inputNumber>
           </label>
-          <label>
-            Execution Price
+          <label class="ticket-field">
+            <span>Execution Price</span>
             <p-inputNumber formControlName="execution_price" [min]="0.01" [minFractionDigits]="2" [maxFractionDigits]="2" mode="currency" [currency]="marketService.currentMarket() === 'IN' ? 'INR' : 'USD'"></p-inputNumber>
           </label>
         </div>
 
+        <div class="order-preview">
+          <span>Estimated notional</span>
+          <strong>{{ formatCurrency(orderForm.controls.quantity.value * orderForm.controls.execution_price.value) }}</strong>
+        </div>
+
         <div class="ticket-actions">
-          <button pButton type="button" class="p-button-outlined" icon="pi pi-sync" label="Use Live Quote" [loading]="quoteLoading()" [disabled]="!canRefreshQuote()" (click)="refreshQuote()"></button>
-          <button pButton type="submit" icon="pi pi-check" label="Place Paper Order" [loading]="orderSubmitting()" [disabled]="!canPlaceOrder()"></button>
+          <button pButton type="button" class="quote-action p-button-outlined" icon="pi pi-sync" label="Use Live Quote" [loading]="quoteLoading()" [disabled]="!canRefreshQuote()" (click)="refreshQuote()"></button>
+          <button pButton type="submit" class="submit-action" icon="pi pi-check" label="Place Paper Order" [loading]="orderSubmitting()" [disabled]="!canPlaceOrder()"></button>
         </div>
         @if (orderBlockReason(); as reason) {
           <div class="order-block-reason">
@@ -108,100 +231,86 @@
           </div>
         }
       </form>
-
-      <section class="positions-panel">
-        <div class="section-heading">
-          <span class="eyebrow">Open Positions</span>
-          <h2>{{ paperService.positions().length }} holding{{ paperService.positions().length === 1 ? '' : 's' }}</h2>
-          <button pButton type="button" class="p-button-text p-button-sm" icon="pi pi-sync" label="Refresh Prices" [loading]="positionQuotesLoading()" (click)="refreshLivePrices()"></button>
-        </div>
-
-        @if (paperService.positions().length === 0) {
-          <div class="empty-state">No open positions yet.</div>
-        } @else {
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Stock</th>
-                  <th>Qty</th>
-                  <th>Avg Cost</th>
-                  <th>Current</th>
-                  <th>Value</th>
-                  <th>P/L</th>
-                </tr>
-              </thead>
-              <tbody>
-                @for (position of paperService.positions(); track position.symbol) {
-                  <tr>
-                    <td>
-                      <a class="stock-link" [routerLink]="['/stock', position.symbol]">
-                        <strong>{{ position.symbol }}</strong>
-                        <span>{{ position.name }}</span>
-                      </a>
-                    </td>
-                    <td>{{ position.quantity | number:'1.0-6' }}</td>
-                    <td>{{ formatCurrency(position.average_cost) }}</td>
-                    <td>
-                      @if (getPositionCurrentPrice(position.symbol) != null) {
-                        {{ formatCurrency(getPositionCurrentPrice(position.symbol)) }}
-                        <small>Live{{ getPositionQuoteTime(position.symbol) ? ' as of ' + getPositionQuoteTime(position.symbol) : '' }}</small>
-                      } @else {
-                        <span>Loading quote...</span>
-                      }
-                    </td>
-                    <td>{{ getPositionCurrentPrice(position.symbol) == null ? '-' : formatCurrency(getPositionMarketValue(position.symbol, position.quantity)) }}</td>
-                    <td [class.positive]="getPositionPnl(position.symbol, position.quantity, position.average_cost) > 0" [class.negative]="getPositionPnl(position.symbol, position.quantity, position.average_cost) < 0">
-                      {{ formatCurrency(getPositionPnl(position.symbol, position.quantity, position.average_cost)) }}
-                    </td>
-                  </tr>
-                }
-              </tbody>
-            </table>
-          </div>
-        }
-      </section>
-    </section>
+    </p-dialog>
 
     <section class="history-panel">
-      <div class="section-heading">
-        <span class="eyebrow">Trade History</span>
-        <h2>{{ paperService.trades().length }} trade{{ paperService.trades().length === 1 ? '' : 's' }}</h2>
+      <div class="panel-heading table-heading">
+        <div>
+          <span class="eyebrow">Trade History</span>
+          <h2>
+            @if (tradeHistoryQuery().trim()) {
+              {{ filteredTrades().length }} of {{ paperService.trades().length }} trades
+            } @else {
+              {{ paperService.trades().length }} trade{{ paperService.trades().length === 1 ? '' : 's' }}
+            }
+          </h2>
+        </div>
+        @if (paperService.trades().length > 0) {
+          <label class="history-search">
+            <span>Search Trades</span>
+            <div class="history-search-box">
+              <i class="pi pi-search"></i>
+              <input
+                type="search"
+                placeholder="Ticker or company name"
+                [value]="tradeHistoryQuery()"
+                (input)="filterTradeHistory($event)"
+              />
+              @if (tradeHistoryQuery().trim()) {
+                <button type="button" aria-label="Clear trade history search" (click)="clearTradeHistoryFilter()">
+                  <i class="pi pi-times"></i>
+                </button>
+              }
+            </div>
+          </label>
+        }
       </div>
 
       @if (paperService.trades().length === 0) {
-        <div class="empty-state">Your filled paper trades will appear here.</div>
+        <div class="empty-state">
+          <i class="pi pi-history"></i>
+          <strong>No filled trades yet</strong>
+          <span>Your paper orders will appear here after execution.</span>
+        </div>
+      } @else if (filteredTrades().length === 0) {
+        <div class="empty-state">
+          <i class="pi pi-search"></i>
+          <strong>No matching trades</strong>
+          <span>Try another ticker or company name.</span>
+        </div>
       } @else {
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
+                <th class="col-stock">Stock</th>
                 <th>Date</th>
                 <th>Action</th>
-                <th>Stock</th>
-                <th>Qty</th>
-                <th>Price</th>
-                <th>Realized P/L</th>
+                <th class="numeric">Qty</th>
+                <th class="numeric">Price</th>
+                <th class="numeric">Realized P/L</th>
               </tr>
             </thead>
             <tbody>
-              @for (trade of paperService.trades(); track trade.id ?? trade.executed_at + trade.symbol) {
+              @for (trade of filteredTrades(); track trade.id ?? trade.executed_at + trade.symbol) {
                 <tr>
-                  <td>{{ trade.executed_at | date:'medium' }}</td>
-                  <td><span class="action-chip" [class.sell]="trade.action === 'SELL'">{{ trade.action }}</span></td>
-                  <td>
+                  <td class="col-stock">
                     <a class="stock-link" [routerLink]="['/stock', trade.symbol]">
                       <strong>{{ trade.symbol }}</strong>
                       <span>{{ trade.name }}</span>
                     </a>
                   </td>
-                  <td>{{ trade.quantity | number:'1.0-6' }}</td>
-                  <td>{{ formatCurrency(trade.execution_price) }}</td>
-                  <td [class.positive]="(trade.realized_pnl ?? 0) > 0" [class.negative]="(trade.realized_pnl ?? 0) < 0">
-                    {{ trade.realized_pnl == null ? '-' : formatCurrency(trade.realized_pnl) }}
-                    @if (trade.realized_pnl_percent != null) {
-                      <small>{{ formatPercent(trade.realized_pnl_percent) }}</small>
-                    }
+                  <td>{{ trade.executed_at | date:'medium' }}</td>
+                  <td><span class="action-chip" [class.sell]="trade.action === 'SELL'">{{ trade.action }}</span></td>
+                  <td class="numeric">{{ trade.quantity | number:'1.0-6' }}</td>
+                  <td class="numeric">{{ formatCurrency(trade.execution_price) }}</td>
+                  <td class="numeric" [class.positive]="(trade.realized_pnl ?? 0) > 0" [class.negative]="(trade.realized_pnl ?? 0) < 0">
+                    <span class="price-stack">
+                      {{ trade.realized_pnl == null ? '-' : formatCurrency(trade.realized_pnl) }}
+                      @if (trade.realized_pnl_percent != null) {
+                        <small>{{ formatPercent(trade.realized_pnl_percent) }}</small>
+                      }
+                    </span>
                   </td>
                 </tr>
               }

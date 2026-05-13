@@ -9,7 +9,9 @@ import {
   PaginationConfig,
   getDefaultFilters,
   FilterPreset,
-  FILTER_PRESETS
+  FILTER_PRESETS,
+  RSIZone,
+  MACDSignal
 } from '../models/filter.model';
 import { environment } from '../../../environments/environment';
 
@@ -135,17 +137,23 @@ export class ScreenerService {
     if (f.marketCap.categories.length > 0 || f.marketCap.customRange.min !== undefined || f.marketCap.customRange.max !== undefined) count++;
     if (f.price.min !== undefined || f.price.max !== undefined) count++;
     if (f.fiftyTwoWeek.percentFromHigh.min !== undefined || f.fiftyTwoWeek.percentFromHigh.max !== undefined) count++;
+    if (f.fiftyTwoWeek.percentFromLow.min !== undefined || f.fiftyTwoWeek.percentFromLow.max !== undefined) count++;
     if (f.fiftyTwoWeek.nearHigh || f.fiftyTwoWeek.nearLow) count++;
     if (f.peRatio.min !== undefined || f.peRatio.max !== undefined) count++;
     if (f.forwardPeRatio.min !== undefined || f.forwardPeRatio.max !== undefined) count++;
     if (f.pbRatio.min !== undefined || f.pbRatio.max !== undefined) count++;
+    if (f.psRatio.min !== undefined || f.psRatio.max !== undefined) count++;
     if (f.earningsGrowth.min !== undefined || f.earningsGrowth.max !== undefined) count++;
     if (f.revenueGrowth.min !== undefined || f.revenueGrowth.max !== undefined) count++;
     if (f.dividendYield.min !== undefined || f.dividendYield.max !== undefined) count++;
+    if (f.eps.min !== undefined || f.eps.max !== undefined) count++;
+    if (f.beta.min !== undefined || f.beta.max !== undefined) count++;
     if (f.avgVolume.min !== undefined || f.avgVolume.max !== undefined) count++;
     if (f.relativeVolume.min !== undefined || f.relativeVolume.max !== undefined) count++;
     if (f.movingAverages.aboveFiftyDayMA !== null || f.movingAverages.aboveTwoHundredDayMA !== null) count++;
     if (f.movingAverages.goldenCross || f.movingAverages.deathCross) count++;
+    if (f.rsi.zones.length > 0 || f.rsi.customRange.min !== undefined || f.rsi.customRange.max !== undefined) count++;
+    if (f.macd.signals.length > 0) count++;
     if (f.sectors.length > 0) count++;
     if (f.exchanges.length > 0) count++;
     
@@ -198,9 +206,7 @@ export class ScreenerService {
       this.resetPagination();
       this.runScreen();
     } else if (this._cachedStocks().length > 0) {
-      // Apply filters client-side on cached data for instant feedback
-      this.resetPagination();
-      this.applyScreenerFiltersClientSide();
+      this.applyFiltersAgainstCachedStocks();
     }
   }
 
@@ -322,16 +328,20 @@ export class ScreenerService {
       if (f.fiftyTwoWeek.nearHigh && stock.percentFromFiftyTwoWeekHigh < -5) return false;
       if (f.fiftyTwoWeek.nearLow && stock.percentFromFiftyTwoWeekLow > 10) return false;
       if (!this.passesRange(stock.percentFromFiftyTwoWeekHigh, f.fiftyTwoWeek.percentFromHigh)) return false;
+      if (!this.passesRange(stock.percentFromFiftyTwoWeekLow, f.fiftyTwoWeek.percentFromLow)) return false;
 
       // Valuation
       if (!this.passesRange(stock.peRatio, f.peRatio)) return false;
       if (!this.passesRange(stock.forwardPeRatio, f.forwardPeRatio)) return false;
       if (!this.passesRange(stock.pbRatio, f.pbRatio)) return false;
+      if (!this.passesRange(stock.psRatio, f.psRatio)) return false;
       if (!this.passesRange(stock.dividendYield, f.dividendYield)) return false;
 
       // Growth
       if (!this.passesRange(stock.earningsGrowth, f.earningsGrowth)) return false;
       if (!this.passesRange(stock.revenueGrowth, f.revenueGrowth)) return false;
+      if (!this.passesRange(stock.eps, f.eps)) return false;
+      if (!this.passesRange(stock.beta, f.beta)) return false;
 
       // Volume
       if (!this.passesRange(stock.avgVolume, f.avgVolume)) return false;
@@ -358,6 +368,9 @@ export class ScreenerService {
       // Exchanges
       if (f.exchanges.length > 0 && !(f.exchanges as string[]).includes(stock.exchange)) return false;
 
+      if (!this.passesRsiFilter(stock.rsi, f.rsi.zones, f.rsi.customRange)) return false;
+      if (!this.passesMacdFilter(stock.macdSignalType, f.macd.signals)) return false;
+
       return true;
     });
 
@@ -366,6 +379,63 @@ export class ScreenerService {
     this._totalCount.set(filtered.length);
     this._pagination.update(p => ({ ...p, page: 0, totalRecords: filtered.length }));
     this.paginateFromCache();
+  }
+
+  private applyFiltersAgainstCachedStocks(): void {
+    this.resetPagination();
+    if (this.hasModelTechnicalFilters() && !this._technicalsCalculated) {
+      void this.calculateTechnicalsForAllStocks().then(() => this.applyScreenerFiltersClientSide());
+      return;
+    }
+    this.applyScreenerFiltersClientSide();
+  }
+
+  private hasModelTechnicalFilters(): boolean {
+    const { rsi, macd } = this._filters();
+    return rsi.zones.length > 0
+      || rsi.customRange.min !== undefined
+      || rsi.customRange.max !== undefined
+      || macd.signals.length > 0;
+  }
+
+  private passesRsiFilter(value: number | null | undefined, zones: RSIZone[], customRange: { min?: number; max?: number }): boolean {
+    const hasCustomRange = customRange.min !== undefined || customRange.max !== undefined;
+    if (zones.length === 0 && !hasCustomRange) {
+      return true;
+    }
+    if (value === null || value === undefined) {
+      return false;
+    }
+    if (hasCustomRange && !this.passesRange(value, customRange)) {
+      return false;
+    }
+    if (zones.length === 0) {
+      return true;
+    }
+    return zones.some(zone => {
+      switch (zone) {
+        case 'oversold':
+          return value < 30;
+        case 'approaching_oversold':
+          return value >= 30 && value < 40;
+        case 'neutral':
+          return value >= 40 && value < 60;
+        case 'approaching_overbought':
+          return value >= 60 && value < 70;
+        case 'overbought':
+          return value >= 70;
+      }
+    });
+  }
+
+  private passesMacdFilter(value: Stock['macdSignalType'], signals: MACDSignal[]): boolean {
+    if (signals.length === 0) {
+      return true;
+    }
+    if (value === null || value === undefined) {
+      return false;
+    }
+    return signals.includes(value);
   }
 
   private passesRange(value: number | null | undefined, range: { min?: number; max?: number }): boolean {
@@ -403,6 +473,7 @@ export class ScreenerService {
    */
   private paginateFromSource(stocks: Stock[]): void {
     if (stocks.length === 0) {
+      this._results.set([]);
       return;
     }
     
@@ -1015,6 +1086,11 @@ export class ScreenerService {
     this._calculatingTechnicals.set(false);
     this._technicalProgress.set('');
     
+    if (this.hasModelTechnicalFilters()) {
+      this.applyScreenerFiltersClientSide();
+      return;
+    }
+
     // Refresh displayed results to show calculated technicals
     this.paginateFromCache();
   }

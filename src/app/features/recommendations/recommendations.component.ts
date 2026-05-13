@@ -1,4 +1,4 @@
-import { Component, inject, signal, computed, effect, OnInit } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, effect, inject, OnInit, signal } from '@angular/core';
 import { CommonModule, DecimalPipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { Router } from '@angular/router';
@@ -68,7 +68,6 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
 
 @Component({
   selector: 'app-recommendations',
-  standalone: true,
   imports: [
     CommonModule,
     DecimalPipe,
@@ -77,18 +76,19 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
     TooltipModule,
     TagModule,
   ],
+  changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <div class="reco-container">
-      <!-- Header -->
-      <div class="page-header">
-        <div class="header-left">
-          <h1>
-            <i class="pi pi-star"></i>
-            Day Trade Recommendations
-          </h1>
-          <span class="subtitle">Track daily picks and their outcomes</span>
+    <div class="trades-page">
+      <header class="trades-hero">
+        <div class="hero-copy">
+          <span class="eyebrow">Trades</span>
+          <div class="hero-title-row">
+            <h1>Day Trade Recommendations</h1>
+            <p>Review daily setups, outcomes, and automated paper results.</p>
+          </div>
         </div>
-        <div class="header-right">
+        <div class="hero-actions">
+          <span class="market-chip">{{ marketService.marketInfo().name }}</span>
           <div class="month-nav">
             <button pButton icon="pi pi-chevron-left" class="p-button-text p-button-sm"
               (click)="prevMonth()" [pTooltip]="'Previous month'"></button>
@@ -98,7 +98,7 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
               [pTooltip]="'Next month'"></button>
           </div>
         </div>
-      </div>
+      </header>
 
       <div class="reco-tabs" role="tablist" aria-label="Recommendation views">
         <button
@@ -117,280 +117,326 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
         </button>
       </div>
 
-      <ng-container *ngIf="activeTab() === 'recommendations'">
-        <!-- Summary Cards -->
-        <div class="summary-strip" *ngIf="!loading() && dateGroups().length > 0">
-          <div class="summary-card">
-            <div class="summary-value">{{ totalPicks() }}</div>
-            <div class="summary-label">Total Picks</div>
-          </div>
-          <div class="summary-card hit-target">
-            <div class="summary-value">{{ totalTargetHit() }}</div>
-            <div class="summary-label">Target Hit</div>
-          </div>
-          <div class="summary-card hit-target">
-            <div class="summary-value">{{ totalClosedProfitable() }}</div>
-            <div class="summary-label">Closed Profitable</div>
-          </div>
-          <div class="summary-card hit-sl">
-            <div class="summary-value">{{ totalClosedAtLoss() }}</div>
-            <div class="summary-label">Closed at Loss</div>
-          </div>
-          <div class="summary-card hit-sl">
-            <div class="summary-value">{{ totalStoppedOut() }}</div>
-            <div class="summary-label">Stopped Out</div>
-          </div>
-          <div class="summary-card pending">
-            <div class="summary-value">{{ totalNotTraded() }}</div>
-            <div class="summary-label">Not Traded</div>
-          </div>
-          <div class="summary-card pending">
-            <div class="summary-value">{{ totalPending() }}</div>
-            <div class="summary-label">Pending</div>
-          </div>
-          <div class="summary-card" [class.positive]="winRate() >= 50" [class.negative]="winRate() < 50 && winRate() >= 0">
-            <div class="summary-value">{{ winRate() >= 0 ? (winRate() | number:'1.0-0') + '%' : '--' }}</div>
-            <div class="summary-label">Win Rate</div>
-          </div>
-        </div>
-
-        <!-- Loading -->
-        <div class="loading-container" *ngIf="loading()">
-          <p-progressSpinner strokeWidth="3" animationDuration="1s"></p-progressSpinner>
-          <p>Loading recommendations...</p>
-        </div>
-
-        <!-- Empty State -->
-        <div class="empty-state" *ngIf="!loading() && dateGroups().length === 0">
-          <i class="pi pi-inbox"></i>
-          <h3>No recommendations found</h3>
-          <p>No day trade picks for {{ marketService.marketInfo().name }} in {{ selectedMonthLabel() }}.</p>
-        </div>
-
-        <!-- Date Groups -->
-        <div class="date-groups" *ngIf="!loading() && dateGroups().length > 0">
-          <div class="date-group" *ngFor="let group of dateGroups()">
-            <div class="date-header">
-              <div class="date-title">
-                <span class="date-text">{{ group.displayDate }}</span>
-                <span class="pick-count" *ngIf="group.picks.length > 0">{{ group.picks.length }} pick{{ group.picks.length > 1 ? 's' : '' }}</span>
-                <span class="pick-count no-picks" *ngIf="group.picks.length === 0">No recommendations</span>
-              </div>
-              <div class="date-stats">
-                <span class="stat-badge hit-target" *ngIf="group.hitTargetCount > 0">
-                  <i class="pi pi-check-circle"></i> {{ group.hitTargetCount }} profitable
-                </span>
-                <span class="stat-badge hit-sl" *ngIf="group.hitStopLossCount > 0">
-                  <i class="pi pi-times-circle"></i> {{ group.hitStopLossCount }} stopped out
-                </span>
-                <span class="stat-badge pending" *ngIf="group.pendingCount > 0">
-                  <i class="pi pi-clock"></i> {{ group.pendingCount }} pending
-                </span>
-              </div>
-            </div>
-
-            <div class="picks-table-wrap" *ngIf="group.picks.length > 0">
-              <table class="picks-table">
-                <thead>
-                  <tr>
-                    <th class="col-score">Score</th>
-                    <th class="col-stock">Stock</th>
-                    <th class="col-price">Rec. Price</th>
-                    <th class="col-targets">Buy / Sell / Stop</th>
-                    <th class="col-outcome">Outcome</th>
-                    <th class="col-signals">Signals</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr *ngFor="let pick of group.picks" class="pick-row" [class.row-hit-target]="getOutcome(pick) === 'hit-target'" [class.row-hit-sl]="getOutcome(pick) === 'hit-sl'">
-                    <td class="col-score">
-                      <span class="score-badge" [class.high]="pick.priority === 'High'" [class.medium]="pick.priority === 'Medium'">
-                        {{ pick.score }}
-                      </span>
-                    </td>
-                    <td class="col-stock">
-                      <div class="stock-symbol-row">
-                        <span class="stock-symbol" (click)="navigateToStock(pick.symbol)">{{ formatSymbol(pick.symbol) }}</span>
-                        <a class="rh-icon"
-                           *ngIf="pick.market === 'US'"
-                           [href]="'https://robinhood.com/stocks/' + formatSymbol(pick.symbol) + '?source=search'"
-                           target="_blank" rel="noopener noreferrer"
-                           (click)="$event.stopPropagation()"
-                           pTooltip="Trade on Robinhood" tooltipPosition="top">
-                          <img src="robinhood.png" alt="RH" />
-                        </a>
-                        <a class="detail-icon-link"
-                           [href]="'/stock/' + pick.symbol"
-                           target="_blank"
-                           (click)="$event.stopPropagation()"
-                           pTooltip="Stock details" tooltipPosition="top">
-                          <img src="stock-detail.svg" alt="Details" />
-                        </a>
-                      </div>
-                      <div class="stock-name" (click)="navigateToStock(pick.symbol)">{{ pick.name | slice:0:30 }}</div>
-                      <div class="stock-meta">{{ pick.sector }}</div>
-                    </td>
-                    <td class="col-price">
-                      <div class="price-value">{{ currencySymbol() }}{{ pick.price | number:'1.2-2' }}</div>
-                      <div class="price-sub" *ngIf="pick.gap_percent != null">
-                        Gap {{ pick.gap_percent >= 0 ? '+' : '' }}{{ pick.gap_percent | number:'1.1-1' }}%
-                      </div>
-                      <div class="price-sub" *ngIf="pick.change_percent != null">
-                        {{ pick.change_percent >= 0 ? '+' : '' }}{{ pick.change_percent | number:'1.1-1' }}%
-                      </div>
-                    </td>
-                    <td class="col-targets">
-                      <div class="target buy">Buy: {{ currencySymbol() }}{{ pick.buy_price | number:'1.2-2' }}</div>
-                      <div class="target sell">Sell: {{ currencySymbol() }}{{ pick.sell_price | number:'1.2-2' }} <span class="target-pct positive">(+{{ getTargetPct(pick) | number:'1.1-1' }}%)</span></div>
-                      <div class="target stop">Stop: {{ currencySymbol() }}{{ pick.stop_loss | number:'1.2-2' }} <span class="target-pct negative">(-{{ getStopPct(pick) | number:'1.1-1' }}%)</span></div>
-                    </td>
-                    <td class="col-outcome">
-                      <span class="outcome-badge" [ngClass]="getOutcome(pick)">
-                        <i [class]="getOutcomeIcon(pick)"></i>
-                        {{ getOutcomeLabel(pick) }}
-                      </span>
-                      <div class="outcome-pnl" *ngIf="shouldShowPnl(pick)">
-                        {{ getOutcome(pick) === 'hit-target' ? '+' : '' }}{{ getPnlPercent(pick) | number:'1.1-1' }}%
-                      </div>
-                      <div class="outcome-high" *ngIf="pick.actual_high">
-                        Day High: {{ currencySymbol() }}{{ pick.actual_high | number:'1.2-2' }}
-                      </div>
-                    </td>
-                    <td class="col-signals">
-                      <div class="signal-list">
-                        <span class="signal-chip" *ngFor="let s of pick.signals | slice:0:3">{{ s }}</span>
-                        <span class="signal-chip analyst-chip" *ngIf="getPickTarget(pick)" [ngClass]="getPickTargetClass(pick)">{{ getPickTarget(pick) }}</span>
-                        <span class="signal-chip earnings-chip" *ngIf="getPickEarnings(pick)">{{ getPickEarnings(pick) }}</span>
-                      </div>
-                      <div class="tech-meta">
-                        <span *ngIf="pick.relative_volume">RVOL: {{ pick.relative_volume | number:'1.1-1' }}x</span>
-                        <span *ngIf="pick.rsi"> · RSI: {{ pick.rsi | number:'1.0-0' }}</span>
-                      </div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </ng-container>
-
-      <ng-container *ngIf="activeTab() === 'paper-results'">
-        <div class="loading-container" *ngIf="loading()">
-          <p-progressSpinner strokeWidth="3" animationDuration="1s"></p-progressSpinner>
-          <p>Loading paper results...</p>
-        </div>
-
-        <div class="empty-state" *ngIf="!loading() && picks().length === 0">
-          <i class="pi pi-chart-line"></i>
-          <h3>No paper results found</h3>
-          <p>No evaluated recommendations are available for {{ selectedMonthLabel() }}.</p>
-        </div>
-
-        <div class="paper-results" *ngIf="!loading() && picks().length > 0">
-          <div class="formula-card">
-            <div>
-              <span class="eyebrow">Score-to-Investment Formula</span>
-              <h2>{{ currencySymbol() }}{{ investmentRange().min | number:'1.0-0' }} to {{ currencySymbol() }}{{ investmentRange().max | number:'1.0-0' }} per triggered pick</h2>
-              <p>{{ scoreFormula() }}. Scores are clamped from 0 to 100, and no cash is deployed when the buy trigger is not reached.</p>
-            </div>
-          </div>
-
-          <div class="summary-strip paper-summary">
+      @if (activeTab() === 'recommendations') {
+        @if (!loading() && dateGroups().length > 0) {
+          <section class="summary-grid" aria-label="Recommendation summary">
             <div class="summary-card">
-              <div class="summary-value">{{ paperSimulation().summary.triggeredTrades }}</div>
-              <div class="summary-label">Triggered Trades</div>
+              <span>Total Picks</span>
+              <strong>{{ totalPicks() }}</strong>
             </div>
-            <div class="summary-card">
-              <div class="summary-value">{{ currencySymbol() }}{{ paperSimulation().summary.totalDeployedInvestment | number:'1.2-2' }}</div>
-              <div class="summary-label">Capital Deployed</div>
+            <div class="summary-card positive">
+              <span>Target Hit</span>
+              <strong>{{ totalTargetHit() }}</strong>
             </div>
-            <div class="summary-card" [class.positive]="paperSimulation().summary.totalPnl > 0" [class.negative]="paperSimulation().summary.totalPnl < 0">
-              <div class="summary-value">{{ paperSimulation().summary.totalPnl >= 0 ? '+' : '' }}{{ currencySymbol() }}{{ paperSimulation().summary.totalPnl | number:'1.2-2' }}</div>
-              <div class="summary-label">Realized P/L</div>
+            <div class="summary-card positive">
+              <span>Closed Profit</span>
+              <strong>{{ totalClosedProfitable() }}</strong>
             </div>
-            <div class="summary-card" [class.positive]="paperSimulation().summary.returnPercent > 0" [class.negative]="paperSimulation().summary.returnPercent < 0">
-              <div class="summary-value">{{ paperSimulation().summary.returnPercent >= 0 ? '+' : '' }}{{ paperSimulation().summary.returnPercent | number:'1.1-1' }}%</div>
-              <div class="summary-label">Monthly Return</div>
+            <div class="summary-card negative">
+              <span>Closed Loss</span>
+              <strong>{{ totalClosedAtLoss() }}</strong>
             </div>
-            <div class="summary-card">
-              <div class="summary-value">{{ paperSimulation().summary.winRate | number:'1.0-0' }}%</div>
-              <div class="summary-label">Win Rate</div>
+            <div class="summary-card negative">
+              <span>Stopped Out</span>
+              <strong>{{ totalStoppedOut() }}</strong>
             </div>
             <div class="summary-card pending">
-              <div class="summary-value">{{ paperSimulation().summary.notTradedCount }}</div>
-              <div class="summary-label">No Trigger</div>
+              <span>Not Traded</span>
+              <strong>{{ totalNotTraded() }}</strong>
             </div>
-          </div>
+            <div class="summary-card pending">
+              <span>Pending</span>
+              <strong>{{ totalPending() }}</strong>
+            </div>
+            <div class="summary-card" [class.positive]="winRate() >= 50" [class.negative]="winRate() < 50 && winRate() >= 0">
+              <span>Win Rate</span>
+              <strong>{{ winRate() >= 0 ? (winRate() | number:'1.0-0') + '%' : '--' }}</strong>
+            </div>
+          </section>
+        }
 
-          <div class="picks-table-wrap">
-            <table class="picks-table paper-table">
-              <thead>
-                <tr>
-                  <th>Stock</th>
-                  <th>Score</th>
-                  <th>Shares</th>
-                  <th>Planned</th>
-                  <th>Deployed</th>
-                  <th>Bought</th>
-                  <th>Sold</th>
-                  <th>Entry</th>
-                  <th>Exit</th>
-                  <th>Exit Reason</th>
-                  <th>P/L</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr *ngFor="let trade of paperSimulation().trades" [ngClass]="'paper-row-' + trade.resultTone">
-                  <td>
-                    <span class="stock-symbol" (click)="navigateToStock(trade.symbol)">{{ formatSymbol(trade.symbol) }}</span>
-                    <div class="stock-name">{{ trade.name | slice:0:28 }}</div>
-                  </td>
-                  <td><span class="score-badge">{{ trade.score }}</span></td>
-                  <td>{{ trade.sharesBought | number:'1.0-6' }}</td>
-                  <td class="planned-cell">
-                    <span>{{ currencySymbol() }}{{ trade.plannedInvestment | number:'1.2-2' }}</span>
-                    <button
-                      type="button"
-                      class="planned-info-button"
-                      [attr.aria-label]="'Show planned investment calculation for ' + formatSymbol(trade.symbol)"
-                      [attr.aria-expanded]="activePlanExplanation() === getTradeKey(trade)"
-                      (click)="togglePlanExplanation(trade)">
-                      <i class="pi pi-info-circle"></i>
-                    </button>
-                    <div class="planned-explanation" *ngIf="activePlanExplanation() === getTradeKey(trade)">
-                      {{ getPlannedInvestmentExplanation(trade) }}
-                    </div>
-                  </td>
-                  <td>{{ currencySymbol() }}{{ trade.deployedInvestment | number:'1.2-2' }}</td>
-                  <td class="date-time-cell">{{ trade.boughtAtLabel }}</td>
-                  <td class="date-time-cell">{{ trade.soldAtLabel }}</td>
-                  <td>
-                    {{ currencySymbol() }}{{ trade.entryPrice | number:'1.2-2' }}
-                  </td>
-                  <td class="exit-price-cell">
-                    <span class="outcome-badge compact detailed exit-price-badge" [ngClass]="trade.resultTone">
-                      <ng-container *ngIf="trade.exitPrice != null; else noExitPrice">
-                        {{ currencySymbol() }}{{ trade.exitPrice | number:'1.2-2' }}
-                      </ng-container>
-                      <ng-template #noExitPrice>No exit</ng-template>
-                    </span>
-                  </td>
-                  <td class="exit-reason-cell">
-                    <span class="outcome-badge compact detailed" [ngClass]="trade.resultTone">{{ trade.detailedExitReason }}</span>
-                  </td>
-                  <td class="paper-pnl">
-                    <span class="outcome-badge compact detailed pnl-badge" [ngClass]="trade.resultTone">
-                      <span>{{ trade.pnlAmount >= 0 ? '+' : '' }}{{ currencySymbol() }}{{ trade.pnlAmount | number:'1.2-2' }}</span>
-                      <small>{{ trade.pnlPercent >= 0 ? '+' : '' }}{{ trade.pnlPercent | number:'1.1-1' }}%</small>
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+        @if (loading()) {
+          <div class="loading-card">
+            <p-progressSpinner strokeWidth="3" animationDuration="1s"></p-progressSpinner>
+            <span>Loading recommendations...</span>
           </div>
-        </div>
-      </ng-container>
+        } @else if (dateGroups().length === 0) {
+          <div class="empty-state">
+            <i class="pi pi-inbox"></i>
+            <strong>No recommendations found</strong>
+            <span>No day trade picks for {{ marketService.marketInfo().name }} in {{ selectedMonthLabel() }}.</span>
+          </div>
+        } @else {
+          <section class="date-groups">
+            @for (group of dateGroups(); track group.date) {
+              <article class="trades-panel">
+                <div class="panel-heading">
+                  <div>
+                    <span class="eyebrow">Daily Setups</span>
+                    <h2>{{ group.displayDate }}</h2>
+                  </div>
+                  <div class="date-stats">
+                    @if (group.picks.length > 0) {
+                      <span class="stat-badge neutral">{{ group.picks.length }} pick{{ group.picks.length > 1 ? 's' : '' }}</span>
+                    } @else {
+                      <span class="stat-badge neutral muted">No recommendations</span>
+                    }
+                    @if (group.hitTargetCount > 0) {
+                      <span class="stat-badge positive"><i class="pi pi-check-circle"></i>{{ group.hitTargetCount }} profitable</span>
+                    }
+                    @if (group.hitStopLossCount > 0) {
+                      <span class="stat-badge negative"><i class="pi pi-times-circle"></i>{{ group.hitStopLossCount }} stopped out</span>
+                    }
+                    @if (group.pendingCount > 0) {
+                      <span class="stat-badge pending"><i class="pi pi-clock"></i>{{ group.pendingCount }} pending</span>
+                    }
+                  </div>
+                </div>
+
+                @if (group.picks.length > 0) {
+                  <div class="table-wrap">
+                    <table class="picks-table">
+                      <thead>
+                        <tr>
+                          <th class="col-score">Score</th>
+                          <th class="col-stock">Stock</th>
+                          <th class="col-price numeric">Rec. Price</th>
+                          <th class="col-targets">Buy / Sell / Stop</th>
+                          <th class="col-outcome">Outcome</th>
+                          <th class="col-signals">Signals</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        @for (pick of group.picks; track pick.id) {
+                          <tr class="pick-row" [class.row-hit-target]="getOutcome(pick) === 'hit-target'" [class.row-hit-sl]="getOutcome(pick) === 'hit-sl'">
+                            <td class="col-score">
+                              <span class="score-badge" [class.high]="pick.priority === 'High'" [class.medium]="pick.priority === 'Medium'">
+                                {{ pick.score }}
+                              </span>
+                            </td>
+                            <td class="col-stock">
+                              <div class="stock-identity">
+                                <div class="stock-symbol-row">
+                                  <button type="button" class="stock-symbol" (click)="navigateToStock(pick.symbol)">{{ formatSymbol(pick.symbol) }}</button>
+                                  @if (pick.market === 'US') {
+                                    <a class="rh-icon"
+                                      [href]="'https://robinhood.com/stocks/' + formatSymbol(pick.symbol) + '?source=search'"
+                                      target="_blank" rel="noopener noreferrer"
+                                      (click)="$event.stopPropagation()"
+                                      pTooltip="Trade on Robinhood" tooltipPosition="top">
+                                      <img src="robinhood.png" alt="RH" />
+                                    </a>
+                                  }
+                                  <a class="detail-icon-link"
+                                    [href]="'/stock/' + pick.symbol"
+                                    target="_blank"
+                                    (click)="$event.stopPropagation()"
+                                    pTooltip="Stock details" tooltipPosition="top">
+                                    <img src="stock-detail.svg" alt="Details" />
+                                  </a>
+                                </div>
+                                <button type="button" class="stock-name" (click)="navigateToStock(pick.symbol)">{{ pick.name | slice:0:30 }}</button>
+                                <span class="stock-meta">{{ pick.sector }}</span>
+                              </div>
+                            </td>
+                            <td class="col-price numeric">
+                              <span class="price-stack">
+                                {{ currencySymbol() }}{{ pick.price | number:'1.2-2' }}
+                                @if (pick.gap_percent != null) {
+                                  <small>Gap {{ pick.gap_percent >= 0 ? '+' : '' }}{{ pick.gap_percent | number:'1.1-1' }}%</small>
+                                } @else if (pick.change_percent != null) {
+                                  <small>{{ pick.change_percent >= 0 ? '+' : '' }}{{ pick.change_percent | number:'1.1-1' }}%</small>
+                                }
+                              </span>
+                            </td>
+                            <td class="col-targets">
+                              <div class="target-grid">
+                                <span class="target buy">Buy {{ currencySymbol() }}{{ pick.buy_price | number:'1.2-2' }}</span>
+                                <span class="target sell">Sell {{ currencySymbol() }}{{ pick.sell_price | number:'1.2-2' }} <small>+{{ getTargetPct(pick) | number:'1.1-1' }}%</small></span>
+                                <span class="target stop">Stop {{ currencySymbol() }}{{ pick.stop_loss | number:'1.2-2' }} <small>-{{ getStopPct(pick) | number:'1.1-1' }}%</small></span>
+                              </div>
+                            </td>
+                            <td class="col-outcome">
+                              <span class="outcome-badge" [ngClass]="getOutcome(pick)">
+                                <i [class]="getOutcomeIcon(pick)"></i>
+                                {{ getOutcomeLabel(pick) }}
+                              </span>
+                              @if (shouldShowPnl(pick)) {
+                                <div class="outcome-pnl">
+                                  {{ getOutcome(pick) === 'hit-target' ? '+' : '' }}{{ getPnlPercent(pick) | number:'1.1-1' }}%
+                                </div>
+                              }
+                              @if (pick.actual_high) {
+                                <div class="outcome-high">High {{ currencySymbol() }}{{ pick.actual_high | number:'1.2-2' }}</div>
+                              }
+                            </td>
+                            <td class="col-signals">
+                              <div class="signal-list">
+                                @for (s of pick.signals | slice:0:3; track s) {
+                                  <span class="signal-chip">{{ s }}</span>
+                                }
+                                @if (getPickTarget(pick)) {
+                                  <span class="signal-chip analyst-chip" [ngClass]="getPickTargetClass(pick)">{{ getPickTarget(pick) }}</span>
+                                }
+                                @if (getPickEarnings(pick)) {
+                                  <span class="signal-chip earnings-chip">{{ getPickEarnings(pick) }}</span>
+                                }
+                              </div>
+                              <div class="tech-meta">
+                                @if (pick.relative_volume) {
+                                  <span>RVOL {{ pick.relative_volume | number:'1.1-1' }}x</span>
+                                }
+                                @if (pick.rsi) {
+                                  <span>RSI {{ pick.rsi | number:'1.0-0' }}</span>
+                                }
+                              </div>
+                            </td>
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                } @else {
+                  <div class="empty-state compact">
+                    <strong>No recommendations</strong>
+                    <span>No qualifying setups were generated for this trading day.</span>
+                  </div>
+                }
+              </article>
+            }
+          </section>
+        }
+      } @else {
+        @if (loading()) {
+          <div class="loading-card">
+            <p-progressSpinner strokeWidth="3" animationDuration="1s"></p-progressSpinner>
+            <span>Loading paper results...</span>
+          </div>
+        } @else if (picks().length === 0) {
+          <div class="empty-state">
+            <i class="pi pi-chart-line"></i>
+            <strong>No paper results found</strong>
+            <span>No evaluated recommendations are available for {{ selectedMonthLabel() }}.</span>
+          </div>
+        } @else {
+          <section class="paper-results">
+            <div class="formula-card">
+              <div>
+                <span class="eyebrow">Score-to-Investment Formula</span>
+                <h2>{{ currencySymbol() }}{{ investmentRange().min | number:'1.0-0' }} to {{ currencySymbol() }}{{ investmentRange().max | number:'1.0-0' }} per triggered pick</h2>
+                <p>{{ scoreFormula() }}. Scores are clamped from 0 to 100, and no cash is deployed when the buy trigger is not reached.</p>
+              </div>
+            </div>
+
+            <section class="summary-grid paper-summary" aria-label="Automated paper result summary">
+              <div class="summary-card">
+                <span>Triggered Trades</span>
+                <strong>{{ paperSimulation().summary.triggeredTrades }}</strong>
+              </div>
+              <div class="summary-card">
+                <span>Capital Deployed</span>
+                <strong>{{ currencySymbol() }}{{ paperSimulation().summary.totalDeployedInvestment | number:'1.2-2' }}</strong>
+              </div>
+              <div class="summary-card" [class.positive]="paperSimulation().summary.totalPnl > 0" [class.negative]="paperSimulation().summary.totalPnl < 0">
+                <span>Realized P/L</span>
+                <strong>{{ paperSimulation().summary.totalPnl >= 0 ? '+' : '' }}{{ currencySymbol() }}{{ paperSimulation().summary.totalPnl | number:'1.2-2' }}</strong>
+              </div>
+              <div class="summary-card" [class.positive]="paperSimulation().summary.returnPercent > 0" [class.negative]="paperSimulation().summary.returnPercent < 0">
+                <span>Monthly Return</span>
+                <strong>{{ paperSimulation().summary.returnPercent >= 0 ? '+' : '' }}{{ paperSimulation().summary.returnPercent | number:'1.1-1' }}%</strong>
+              </div>
+              <div class="summary-card">
+                <span>Win Rate</span>
+                <strong>{{ paperSimulation().summary.winRate | number:'1.0-0' }}%</strong>
+              </div>
+              <div class="summary-card pending">
+                <span>No Trigger</span>
+                <strong>{{ paperSimulation().summary.notTradedCount }}</strong>
+              </div>
+            </section>
+
+            <section class="trades-panel paper-table-shell">
+              <div class="panel-heading">
+                <div>
+                  <span class="eyebrow">Automated Paper Ledger</span>
+                  <h2>{{ paperSimulation().trades.length }} simulated trade{{ paperSimulation().trades.length === 1 ? '' : 's' }}</h2>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="picks-table paper-table">
+                  <thead>
+                    <tr>
+                      <th class="col-stock">Stock</th>
+                      <th>Score</th>
+                      <th class="numeric">Shares</th>
+                      <th class="numeric">Planned</th>
+                      <th class="numeric">Deployed</th>
+                      <th>Bought</th>
+                      <th>Sold</th>
+                      <th class="numeric">Entry</th>
+                      <th>Exit</th>
+                      <th>Exit Reason</th>
+                      <th>P/L</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    @for (trade of paperSimulation().trades; track getTradeKey(trade)) {
+                      <tr [ngClass]="'paper-row-' + trade.resultTone">
+                        <td class="col-stock">
+                          <div class="stock-identity">
+                            <button type="button" class="stock-symbol" (click)="navigateToStock(trade.symbol)">{{ formatSymbol(trade.symbol) }}</button>
+                            <span class="stock-name">{{ trade.name | slice:0:28 }}</span>
+                          </div>
+                        </td>
+                        <td><span class="score-badge">{{ trade.score }}</span></td>
+                        <td class="numeric">{{ trade.sharesBought | number:'1.0-6' }}</td>
+                        <td class="planned-cell numeric">
+                          <span>{{ currencySymbol() }}{{ trade.plannedInvestment | number:'1.2-2' }}</span>
+                          <button
+                            type="button"
+                            class="planned-info-button"
+                            [attr.aria-label]="'Show planned investment calculation for ' + formatSymbol(trade.symbol)"
+                            [attr.aria-expanded]="activePlanExplanation() === getTradeKey(trade)"
+                            (click)="togglePlanExplanation(trade)">
+                            <i class="pi pi-info-circle"></i>
+                          </button>
+                          @if (activePlanExplanation() === getTradeKey(trade)) {
+                            <div class="planned-explanation">
+                              {{ getPlannedInvestmentExplanation(trade) }}
+                            </div>
+                          }
+                        </td>
+                        <td class="numeric">{{ currencySymbol() }}{{ trade.deployedInvestment | number:'1.2-2' }}</td>
+                        <td class="date-time-cell">{{ trade.boughtAtLabel }}</td>
+                        <td class="date-time-cell">{{ trade.soldAtLabel }}</td>
+                        <td class="numeric">{{ currencySymbol() }}{{ trade.entryPrice | number:'1.2-2' }}</td>
+                        <td class="exit-price-cell">
+                          <span class="outcome-badge compact detailed exit-price-badge" [ngClass]="trade.resultTone">
+                            @if (trade.exitPrice != null) {
+                              {{ currencySymbol() }}{{ trade.exitPrice | number:'1.2-2' }}
+                            } @else {
+                              No exit
+                            }
+                          </span>
+                        </td>
+                        <td class="exit-reason-cell">
+                          <span class="outcome-badge compact detailed" [ngClass]="trade.resultTone">{{ trade.detailedExitReason }}</span>
+                        </td>
+                        <td class="paper-pnl">
+                          <span class="outcome-badge compact detailed pnl-badge" [ngClass]="trade.resultTone">
+                            <span>{{ trade.pnlAmount >= 0 ? '+' : '' }}{{ currencySymbol() }}{{ trade.pnlAmount | number:'1.2-2' }}</span>
+                            <small>{{ trade.pnlPercent >= 0 ? '+' : '' }}{{ trade.pnlPercent | number:'1.1-1' }}%</small>
+                          </span>
+                        </td>
+                      </tr>
+                    }
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+        }
+      }
     </div>
   `,
   styles: [`
@@ -1004,6 +1050,754 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
       .score-badge { width: 30px; height: 30px; font-size: 0.75rem; }
       .summary-card { min-width: 45px; }
       .summary-value { font-size: 0.9rem; }
+    }
+
+    /* Watchlists/Paper-style Trades redesign */
+    .trades-page {
+      min-height: calc(100vh - 56px);
+      padding: 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+      background: linear-gradient(180deg, rgba(15, 23, 42, 0.16), transparent 34%);
+    }
+
+    .trades-hero,
+    .reco-tabs,
+    .summary-card,
+    .trades-panel,
+    .formula-card,
+    .loading-card,
+    .empty-state {
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: rgba(15, 23, 42, 0.58);
+    }
+
+    .trades-hero {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.1rem;
+      border-radius: 18px;
+    }
+
+    .hero-copy {
+      min-width: 0;
+    }
+
+    .hero-title-row {
+      display: flex;
+      align-items: baseline;
+      gap: 0.7rem;
+      flex-wrap: wrap;
+    }
+
+    .hero-title-row h1 {
+      margin: 0.1rem 0 0.2rem;
+      color: #f8fafc;
+      font-size: clamp(1.45rem, 2.8vw, 2.15rem);
+      line-height: 1;
+      letter-spacing: -0.045em;
+    }
+
+    .hero-title-row p {
+      margin: 0;
+      color: #94a3b8;
+      font-size: 0.9rem;
+    }
+
+    .hero-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.55rem;
+      flex-wrap: wrap;
+    }
+
+    .eyebrow {
+      display: inline-block;
+      color: #38bdf8;
+      font-size: 0.7rem;
+      font-weight: 900;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .market-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: fit-content;
+      border: 1px solid rgba(125, 211, 252, 0.18);
+      border-radius: 999px;
+      background: rgba(14, 116, 144, 0.16);
+      color: #bae6fd;
+      font-size: 0.7rem;
+      font-weight: 800;
+      letter-spacing: 0.04em;
+      padding: 0.32rem 0.7rem;
+      white-space: nowrap;
+    }
+
+    .month-nav {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.58);
+      padding: 0.25rem 0.45rem;
+    }
+
+    .month-label {
+      min-width: 8.4rem;
+      color: #f8fafc;
+      font-size: 0.82rem;
+      font-weight: 800;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    :host ::ng-deep .month-nav .p-button {
+      width: 1.85rem;
+      height: 1.85rem;
+      padding: 0;
+      border-radius: 999px;
+      color: #94a3b8;
+    }
+
+    .reco-tabs {
+      width: fit-content;
+      display: inline-flex;
+      gap: 0.3rem;
+      padding: 0.3rem;
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.56);
+    }
+
+    .reco-tab {
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: #94a3b8;
+      padding: 0.62rem 1rem;
+      font: inherit;
+      font-size: 0.82rem;
+      font-weight: 900;
+      cursor: pointer;
+      transition: background 0.14s ease, color 0.14s ease, transform 0.14s ease;
+    }
+
+    .reco-tab.active {
+      color: #fff;
+      background: linear-gradient(135deg, #38bdf8, #2563eb);
+      box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
+    }
+
+    .reco-tab:hover:not(.active) {
+      color: #f8fafc;
+      background: rgba(56, 189, 248, 0.08);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 0.65rem;
+    }
+
+    .summary-card {
+      --summary-accent: #f8fafc;
+      min-width: 0;
+      padding: 0.72rem 0.85rem;
+      border-radius: 14px;
+      background: rgba(15, 23, 42, 0.48);
+      text-align: left;
+    }
+
+    .summary-card span,
+    .summary-label {
+      display: block;
+      color: #94a3b8;
+      font-size: 0.66rem;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .summary-card strong,
+    .summary-value {
+      display: block;
+      margin-top: 0.2rem;
+      color: var(--summary-accent);
+      font-family: inherit;
+      font-size: 1.18rem;
+      font-weight: 900;
+      line-height: 1.08;
+      letter-spacing: -0.035em;
+    }
+
+    .summary-card.positive,
+    .summary-card.hit-target {
+      --summary-accent: #34d399;
+    }
+
+    .summary-card.negative,
+    .summary-card.hit-sl {
+      --summary-accent: #f87171;
+    }
+
+    .summary-card.pending {
+      --summary-accent: #7dd3fc;
+    }
+
+    .date-groups,
+    .paper-results {
+      display: flex;
+      flex-direction: column;
+      gap: 0.9rem;
+    }
+
+    .trades-panel {
+      border-radius: 18px;
+      background: rgba(15, 23, 42, 0.56);
+      overflow: hidden;
+    }
+
+    .panel-heading {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      padding: 0.95rem 1rem 0;
+      margin-bottom: 0.85rem;
+    }
+
+    .panel-heading h2 {
+      margin: 0.18rem 0 0;
+      color: #f8fafc;
+      font-size: 1rem;
+      line-height: 1.2;
+      letter-spacing: -0.025em;
+    }
+
+    .date-stats {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+    }
+
+    .stat-badge,
+    .outcome-badge,
+    .signal-chip {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.3rem;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 0.24rem 0.58rem;
+      font-size: 0.66rem;
+      font-weight: 900;
+      letter-spacing: 0.04em;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
+
+    .stat-badge.neutral,
+    .signal-chip {
+      color: #94a3b8;
+      background: rgba(148, 163, 184, 0.12);
+    }
+
+    .stat-badge.positive,
+    .outcome-badge.hit-target,
+    .outcome-badge.positive,
+    .signal-chip.analyst-chip.positive {
+      color: #34d399;
+      background: rgba(16, 185, 129, 0.12);
+    }
+
+    .stat-badge.negative,
+    .outcome-badge.hit-sl,
+    .outcome-badge.negative,
+    .signal-chip.analyst-chip.negative {
+      color: #f87171;
+      background: rgba(248, 113, 113, 0.12);
+    }
+
+    .stat-badge.pending,
+    .outcome-badge.pending,
+    .outcome-badge.neutral {
+      color: #7dd3fc;
+      background: rgba(56, 189, 248, 0.12);
+    }
+
+    .outcome-badge.no-trigger {
+      color: #94a3b8;
+      background: rgba(148, 163, 184, 0.14);
+    }
+
+    .signal-chip.earnings-chip,
+    .outcome-badge.pending {
+      color: #fbbf24;
+      background: rgba(251, 191, 36, 0.12);
+    }
+
+    .table-wrap,
+    .picks-table-wrap {
+      overflow: auto;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .picks-table {
+      width: 100%;
+      min-width: 980px;
+      border-collapse: separate;
+      border-spacing: 0;
+      table-layout: fixed;
+      font-size: 0.84rem;
+    }
+
+    .paper-table {
+      min-width: 1320px;
+    }
+
+    .picks-table thead th {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      padding: 0.72rem 0.8rem;
+      color: #64748b;
+      font-size: 0.68rem;
+      font-weight: 900;
+      letter-spacing: 0.08em;
+      text-align: left;
+      text-transform: uppercase;
+      white-space: nowrap;
+      background: linear-gradient(180deg, #0b1120 0%, #0f172a 100%);
+      border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      box-shadow: 0 1px 0 rgba(148, 163, 184, 0.16), 0 10px 18px rgba(2, 6, 23, 0.22);
+    }
+
+    .picks-table td {
+      padding: 0.74rem 0.8rem;
+      color: #cbd5e1;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+      vertical-align: middle;
+      transition: background 0.14s ease;
+    }
+
+    .picks-table tbody tr:hover td {
+      background: rgba(56, 189, 248, 0.055);
+    }
+
+    .row-hit-target td {
+      background: rgba(16, 185, 129, 0.025);
+    }
+
+    .row-hit-sl td {
+      background: rgba(248, 113, 113, 0.025);
+    }
+
+    .col-score {
+      width: 5.5rem;
+      text-align: center;
+    }
+
+    .col-stock {
+      width: 15rem;
+    }
+
+    .col-price {
+      width: 8.5rem;
+    }
+
+    .col-targets {
+      width: 15rem;
+    }
+
+    .col-outcome {
+      width: 11rem;
+      text-align: center;
+    }
+
+    .col-signals {
+      min-width: 16rem;
+    }
+
+    .numeric {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .score-badge {
+      width: 2.25rem;
+      height: 2.25rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 12px;
+      background: rgba(148, 163, 184, 0.12);
+      color: #e2e8f0;
+      font-family: inherit;
+      font-size: 0.86rem;
+      font-weight: 900;
+    }
+
+    .score-badge.high {
+      color: #022c22;
+      background: linear-gradient(135deg, #34d399, #059669);
+    }
+
+    .score-badge.medium {
+      color: #0f172a;
+      background: linear-gradient(135deg, #fbbf24, #f97316);
+    }
+
+    .stock-identity {
+      display: inline-flex;
+      max-width: 100%;
+      min-width: 0;
+      flex-direction: column;
+      gap: 0.14rem;
+    }
+
+    .stock-symbol-row {
+      display: flex;
+      align-items: center;
+      gap: 0.38rem;
+    }
+
+    .stock-symbol,
+    .stock-name {
+      border: 0;
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      text-align: left;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    .stock-symbol {
+      color: #f8fafc;
+      font-size: 0.94rem;
+      font-weight: 900;
+      line-height: 1.1;
+    }
+
+    .stock-name {
+      max-width: 100%;
+      color: #94a3b8;
+      font-size: 0.78rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .stock-symbol:hover,
+    .stock-name:hover {
+      color: #7dd3fc;
+    }
+
+    .stock-meta,
+    .tech-meta,
+    .price-stack small,
+    .outcome-high,
+    .date-time-cell,
+    .exit-reason-cell {
+      color: #64748b;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+
+    .rh-icon,
+    .detail-icon-link {
+      width: 1.25rem;
+      height: 1.25rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 8px;
+      background: rgba(15, 23, 42, 0.68);
+      overflow: hidden;
+    }
+
+    .rh-icon img,
+    .detail-icon-link img {
+      width: 1rem;
+      height: 1rem;
+      object-fit: cover;
+    }
+
+    .price-stack {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 0.12rem;
+      color: #f8fafc;
+      font-weight: 800;
+    }
+
+    .target-grid {
+      display: grid;
+      gap: 0.24rem;
+    }
+
+    .target {
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
+    .target small {
+      font-size: 0.7rem;
+      opacity: 0.82;
+    }
+
+    .target.buy {
+      color: #34d399;
+    }
+
+    .target.sell {
+      color: #7dd3fc;
+    }
+
+    .target.stop {
+      color: #f87171;
+    }
+
+    .outcome-pnl {
+      margin-top: 0.25rem;
+      color: #e2e8f0;
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 900;
+    }
+
+    .signal-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.32rem;
+    }
+
+    .tech-meta {
+      display: flex;
+      gap: 0.45rem;
+      margin-top: 0.35rem;
+    }
+
+    .formula-card {
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      padding: 1rem 1.1rem;
+      border-radius: 18px;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(56, 189, 248, 0.14), transparent 34%),
+        rgba(15, 23, 42, 0.58);
+    }
+
+    .formula-card h2 {
+      margin: 0.22rem 0;
+      color: #f8fafc;
+      font-size: 1rem;
+      letter-spacing: -0.025em;
+    }
+
+    .formula-card p {
+      max-width: 58rem;
+      margin: 0;
+      color: #94a3b8;
+      font-size: 0.86rem;
+      line-height: 1.5;
+    }
+
+    .planned-cell {
+      position: relative;
+    }
+
+    .planned-info-button {
+      width: 1.35rem;
+      height: 1.35rem;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      margin-left: 0.35rem;
+      border: 1px solid rgba(56, 189, 248, 0.32);
+      border-radius: 999px;
+      background: rgba(56, 189, 248, 0.12);
+      color: #7dd3fc;
+      cursor: pointer;
+      vertical-align: middle;
+    }
+
+    .planned-explanation {
+      position: absolute;
+      right: 0;
+      top: calc(100% + 0.35rem);
+      z-index: 12;
+      width: min(17rem, 70vw);
+      padding: 0.58rem 0.65rem;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-radius: 12px;
+      background: #0f172a;
+      color: #cbd5e1;
+      box-shadow: 0 18px 34px rgba(2, 6, 23, 0.32);
+      white-space: normal;
+      text-align: left;
+      font-size: 0.74rem;
+      line-height: 1.35;
+    }
+
+    .outcome-badge.compact.detailed,
+    .pnl-badge {
+      border-radius: 999px;
+      padding: 0.28rem 0.62rem;
+      font-weight: 900;
+    }
+
+    .pnl-badge {
+      display: inline-flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 0.1rem;
+    }
+
+    .pnl-badge small {
+      color: inherit;
+      font-size: 0.7rem;
+      opacity: 0.82;
+    }
+
+    .loading-card,
+    .empty-state {
+      min-height: 18rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 2rem;
+      border-radius: 18px;
+      color: #94a3b8;
+      text-align: center;
+    }
+
+    .empty-state.compact {
+      min-height: 8rem;
+      margin: 0 1rem 1rem;
+      border-style: dashed;
+    }
+
+    .empty-state .pi {
+      color: #38bdf8;
+      font-size: 1.4rem;
+    }
+
+    .empty-state strong {
+      color: #f8fafc;
+      font-size: 0.95rem;
+    }
+
+    @media (max-width: 1180px) {
+      .summary-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .col-signals {
+        display: none;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .trades-page {
+        padding: 0.75rem;
+      }
+
+      .trades-hero,
+      .panel-heading,
+      .formula-card {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+
+      .hero-actions,
+      .month-nav,
+      .reco-tabs {
+        width: 100%;
+      }
+
+      .reco-tabs {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .reco-tab {
+        text-align: center;
+      }
+
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .date-stats {
+        justify-content: flex-start;
+      }
+
+      .picks-table {
+        min-width: 900px;
+      }
+
+      .paper-table {
+        min-width: 1280px;
+      }
+
+      .picks-table thead th.col-stock,
+      .picks-table tbody td.col-stock {
+        position: sticky;
+        left: 0;
+        width: 132px;
+        min-width: 132px;
+        max-width: 132px;
+        background: #0f172a;
+        z-index: 3;
+        box-shadow: 1px 0 0 rgba(148, 163, 184, 0.1), 14px 0 18px rgba(2, 6, 23, 0.22);
+      }
+
+      .picks-table thead th.col-stock {
+        z-index: 7;
+        background: #0b1120;
+      }
+    }
+
+    @media (max-width: 520px) {
+      .trades-page {
+        padding: 0.5rem;
+        gap: 0.7rem;
+      }
+
+      .hero-title-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.2rem;
+      }
+
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .month-label {
+        flex: 1;
+        min-width: 0;
+      }
     }
   `]
 })

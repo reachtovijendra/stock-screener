@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
 import { RouterLink } from '@angular/router';
 import { ButtonModule } from 'primeng/button';
+import { DialogModule } from 'primeng/dialog';
 import { InputNumberModule } from 'primeng/inputnumber';
 import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { ToastModule } from 'primeng/toast';
@@ -21,6 +22,7 @@ import { getManualStartingCash } from '../../core/utils/paper-trading-calculatio
     ReactiveFormsModule,
     RouterLink,
     ButtonModule,
+    DialogModule,
     InputNumberModule,
     ProgressSpinnerModule,
     ToastModule,
@@ -44,6 +46,12 @@ export class PaperTradingComponent {
   readonly quoteLoading = signal(false);
   readonly positionQuotesLoading = signal(false);
   readonly orderSubmitting = signal(false);
+  readonly orderDialogVisible = signal(false);
+  readonly tradeHistoryQuery = signal('');
+  readonly tradeDialogBreakpoints = {
+    '960px': '92vw',
+    '560px': 'calc(100vw - 1rem)',
+  };
 
   readonly orderForm = this.fb.nonNullable.group({
     action: this.fb.nonNullable.control<'BUY' | 'SELL'>('BUY', Validators.required),
@@ -57,6 +65,17 @@ export class PaperTradingComponent {
   readonly summary = computed(() => this.paperService.getSummary(this.latestPrices()));
   readonly currencySymbol = computed(() => this.marketService.marketInfo().currencySymbol);
   readonly locale = computed(() => this.marketService.currentMarket() === 'IN' ? 'en-IN' : 'en-US');
+  readonly filteredTrades = computed(() => {
+    const query = this.tradeHistoryQuery().trim().toLowerCase();
+    const trades = this.paperService.trades();
+    if (!query) return trades;
+
+    return trades.filter(trade => {
+      const symbol = trade.symbol.toLowerCase();
+      const name = trade.name?.toLowerCase() ?? '';
+      return symbol.includes(query) || name.includes(query);
+    });
+  });
 
   canRefreshQuote(): boolean {
     return this.orderForm.controls.symbol.value.trim().length > 0 && !this.quoteLoading();
@@ -75,6 +94,28 @@ export class PaperTradingComponent {
     if (!value.execution_price || value.execution_price <= 0) return 'Use Live Quote or enter an execution price above 0.';
     if (this.orderForm.invalid) return 'Complete the order ticket before placing the trade.';
     return null;
+  }
+
+  setOrderAction(action: 'BUY' | 'SELL'): void {
+    this.orderForm.controls.action.setValue(action);
+  }
+
+  openOrderTicket(action: 'BUY' | 'SELL'): void {
+    this.setOrderAction(action);
+    this.orderDialogVisible.set(true);
+  }
+
+  closeOrderTicket(): void {
+    this.orderDialogVisible.set(false);
+    this.stockSuggestions.set([]);
+  }
+
+  filterTradeHistory(event: Event): void {
+    this.tradeHistoryQuery.set((event.target as HTMLInputElement).value);
+  }
+
+  clearTradeHistoryFilter(): void {
+    this.tradeHistoryQuery.set('');
   }
 
   constructor() {
@@ -179,6 +220,7 @@ export class PaperTradingComponent {
       await this.paperService.placeOrder(order);
       await this.refreshLivePrices();
       this.orderForm.patchValue({ quantity: 1 });
+      this.closeOrderTicket();
       this.messageService.add({ severity: 'success', summary: `${order.action} order filled`, detail: `${order.quantity} ${order.symbol} at ${this.formatCurrency(order.execution_price)}` });
     } catch (error) {
       this.showError(error);
@@ -211,6 +253,12 @@ export class PaperTradingComponent {
     const price = this.getPositionCurrentPrice(symbol);
     if (price == null) return 0;
     return (price - averageCost) * quantity;
+  }
+
+  getPositionPnlPercent(symbol: string, averageCost: number): number | null {
+    const price = this.getPositionCurrentPrice(symbol);
+    if (price == null || averageCost <= 0) return null;
+    return ((price - averageCost) / averageCost) * 100;
   }
 
   private getPositionForSymbol(symbol: string) {

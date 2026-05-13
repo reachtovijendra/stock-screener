@@ -1906,6 +1906,14 @@ async function fetchMarketStocks(market, filters = {}) {
 }
 
 function applyFilters(stocks, filters) {
+  const passesRange = (value, range = {}) => {
+    if (range.min == null && range.max == null) return true;
+    if (value == null) return false;
+    if (range.min != null && value < range.min) return false;
+    if (range.max != null && value > range.max) return false;
+    return true;
+  };
+
   return stocks.filter(stock => {
     if (!stock || !stock.price) return false;
     
@@ -1921,11 +1929,25 @@ function applyFilters(stocks, filters) {
 
     if (filters.peRatio?.min != null && (stock.peRatio == null || stock.peRatio < filters.peRatio.min)) return false;
     if (filters.peRatio?.max != null && (stock.peRatio == null || stock.peRatio > filters.peRatio.max)) return false;
+    if (!passesRange(stock.forwardPeRatio, filters.forwardPeRatio)) return false;
+    if (!passesRange(stock.pbRatio, filters.pbRatio)) return false;
+    if (!passesRange(stock.psRatio, filters.psRatio)) return false;
+    if (!passesRange(stock.dividendYield, filters.dividendYield)) return false;
+    if (!passesRange(stock.earningsGrowth, filters.earningsGrowth)) return false;
+    if (!passesRange(stock.revenueGrowth, filters.revenueGrowth)) return false;
+    if (!passesRange(stock.eps, filters.eps)) return false;
+    if (!passesRange(stock.beta, filters.beta)) return false;
+    if (!passesRange(stock.avgVolume, filters.avgVolume)) return false;
+    if (!passesRange(stock.relativeVolume, filters.relativeVolume)) return false;
+    if (!passesRange(stock.price, filters.price)) return false;
 
     if (filters.fiftyTwoWeek?.nearHigh && (stock.percentFromFiftyTwoWeekHigh == null || stock.percentFromFiftyTwoWeekHigh < -5)) return false;
     if (filters.fiftyTwoWeek?.nearLow && (stock.percentFromFiftyTwoWeekLow == null || stock.percentFromFiftyTwoWeekLow > 10)) return false;
+    if (!passesRange(stock.percentFromFiftyTwoWeekHigh, filters.fiftyTwoWeek?.percentFromHigh)) return false;
+    if (!passesRange(stock.percentFromFiftyTwoWeekLow, filters.fiftyTwoWeek?.percentFromLow)) return false;
 
     if (filters.sectors?.length > 0 && !filters.sectors.includes(stock.sector)) return false;
+    if (filters.exchanges?.length > 0 && !filters.exchanges.includes(stock.exchange)) return false;
 
     if (filters.movingAverages?.aboveFiftyDayMA === true && (stock.percentFromFiftyDayMA == null || stock.percentFromFiftyDayMA <= 0)) return false;
     if (filters.movingAverages?.aboveFiftyDayMA === false && (stock.percentFromFiftyDayMA == null || stock.percentFromFiftyDayMA > 0)) return false;
@@ -1933,13 +1955,16 @@ function applyFilters(stocks, filters) {
     if (filters.movingAverages?.aboveTwoHundredDayMA === false && (stock.percentFromTwoHundredDayMA == null || stock.percentFromTwoHundredDayMA > 0)) return false;
 
     // RSI Filter
-    if (filters.rsi?.zones?.length > 0 && stock.rsi != null) {
+    if (filters.rsi?.zones?.length > 0) {
+      if (stock.rsi == null) return false;
       const rsiZone = getRSIZone(stock.rsi);
       if (!filters.rsi.zones.includes(rsiZone)) return false;
     }
+    if (!passesRange(stock.rsi, filters.rsi?.customRange)) return false;
 
     // MACD Filter
-    if (filters.macd?.signals?.length > 0 && stock.macdSignalType != null) {
+    if (filters.macd?.signals?.length > 0) {
+      if (stock.macdSignalType == null) return false;
       if (!filters.macd.signals.includes(stock.macdSignalType)) return false;
     }
 

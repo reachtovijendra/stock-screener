@@ -26,6 +26,15 @@ interface MovingAverageFilter {
   deathCross: boolean;
 }
 
+interface RSIFilter {
+  zones: string[];
+  customRange: RangeFilter;
+}
+
+interface MACDFilter {
+  signals: string[];
+}
+
 interface ScreenerFilters {
   market: Market;
   marketCap: MarketCapFilter;
@@ -43,6 +52,8 @@ interface ScreenerFilters {
   eps: RangeFilter;
   beta: RangeFilter;
   movingAverages: MovingAverageFilter;
+  rsi?: RSIFilter;
+  macd?: MACDFilter;
   sectors: string[];
   exchanges: string[];
 }
@@ -108,6 +119,10 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
     return false;
   }
 
+  if (!passesRangeFilter(stock.percentFromFiftyTwoWeekLow, filters.fiftyTwoWeek.percentFromLow)) {
+    return false;
+  }
+
   if (!passesRangeFilter(stock.peRatio, filters.peRatio)) {
     return false;
   }
@@ -120,11 +135,23 @@ function passesFilters(stock: StockQuote, filters: ScreenerFilters): boolean {
     return false;
   }
 
+  if (!passesRangeFilter(stock.psRatio, filters.psRatio)) {
+    return false;
+  }
+
   if (!passesRangeFilter(stock.earningsGrowth, filters.earningsGrowth)) {
     return false;
   }
 
   if (!passesRangeFilter(stock.revenueGrowth, filters.revenueGrowth)) {
+    return false;
+  }
+
+  if (!passesRangeFilter(stock.eps, filters.eps)) {
+    return false;
+  }
+
+  if (!passesRangeFilter(stock.beta, filters.beta)) {
     return false;
   }
 

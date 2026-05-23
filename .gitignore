@@ -8,6 +8,7 @@ package-lock.json
 
 # IDE
 /.idea
+.claude/
 .project
 .classpath
 .c9/

@@ -238,6 +238,19 @@ export class WatchlistService {
     return true;
   }
 
+  async loadAllWatchlistItems(): Promise<WatchlistItem[]> {
+    const user = this.auth.user();
+    if (!user) return [];
+    const watchlistIds = this.watchlists().map(wl => wl.id);
+    if (watchlistIds.length === 0) return [];
+    const { data } = await this.db
+      .from('watchlist_items')
+      .select('*')
+      .in('watchlist_id', watchlistIds)
+      .order('added_at', { ascending: true });
+    return data ?? [];
+  }
+
   canEditWatchlist(watchlistId: string): boolean {
     const role = this.findWatchlist(watchlistId)?.access_role;
     return role === 'owner' || role === 'editor';

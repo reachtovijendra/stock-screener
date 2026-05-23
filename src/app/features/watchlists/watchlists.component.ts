@@ -17,10 +17,16 @@ import { ShareRole, Watchlist, WatchlistService, WatchlistShare } from '../../co
           <h1>Stock decks</h1>
           <p>Choose a watchlist to open its dedicated stocks page.</p>
         </div>
-        <button class="btn-primary" type="button" (click)="showCreateDialog.set(true)">
-          <i class="pi pi-plus"></i>
-          New Watchlist
-        </button>
+        <div class="header-actions">
+          <button class="btn-secondary" type="button" (click)="openTopPerformers()">
+            <i class="pi pi-trophy"></i>
+            Top Performers
+          </button>
+          <button class="btn-primary" type="button" (click)="showCreateDialog.set(true)">
+            <i class="pi pi-plus"></i>
+            New Watchlist
+          </button>
+        </div>
       </section>
 
       <section class="watchlist-stats" aria-label="Watchlist summary">
@@ -283,6 +289,12 @@ import { ShareRole, Watchlist, WatchlistService, WatchlistShare } from '../../co
       background: linear-gradient(135deg, #38bdf8, #2563eb);
       box-shadow: 0 10px 24px rgba(37, 99, 235, 0.22);
       white-space: nowrap;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
     }
 
     .btn-primary { padding: 0.66rem 0.95rem; }
@@ -742,6 +754,10 @@ export class WatchlistsComponent implements OnInit {
 
   ngOnInit(): void {
     this.wlService.loadWatchlists();
+  }
+
+  openTopPerformers(): void {
+    this.router.navigate(['/watchlists/top-performers']);
   }
 
   openWatchlist(wl: Watchlist): void {

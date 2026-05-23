@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Top Performers page at `/watchlists/top-performers` that aggregates stocks across all user watchlists (owned and shared), enriches them with live performance data, and ranks by selectable time periods (1D, 1W, 1M, 1Y, Since Added) with configurable display count (10, 25, All).
 - Screener Top Losers and Top Gainers quick-view buttons with selectable 1D, 1M, and 1Y ranking periods backed by a full-market movers API.
 - Portfolio Tracker Growth Lens popup with a PrimeNG dialog, Chart.js-backed growth/profit/return charts, KPI cards, and no-actual-data guidance.
 - Authenticated FIRE Goals page at `/fire-goals` with Supabase-backed goal, asset, and liability persistence, client-side retirement projections, required monthly/yearly contribution targets, and polished mission-control styling.

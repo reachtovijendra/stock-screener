@@ -616,8 +616,8 @@ import { DashboardService } from '../../core/services/dashboard.service';
 
     .stat-value {
       font-family: 'Fraunces', serif;
-      font-size: 0.9rem;
-      font-weight: 500;
+      font-size: 1.1rem;
+      font-weight: 600;
       color: #f5f5f7;
     }
 
@@ -695,8 +695,8 @@ import { DashboardService } from '../../core/services/dashboard.service';
 
     .big-number {
       font-family: 'Fraunces', serif;
-      font-size: 1.75rem;
-      font-weight: 500;
+      font-size: 1.5rem;
+      font-weight: 400;
       color: #f5f5f7;
       letter-spacing: -0.02em;
     }

@@ -1161,12 +1161,14 @@ import { DashboardService } from '../../core/services/dashboard.service';
         height: auto;
         min-height: calc(100vh - 56px);
         overflow-y: auto;
-        padding: 1.25rem 1rem 2rem;
+        padding: 1.25rem 0.75rem 2rem;
       }
-      .greeting-text { font-size: 1.5rem; }
+      .panel { padding: 1rem; }
+      .greeting-text { font-size: 1.4rem; }
       .hero-row { flex-direction: column; align-items: flex-start; margin-bottom: 0.75rem; }
       .bento-grid {
         grid-template-columns: 1fr;
+        gap: 0.85rem;
       }
       .panel-fire,
       .panel-portfolio,
@@ -1176,13 +1178,35 @@ import { DashboardService } from '../../core/services/dashboard.service';
         grid-row: auto;
         grid-column: 1;
       }
+
+      /* FIRE panel mobile */
       .panel-fire .panel-body { justify-content: flex-start; }
-      .fire-hero { flex-direction: row; gap: 0.75rem; }
-      .fire-ring-container { width: 80px; height: 80px; }
-      .fire-percent { font-size: 1.1rem; }
-      .fire-hero-stats { gap: 0.3rem; }
-      .stat-value { font-size: 0.82rem; }
+      .fire-hero { flex-direction: row; gap: 0.6rem; }
+      .fire-ring-container { width: 72px; height: 72px; }
+      .fire-percent { font-size: 1rem; }
+      .fire-hero-stats { gap: 0.25rem; min-width: 0; }
+      .fire-stat { gap: 0.3rem; }
+      .stat-label { font-size: 0.6rem; white-space: nowrap; }
+      .stat-value { font-size: 0.8rem; white-space: nowrap; text-align: right; }
+      .fire-contrib { padding: 0.4rem 0.6rem; gap: 0.5rem; }
+      .contrib-value { font-size: 0.82rem; }
+      .fire-track-badge { margin-top: 0.4rem; font-size: 0.65rem; }
+
+      /* Portfolio panel mobile */
+      .panel-header { flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
+      .portfolio-age-badge { display: none; }
+      .header-icon-btn { width: 24px; height: 24px; font-size: 0.7rem; }
+      .big-number { font-size: 1.3rem; }
+      .pf-return-pills { flex-wrap: wrap; }
+      .pf-goal-labels { flex-wrap: wrap; gap: 0.2rem; }
+      .pf-goal-target { font-size: 0.62rem; }
+      .pf-stats-strip { flex-wrap: wrap; gap: 0.4rem; }
+      .pf-stat-divider { display: none; }
+
+      /* Paper + Email */
       .panel-paper-wrapper { flex-direction: column; }
+
+      /* News */
       .news-list {
         flex-direction: column;
         overflow-x: visible;
@@ -1191,8 +1215,6 @@ import { DashboardService } from '../../core/services/dashboard.service';
         flex: none;
         min-width: unset;
       }
-      .big-number { font-size: 1.4rem; }
-      .pf-stats-strip { flex-wrap: wrap; }
     }
 
     @keyframes v2-slideUp {

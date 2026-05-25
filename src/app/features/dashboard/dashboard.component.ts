@@ -94,9 +94,6 @@ import { DashboardService } from '../../core/services/dashboard.service';
             <div class="panel-header">
               <div class="panel-icon portfolio-icon"><i class="pi pi-wallet"></i></div>
               <span class="panel-title">Portfolio Growth</span>
-              @if (portfolio().hasData) {
-                <span class="portfolio-age-badge">{{ portfolio().monthsTracked }} months since {{ portfolio().trackingSince }}</span>
-              }
               <a routerLink="/portfolio" [queryParams]="{lens: 'open'}" class="header-icon-btn" title="Growth Lens">
                 <i class="pi pi-chart-line"></i>
               </a>
@@ -122,6 +119,9 @@ import { DashboardService } from '../../core/services/dashboard.service';
                       {{ portfolio().annualizedReturn >= 0 ? '+' : '' }}{{ portfolio().annualizedReturn | number:'1.1-1' }}% / yr
                     </span>
                   </div>
+                  @if (portfolio().hasData) {
+                    <span class="portfolio-age-badge">{{ portfolio().monthsTracked }} months since {{ portfolio().trackingSince }}</span>
+                  }
                 </div>
                 @if (portfolio().goalValue > 0) {
                   <div class="pf-goal-track">
@@ -210,9 +210,6 @@ import { DashboardService } from '../../core/services/dashboard.service';
               <div class="panel-header">
                 <div class="panel-icon paper-icon"><i class="pi pi-briefcase"></i></div>
                 <span class="panel-title">Paper Trading</span>
-                @if (paper().tradingSince) {
-                  <span class="pt-since-badge">since {{ paper().tradingSince }}</span>
-                }
                 <i class="pi pi-arrow-up-right panel-link-icon"></i>
               </div>
               <div class="panel-body">
@@ -224,6 +221,9 @@ import { DashboardService } from '../../core/services/dashboard.service';
                         {{ paper().returnPercent >= 0 ? '+' : '' }}{{ paper().returnPercent | number:'1.1-1' }}%
                       </span>
                     </div>
+                    @if (paper().tradingSince) {
+                      <span class="pt-since-badge">since {{ paper().tradingSince }}</span>
+                    }
                   </div>
                   <div class="pt-pnl-row">
                     <div class="pt-pnl-item">
@@ -1194,7 +1194,7 @@ import { DashboardService } from '../../core/services/dashboard.service';
 
       /* Portfolio panel mobile */
       .panel-header { flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.8rem; }
-      .portfolio-age-badge { display: none; }
+      .portfolio-age-badge { font-size: 0.55rem; }
       .header-icon-btn { width: 24px; height: 24px; font-size: 0.7rem; }
       .big-number { font-size: 1.3rem; }
       .pf-return-pills { flex-wrap: wrap; }

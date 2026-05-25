@@ -222,20 +222,16 @@ export class DashboardService {
     this.loading.set(true);
     const market = this.marketService.currentMarket();
 
-    try {
-      await Promise.all([
-        this.fireService.loadData(),
-        this.portfolioService.loadData(),
-        this.paperService.loadData(),
-        this.loadPicks(market),
-        this.loadNews(market),
-      ]);
-      await this.loadPaperLivePrices(market);
-    } catch (err) {
-      console.error('[Dashboard] Error loading data:', err);
-    } finally {
-      this.loading.set(false);
-    }
+    const loads = [
+      this.fireService.loadData().catch(e => console.error('[Dashboard] FIRE load error:', e)),
+      this.portfolioService.loadData().catch(e => console.error('[Dashboard] Portfolio load error:', e)),
+      this.paperService.loadData().then(() => this.loadPaperLivePrices(market)).catch(e => console.error('[Dashboard] Paper load error:', e)),
+      this.loadPicks(market),
+      this.loadNews(market),
+    ];
+
+    await Promise.allSettled(loads);
+    this.loading.set(false);
   }
 
   private async loadPaperLivePrices(market: string): Promise<void> {

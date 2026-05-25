@@ -1159,7 +1159,12 @@ import { DashboardService } from '../../core/services/dashboard.service';
         overflow-y: auto;
         padding: 1.25rem 0.75rem 2rem;
       }
-      .panel { padding: 1rem; }
+      .panel {
+        padding: 1rem;
+        opacity: 1 !important;
+        animation: none !important;
+      }
+      .hero-row { opacity: 1 !important; animation: none !important; }
       .greeting-text { font-size: 1.4rem; }
       .hero-row { flex-direction: column; align-items: flex-start; margin-bottom: 0.75rem; }
       .bento-grid {

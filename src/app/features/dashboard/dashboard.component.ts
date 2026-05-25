@@ -616,9 +616,9 @@ import { DashboardService } from '../../core/services/dashboard.service';
 
     .stat-value {
       font-family: 'Fraunces', serif;
-      font-size: 1.1rem;
-      font-weight: 600;
-      color: #f5f5f7;
+      font-size: 1.05rem;
+      font-weight: 500;
+      color: #34d399;
     }
 
     .fire-contrib {
@@ -696,7 +696,7 @@ import { DashboardService } from '../../core/services/dashboard.service';
     .big-number {
       font-family: 'Fraunces', serif;
       font-size: 1.5rem;
-      font-weight: 400;
+      font-weight: 500;
       color: #f5f5f7;
       letter-spacing: -0.02em;
     }

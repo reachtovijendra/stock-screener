@@ -280,7 +280,7 @@ export class DashboardService {
       const url = `${environment.apiBaseUrl}/api/market?action=news&market=${market}`;
       const data: any = await firstValueFrom(this.http.get(url));
       const articles: any[] = data?.news ?? [];
-      this.news.set(articles.slice(0, 5).map((a: any) => ({
+      this.news.set(articles.slice(0, 6).map((a: any) => ({
         title: a.title,
         link: a.link,
         source: a.source,

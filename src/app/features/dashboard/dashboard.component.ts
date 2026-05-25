@@ -245,6 +245,15 @@ import { DashboardService } from '../../core/services/dashboard.service';
                       </span>
                     </div>
                   </div>
+                  <div class="pt-alloc-mini">
+                    <div class="pt-alloc-bar-mini">
+                      <div class="pt-bar-invested" [style.width.%]="paper().totalEquity > 0 ? ((paper().totalEquity - paper().cashBalance) / paper().totalEquity) * 100 : 0"></div>
+                    </div>
+                    <div class="pt-alloc-meta">
+                      <span class="pt-meta-item"><i class="pt-dot-inv"></i>{{ ((paper().totalEquity - paper().cashBalance) / paper().totalEquity * 100) | number:'1.0-0' }}% deployed</span>
+                      <span class="pt-meta-item"><i class="pt-dot-cash"></i>{{ (paper().cashBalance / paper().totalEquity * 100) | number:'1.0-0' }}% cash</span>
+                    </div>
+                  </div>
                   <div class="pf-stats-strip">
                     <div class="pf-stat">
                       <span class="pf-stat-val">{{ paper().positionCount }}</span>
@@ -347,10 +356,24 @@ import { DashboardService } from '../../core/services/dashboard.service';
 
     .dashboard {
       position: relative;
-      height: calc(100vh - 56px);
       padding: 1.5rem 2rem 1.5rem;
-      overflow: hidden;
       font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+      height: calc(100vh - 56px);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .dashboard-content {
+      position: relative;
+      z-index: 2;
+      max-width: 1600px;
+      margin: 0 auto;
+      width: 100%;
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
     }
 
     .dashboard-bg {
@@ -372,12 +395,6 @@ import { DashboardService } from '../../core/services/dashboard.service';
       z-index: 1;
     }
 
-    .dashboard-content {
-      position: relative;
-      z-index: 2;
-      max-width: 1400px;
-      margin: 0 auto;
-    }
 
     /* Hero Row */
     .hero-row {
@@ -441,8 +458,9 @@ import { DashboardService } from '../../core/services/dashboard.service';
     .bento-grid {
       display: grid;
       grid-template-columns: 1fr 1.5fr;
-      grid-template-rows: auto auto auto;
-      gap: 1.1rem;
+      grid-template-rows: auto 1fr 0.8fr;
+      gap: 1.25rem;
+      flex: 1;
     }
 
     .panel-fire { grid-row: 1; grid-column: 1; }
@@ -463,8 +481,13 @@ import { DashboardService } from '../../core/services/dashboard.service';
       color: inherit;
       display: flex;
       flex-direction: column;
-      opacity: 0;
-      animation: v2-slideUp 0.4s ease-out forwards;
+    }
+
+    @media (min-width: 1025px) {
+      .panel, .hero-row {
+        opacity: 0;
+        animation: v2-slideUp 0.4s ease-out forwards;
+      }
     }
 
     .panel:hover {
@@ -535,11 +558,14 @@ import { DashboardService } from '../../core/services/dashboard.service';
       transform: translate(2px, -2px);
     }
 
-    .panel-body { flex: 1; }
-
-    .panel-fire .panel-body {
+    .panel-body {
+      flex: 1;
       display: flex;
       flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .panel-fire .panel-body {
       justify-content: center;
     }
 
@@ -704,7 +730,7 @@ import { DashboardService } from '../../core/services/dashboard.service';
       align-items: baseline;
       gap: 0.75rem;
       flex-wrap: wrap;
-      margin-bottom: 0.85rem;
+      margin-bottom: 0.75rem;
     }
 
     .pf-return-pills {
@@ -732,14 +758,14 @@ import { DashboardService } from '../../core/services/dashboard.service';
     }
 
     .pf-goal-track {
-      margin-bottom: 0.75rem;
+      margin-bottom: 0.6rem;
     }
 
     .pf-goal-labels {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 0.35rem;
+      margin-bottom: 0.3rem;
     }
 
     .pf-goal-current {
@@ -763,8 +789,8 @@ import { DashboardService } from '../../core/services/dashboard.service';
     }
 
     .pf-goal-bar {
-      height: 4px;
-      border-radius: 2px;
+      height: 6px;
+      border-radius: 3px;
       background: rgba(255,255,255,0.06);
       overflow: hidden;
       margin-bottom: 0.25rem;
@@ -772,7 +798,7 @@ import { DashboardService } from '../../core/services/dashboard.service';
 
     .pf-goal-fill {
       height: 100%;
-      border-radius: 2px;
+      border-radius: 3px;
       background: linear-gradient(90deg, #34d399, #4a7cff);
       transition: width 0.6s ease;
     }
@@ -934,20 +960,18 @@ import { DashboardService } from '../../core/services/dashboard.service';
       align-items: baseline;
       gap: 0.75rem;
       flex-wrap: wrap;
-      margin-bottom: 0.7rem;
     }
 
     .pt-pnl-row {
       display: flex;
       gap: 0.4rem;
-      margin-bottom: 0.7rem;
     }
 
     .pt-pnl-item {
       flex: 1;
       display: flex;
       flex-direction: column;
-      padding: 0.3rem 0.5rem;
+      padding: 0.4rem 0.55rem;
       border-radius: 6px;
       background: rgba(255,255,255,0.03);
       border: 1px solid rgba(255,255,255,0.06);
@@ -970,19 +994,12 @@ import { DashboardService } from '../../core/services/dashboard.service';
 
     /* News */
     .news-list {
-      display: flex;
-      flex-direction: row;
-      gap: 0.75rem;
-      overflow-x: auto;
-      overflow-y: hidden;
-      scrollbar-width: none;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.6rem;
     }
 
-    .news-list::-webkit-scrollbar { display: none; }
-
     .news-row {
-      flex: 0 0 calc(33.33% - 0.5rem);
-      min-width: 200px;
       padding: 0.6rem 0.75rem;
       background: rgba(255, 255, 255, 0.02);
       border-radius: 8px;
@@ -1021,6 +1038,63 @@ import { DashboardService } from '../../core/services/dashboard.service';
     .panel-paper-wrapper .panel-paper {
       flex: 1.6;
       min-width: 0;
+    }
+
+    .panel-paper .panel-body {
+      justify-content: flex-start;
+      gap: 0.65rem;
+    }
+
+    .panel-paper .pt-pnl-row {
+      margin-top: 0.4rem;
+    }
+
+    .panel-paper .pt-alloc-mini {
+      display: flex;
+      flex-direction: column;
+      gap: 0.3rem;
+      margin-top: 0.3rem;
+    }
+
+    .panel-paper .pt-alloc-bar-mini {
+      height: 4px;
+      border-radius: 2px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+
+    .panel-paper .pt-bar-invested {
+      height: 100%;
+      border-radius: 2px;
+      background: linear-gradient(90deg, #4a7cff, #34d399);
+      transition: width 0.6s ease;
+    }
+
+    .panel-paper .pt-alloc-meta {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .panel-paper .pt-meta-item {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+      font-size: 0.58rem;
+      color: rgba(255,255,255,0.4);
+    }
+
+    .panel-paper .pt-dot-inv,
+    .panel-paper .pt-dot-cash {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+    }
+
+    .panel-paper .pt-dot-inv { background: #4a7cff; }
+    .panel-paper .pt-dot-cash { background: #34d399; }
+
+    .panel-paper .pf-stats-strip {
+      margin-top: 0.75rem;
     }
 
     .panel-settings {
@@ -1139,17 +1213,16 @@ import { DashboardService } from '../../core/services/dashboard.service';
     @media (max-width: 1024px) {
       .dashboard {
         height: auto;
-        min-height: calc(100vh - 56px);
-        overflow-y: auto;
+        min-height: 0;
+        overflow: visible;
       }
-      .panel, .v2-animate-slide-up, .panel-paper-wrapper {
-        opacity: 1 !important;
-        animation: none !important;
-        animation-delay: 0s !important;
-        transform: none !important;
+      .dashboard-content {
+        flex: none;
       }
       .bento-grid {
+        flex: none;
         grid-template-columns: 1fr 1fr;
+        grid-template-rows: auto;
       }
       .panel-fire { grid-row: auto; grid-column: 1; }
       .panel-portfolio { grid-row: auto; grid-column: 2; }
@@ -1161,19 +1234,17 @@ import { DashboardService } from '../../core/services/dashboard.service';
     @media (max-width: 768px) {
       .dashboard {
         height: auto;
-        min-height: calc(100vh - 56px);
-        overflow-y: auto;
+        min-height: 0;
+        overflow: visible;
         padding: 1.25rem 0.75rem 2rem;
       }
-      .panel, .v2-animate-slide-up, .panel-paper-wrapper {
-        padding: 1rem;
-        opacity: 1 !important;
-        animation: none !important;
-        animation-delay: 0s !important;
-        transform: none !important;
+      .dashboard-content {
+        flex: none;
       }
-      .panel-paper-wrapper { padding: 0; transform: none !important; }
-      .hero-row { opacity: 1 !important; animation: none !important; transform: none !important; }
+      .bento-grid { flex: none; grid-template-rows: auto; }
+      .panel {
+        padding: 1rem;
+      }
       .greeting-text { font-size: 1.4rem; }
       .hero-row { flex-direction: column; align-items: flex-start; margin-bottom: 0.75rem; }
       .bento-grid {
@@ -1218,12 +1289,7 @@ import { DashboardService } from '../../core/services/dashboard.service';
 
       /* News */
       .news-list {
-        flex-direction: column;
-        overflow-x: visible;
-      }
-      .news-row {
-        flex: none;
-        min-width: unset;
+        grid-template-columns: 1fr;
       }
     }
 

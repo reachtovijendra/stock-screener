@@ -79,7 +79,6 @@ import { AuthService } from './core/services/auth.service';
     .content-wrapper {
       display: flex;
       flex: 1;
-      min-height: 0;
     }
 
     .nav-sidebar {

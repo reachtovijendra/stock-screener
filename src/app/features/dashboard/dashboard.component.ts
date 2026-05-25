@@ -118,10 +118,10 @@ import { DashboardService } from '../../core/services/dashboard.service';
                     <span class="pf-pill" [class.positive]="portfolio().annualizedReturn >= 0" [class.negative]="portfolio().annualizedReturn < 0">
                       {{ portfolio().annualizedReturn >= 0 ? '+' : '' }}{{ portfolio().annualizedReturn | number:'1.1-1' }}% / yr
                     </span>
+                    @if (portfolio().hasData) {
+                      <span class="portfolio-age-badge">{{ portfolio().monthsTracked }} months since {{ portfolio().trackingSince }}</span>
+                    }
                   </div>
-                  @if (portfolio().hasData) {
-                    <span class="portfolio-age-badge">{{ portfolio().monthsTracked }} months since {{ portfolio().trackingSince }}</span>
-                  }
                 </div>
                 @if (portfolio().goalValue > 0) {
                   <div class="pf-goal-track">
@@ -220,10 +220,10 @@ import { DashboardService } from '../../core/services/dashboard.service';
                       <span class="pf-pill" [class.positive]="paper().returnPercent >= 0" [class.negative]="paper().returnPercent < 0">
                         {{ paper().returnPercent >= 0 ? '+' : '' }}{{ paper().returnPercent | number:'1.1-1' }}%
                       </span>
+                      @if (paper().tradingSince) {
+                        <span class="pt-since-badge">since {{ paper().tradingSince }}</span>
+                      }
                     </div>
-                    @if (paper().tradingSince) {
-                      <span class="pt-since-badge">since {{ paper().tradingSince }}</span>
-                    }
                   </div>
                   <div class="pt-pnl-row">
                     <div class="pt-pnl-item">
@@ -682,8 +682,6 @@ import { DashboardService } from '../../core/services/dashboard.service';
 
     /* Portfolio */
     .portfolio-age-badge {
-      margin-left: auto;
-      margin-right: 0.4rem;
       font-size: 0.6rem;
       font-weight: 600;
       padding: 0.15rem 0.45rem;
@@ -922,8 +920,6 @@ import { DashboardService } from '../../core/services/dashboard.service';
 
     /* Paper Trading */
     .pt-since-badge {
-      margin-left: auto;
-      margin-right: 0.4rem;
       font-size: 0.6rem;
       font-weight: 600;
       padding: 0.15rem 0.45rem;

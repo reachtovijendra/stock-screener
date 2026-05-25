@@ -54,11 +54,11 @@ import { DashboardService } from '../../core/services/dashboard.service';
                   <div class="fire-hero-stats">
                     <div class="fire-stat">
                       <span class="stat-label">Net Worth</span>
-                      <span class="stat-value">{{ formatCompact(fire().netWorth, fire().currency) }}</span>
+                      <span class="stat-value">{{ formatFull(fire().netWorth, fire().currency) }}</span>
                     </div>
                     <div class="fire-stat">
                       <span class="stat-label">Target</span>
-                      <span class="stat-value">{{ formatCompact(fire().fireTarget, fire().currency) }}</span>
+                      <span class="stat-value">{{ formatFull(fire().fireTarget, fire().currency) }}</span>
                     </div>
                     <div class="fire-stat">
                       <span class="stat-label">Time Left</span>
@@ -69,12 +69,12 @@ import { DashboardService } from '../../core/services/dashboard.service';
                 <div class="fire-contrib">
                   <div class="fire-contrib-item">
                     <span class="contrib-label">Monthly target</span>
-                    <span class="contrib-value">{{ formatCompact(fire().requiredMonthly, fire().currency) }}</span>
+                    <span class="contrib-value">{{ formatFull(fire().requiredMonthly, fire().currency) }}</span>
                   </div>
                   <div class="fire-contrib-divider"></div>
                   <div class="fire-contrib-item">
                     <span class="contrib-label">Yearly target</span>
-                    <span class="contrib-value">{{ formatCompact(fire().requiredAnnual, fire().currency) }}</span>
+                    <span class="contrib-value">{{ formatFull(fire().requiredAnnual, fire().currency) }}</span>
                   </div>
                 </div>
                 <div class="fire-track-badge" [class.on-track]="fire().onTrack" [class.off-track]="!fire().onTrack">
@@ -1258,9 +1258,9 @@ export class DashboardComponent implements OnInit {
     const years = this.fire().yearsToRetirement;
     const months = this.fire().monthsRemainder;
     if (years === 0 && months === 0) return 'Now';
-    if (years === 0) return `${months}mo`;
-    if (months === 0) return `${years}y`;
-    return `${years}y ${months}mo`;
+    const yPart = years > 0 ? `${years} ${years === 1 ? 'Year' : 'Years'}` : '';
+    const mPart = months > 0 ? `${months} ${months === 1 ? 'Month' : 'Months'}` : '';
+    return [yPart, mPart].filter(Boolean).join(', ');
   });
 
   readonly fireEncouragement = computed(() => {
@@ -1287,6 +1287,13 @@ export class DashboardComponent implements OnInit {
       const symbol = currency === 'INR' ? '\u20B9' : '$';
       return `${symbol}${(value / 1e6).toFixed(1)}M`;
     }
+    return new Intl.NumberFormat(locale, {
+      style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0,
+    }).format(value);
+  }
+
+  formatFull(value: number, currency: string): string {
+    const locale = currency === 'INR' ? 'en-IN' : 'en-US';
     return new Intl.NumberFormat(locale, {
       style: 'currency', currency, minimumFractionDigits: 0, maximumFractionDigits: 0,
     }).format(value);

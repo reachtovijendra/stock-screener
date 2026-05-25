@@ -4,6 +4,12 @@ import { authGuard } from './core/guards/auth.guard';
 export const routes: Routes = [
   {
     path: '',
+    loadComponent: () => import('./features/dashboard/dashboard.component').then(m => m.DashboardComponent),
+    canActivate: [authGuard],
+    title: 'Dashboard - StockScreen'
+  },
+  {
+    path: 'screener',
     loadComponent: () => import('./features/screener/screener.component').then(m => m.ScreenerComponent),
     title: 'Stock Screener'
   },
@@ -76,6 +82,6 @@ export const routes: Routes = [
   },
   {
     path: '**',
-    redirectTo: ''
+    redirectTo: 'screener'
   }
 ];

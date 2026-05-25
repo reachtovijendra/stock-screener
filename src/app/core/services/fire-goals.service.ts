@@ -21,6 +21,8 @@ interface FireGoalWritePayload {
   name: string;
   current_age: number;
   target_retirement_age: number;
+  target_retirement_month?: number;
+  target_retirement_year?: number;
   fire_amount: number;
   expected_annual_return: number;
   inflation_rate: number;
@@ -92,12 +94,21 @@ export class FireGoalsService {
 
     const now = new Date().toISOString();
     const existingGoal = this.goal();
-    const goalPayload = this.buildGoalPayload(user.id, goalInput, now, true);
+    let goalPayload = this.buildGoalPayload(user.id, goalInput, now, true);
     let goalResult = await this.saveGoalPayload(existingGoal?.id, goalPayload);
-    const usedLegacySchemaFallback = this.isMissingSchemaColumnError(goalResult.error, 'tax_rate');
 
-    if (usedLegacySchemaFallback) {
-      goalResult = await this.saveGoalPayload(existingGoal?.id, this.buildGoalPayload(user.id, goalInput, now, false));
+    if (this.isMissingSchemaColumnError(goalResult.error, 'target_retirement_month') ||
+        this.isMissingSchemaColumnError(goalResult.error, 'target_retirement_year')) {
+      delete (goalPayload as any).target_retirement_month;
+      delete (goalPayload as any).target_retirement_year;
+      goalResult = await this.saveGoalPayload(existingGoal?.id, goalPayload);
+    }
+
+    if (this.isMissingSchemaColumnError(goalResult.error, 'tax_rate')) {
+      goalPayload = this.buildGoalPayload(user.id, goalInput, now, false);
+      delete (goalPayload as any).target_retirement_month;
+      delete (goalPayload as any).target_retirement_year;
+      goalResult = await this.saveGoalPayload(existingGoal?.id, goalPayload);
     }
 
     this.throwIfError(goalResult, 'Failed to save FIRE goal');
@@ -143,7 +154,12 @@ export class FireGoalsService {
       this.throwIfError(await this.db.from('fire_liabilities').insert(savedLiabilities), 'Failed to save FIRE liabilities');
     }
 
-    this.goal.set(usedLegacySchemaFallback ? { ...savedGoal, tax_rate: goalInput.tax_rate } : savedGoal);
+    this.goal.set({
+      ...savedGoal,
+      tax_rate: savedGoal.tax_rate ?? goalInput.tax_rate,
+      target_retirement_month: savedGoal.target_retirement_month ?? goalInput.target_retirement_month,
+      target_retirement_year: savedGoal.target_retirement_year ?? goalInput.target_retirement_year,
+    });
     this.assets.set(savedAssets);
     this.liabilities.set(savedLiabilities);
   }
@@ -161,6 +177,8 @@ export class FireGoalsService {
       name: goalInput.name.trim() || 'My FIRE Plan',
       current_age: goalInput.current_age,
       target_retirement_age: goalInput.target_retirement_age,
+      target_retirement_month: goalInput.target_retirement_month ?? undefined,
+      target_retirement_year: goalInput.target_retirement_year ?? undefined,
       fire_amount: goalInput.fire_amount,
       expected_annual_return: goalInput.expected_annual_return,
       inflation_rate: goalInput.inflation_rate,

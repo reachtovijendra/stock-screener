@@ -1,6 +1,7 @@
 import { Component, OnInit, inject, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { ActivatedRoute } from '@angular/router';
 import type { ChartData, ChartOptions, TooltipItem } from 'chart.js';
 import * as XLSX from 'xlsx';
 
@@ -49,6 +50,7 @@ export class PortfolioTrackerComponent implements OnInit {
   private marketService = inject(MarketService);
   private messageService = inject(MessageService);
   private authService = inject(AuthService);
+  private route = inject(ActivatedRoute);
 
   portfolioData: PortfolioRow[] = [];
   filteredData: PortfolioRow[] = [];
@@ -152,6 +154,10 @@ export class PortfolioTrackerComponent implements OnInit {
     this.currentPortfolioMarket = this.marketService.currentMarket();
     this.loadInitialContributions();
     this.portfolioService.loadData();
+
+    if (this.route.snapshot.queryParamMap.get('lens') === 'open') {
+      setTimeout(() => this.openGrowthDialog(), 600);
+    }
   }
 
   get setupValid(): boolean {

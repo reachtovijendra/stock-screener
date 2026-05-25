@@ -7,6 +7,8 @@ export interface FireGoal {
   name: string;
   current_age: number;
   target_retirement_age: number;
+  target_retirement_month?: number;
+  target_retirement_year?: number;
   fire_amount: number;
   expected_annual_return: number;
   inflation_rate: number;

@@ -375,6 +375,19 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.08);
 }
 
+.computed-label .computed-value {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 14px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  font-weight: 600;
+  font-size: 1rem;
+}
+
 .money-input {
   position: relative;
   display: block;

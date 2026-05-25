@@ -67,8 +67,18 @@ export function calculateFireProjection(goal: FireGoal, assets: FireAsset[], lia
   const totalAssets = sum(includedAssets.map(asset => asset.current_value));
   const totalLiabilities = sum(liabilities.map(liability => liability.balance));
   const netWorth = totalAssets - totalLiabilities;
-  const yearsToRetirement = Math.max(0, goal.target_retirement_age - goal.current_age);
-  const monthsToRetirement = yearsToRetirement * 12;
+  const now = new Date();
+  let monthsToRetirement: number;
+
+  if (goal.target_retirement_year) {
+    const retMonth = (goal.target_retirement_month ?? 1) - 1;
+    const retDate = new Date(goal.target_retirement_year, retMonth);
+    monthsToRetirement = Math.max(0, (retDate.getFullYear() - now.getFullYear()) * 12 + (retDate.getMonth() - now.getMonth()));
+  } else {
+    const yearsToRetirement = Math.max(0, goal.target_retirement_age - goal.current_age);
+    monthsToRetirement = yearsToRetirement * 12;
+  }
+  const yearsToRetirement = Math.floor(monthsToRetirement / 12);
   const requiredMonthlyContribution = calculateRequiredMonthlyContribution({
     currentNetWorth: Math.max(0, netWorth),
     targetAmount: goal.fire_amount,
@@ -87,7 +97,7 @@ export function calculateFireProjection(goal: FireGoal, assets: FireAsset[], lia
       totalLiabilities,
       netWorth,
       monthsToRetirement,
-      yearsToRetirement,
+      yearsToRetirement: Math.floor(monthsToRetirement / 12),
       fireGap: Math.max(0, goal.fire_amount - netWorth),
       requiredMonthlyContribution,
       requiredAnnualContribution,

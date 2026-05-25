@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Redesigned FIRE Progress panel with horizontal layout (ring + stats side-by-side) to eliminate vertical scrollbar and empty space on the dashboard.
+- Restructured dashboard grid from 4-row layout to compact 3-row layout: FIRE + Portfolio (row 1), Today's Picks + Paper Trading/Email (row 2), Market News as full-width horizontal card strip (row 3).
+- Reduced dashboard vertical spacing (padding, greeting margin, grid gap, panel padding) for tighter fit within viewport.
+- Market News panel now displays items as horizontal scrollable cards instead of vertical list when full-width.
+
+### Added
+- Dashboard home page at `/` with personalized greeting, bento-grid layout, and overview panels for FIRE progress, portfolio growth, today's picks, paper trading, market news, and email preferences (placeholder). Uses V2 luxury theme with Fraunces/Plus Jakarta Sans typography, gold accents, glass morphism, and staggered entrance animations. All panels are market-aware (US/India) and link to their corresponding detail pages.
+- Home navigation item in sidebar with gold gradient icon.
+- DashboardService aggregating data from FireGoals, Portfolio, PaperTrading, Recommendations, and News APIs.
+
+### Changed
+- Default route (`/`) is now the authenticated Dashboard; Screener moved to `/screener`.
+- Wildcard route redirects to `/screener` for unauthenticated users.
+
 ### Added
 - Top Performers page at `/watchlists/top-performers` that aggregates stocks across all user watchlists (owned and shared), enriches them with live performance data, and ranks by selectable time periods (1D, 1W, 1M, 1Y, Since Added) with configurable display count (10, 25, All).
 - Screener Top Losers and Top Gainers quick-view buttons with selectable 1D, 1M, and 1Y ranking periods backed by a full-market movers API.

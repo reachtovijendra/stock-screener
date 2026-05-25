@@ -16,6 +16,10 @@ import { AuthService } from './core/services/auth.service';
       <div class="content-wrapper">
         <!-- Left Nav Sidebar -->
         <nav class="nav-sidebar">
+          <a class="nav-item premium home" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" title="Dashboard">
+            <i class="pi pi-home"></i>
+            <span class="nav-label">Home</span>
+          </a>
           <a class="nav-item premium" routerLink="/portfolio" routerLinkActive="active" title="Portfolio Tracker">
             <i class="pi pi-wallet"></i>
             <span class="nav-label">Portfolio</span>
@@ -39,7 +43,7 @@ import { AuthService } from './core/services/auth.service';
 
           <div class="nav-divider"></div>
 
-          <a class="nav-item" routerLink="/" routerLinkActive="active" [routerLinkActiveOptions]="{exact: true}" title="Screener">
+          <a class="nav-item" routerLink="/screener" routerLinkActive="active" title="Screener">
             <i class="pi pi-table"></i>
             <span class="nav-label">Screener</span>
           </a>
@@ -163,6 +167,13 @@ import { AuthService } from './core/services/auth.service';
         -webkit-text-fill-color: transparent;
         background-clip: text;
       }
+    }
+
+    .nav-item.home i {
+      background: linear-gradient(135deg, #d4a853, #f5c842);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     .nav-item.fire i {

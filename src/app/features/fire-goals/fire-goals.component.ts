@@ -29,6 +29,8 @@ const DEFAULT_GOAL: FireGoal = {
   name: '',
   current_age: 0,
   target_retirement_age: 0,
+  target_retirement_month: new Date().getMonth() + 1,
+  target_retirement_year: new Date().getFullYear() + 10,
   fire_amount: 0,
   expected_annual_return: 0,
   inflation_rate: 0,
@@ -84,7 +86,9 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
   readonly goalForm = this.fb.nonNullable.group({
     name: this.fb.nonNullable.control(DEFAULT_GOAL.name),
     current_age: this.fb.nonNullable.control(DEFAULT_GOAL.current_age, [Validators.required, Validators.min(0), Validators.max(120)]),
-    target_retirement_age: this.fb.nonNullable.control(DEFAULT_GOAL.target_retirement_age, [Validators.required, Validators.min(1), Validators.max(120)]),
+    target_retirement_age: this.fb.nonNullable.control(DEFAULT_GOAL.target_retirement_age, [Validators.min(0), Validators.max(120)]),
+    target_retirement_month: this.fb.nonNullable.control(DEFAULT_GOAL.target_retirement_month!, [Validators.min(1), Validators.max(12)]),
+    target_retirement_year: this.fb.nonNullable.control(DEFAULT_GOAL.target_retirement_year!, [Validators.required, Validators.min(2025), Validators.max(2100)]),
     fire_amount: this.fb.nonNullable.control(DEFAULT_GOAL.fire_amount, [Validators.required, Validators.min(0)]),
     expected_annual_return: this.fb.nonNullable.control(DEFAULT_GOAL.expected_annual_return, [Validators.required, Validators.min(-20), Validators.max(40)]),
     inflation_rate: this.fb.nonNullable.control(DEFAULT_GOAL.inflation_rate, [Validators.required, Validators.min(0), Validators.max(20)]),
@@ -110,6 +114,19 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
       ? `1 USD = ${rate.toFixed(2)} INR`
       : `1 INR = ${(1 / rate).toFixed(4)} USD`;
   });
+  readonly computedRetirementAge = computed(() => {
+    this.formVersion();
+    const currentAge = this.goalForm.controls.current_age.value;
+    const retYear = this.goalForm.controls.target_retirement_year.value;
+    const retMonth = this.goalForm.controls.target_retirement_month.value;
+    if (!currentAge || !retYear) return '-';
+    const now = new Date();
+    const retDate = new Date(retYear, (retMonth || 1) - 1);
+    const diffMonths = (retDate.getFullYear() - now.getFullYear()) * 12 + (retDate.getMonth() - now.getMonth());
+    const ageAtRetirement = currentAge + Math.floor(diffMonths / 12);
+    return ageAtRetirement > 0 ? ageAtRetirement.toString() : '-';
+  });
+
   readonly projection = computed(() => calculateFireProjection(this.currentGoal(), this.assets(), this.liabilities()));
   readonly activePanelIndex = computed(() => FIRE_WIZARD_PANELS.indexOf(this.activePanel()));
   readonly activePanelLabel = computed(() => this.getPanelLabel(this.activePanel()));
@@ -161,6 +178,7 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
     this.goalForm.valueChanges.subscribe(() => {
       this.formVersion.update(version => version + 1);
       this.persistDraft();
+      this.syncRetirementAge();
     });
 
     effect(() => {
@@ -430,6 +448,20 @@ export class FireGoalsComponent implements OnInit, OnDestroy {
     if (years === 0) return `${remainingMonths} mo`;
     if (remainingMonths === 0) return `${years} yr`;
     return `${years} yr ${remainingMonths} mo`;
+  }
+
+  private syncRetirementAge(): void {
+    const currentAge = this.goalForm.controls.current_age.value;
+    const retYear = this.goalForm.controls.target_retirement_year.value;
+    const retMonth = this.goalForm.controls.target_retirement_month.value;
+    if (!currentAge || !retYear) return;
+    const now = new Date();
+    const retDate = new Date(retYear, (retMonth || 1) - 1);
+    const diffMonths = (retDate.getFullYear() - now.getFullYear()) * 12 + (retDate.getMonth() - now.getMonth());
+    const computedAge = currentAge + Math.floor(diffMonths / 12);
+    if (computedAge > 0 && computedAge !== this.goalForm.controls.target_retirement_age.value) {
+      this.goalForm.controls.target_retirement_age.setValue(computedAge, { emitEvent: false });
+    }
   }
 
   private getPanelLabel(panel: FireWizardPanel): string {

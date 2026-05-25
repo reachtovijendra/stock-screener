@@ -1142,6 +1142,10 @@ import { DashboardService } from '../../core/services/dashboard.service';
         min-height: calc(100vh - 56px);
         overflow-y: auto;
       }
+      .panel, .v2-animate-slide-up {
+        opacity: 1 !important;
+        animation: none !important;
+      }
       .bento-grid {
         grid-template-columns: 1fr 1fr;
       }
@@ -1159,11 +1163,12 @@ import { DashboardService } from '../../core/services/dashboard.service';
         overflow-y: auto;
         padding: 1.25rem 0.75rem 2rem;
       }
-      .panel {
+      .panel, .v2-animate-slide-up, .panel-paper-wrapper {
         padding: 1rem;
         opacity: 1 !important;
         animation: none !important;
       }
+      .panel-paper-wrapper { padding: 0; }
       .hero-row { opacity: 1 !important; animation: none !important; }
       .greeting-text { font-size: 1.4rem; }
       .hero-row { flex-direction: column; align-items: flex-start; margin-bottom: 0.75rem; }

@@ -51,6 +51,10 @@ import { AuthService } from './core/services/auth.service';
             <i class="pi pi-chart-line"></i>
             <span class="nav-label">Breakouts</span>
           </a>
+          <a class="nav-item" routerLink="/penny-hits" routerLinkActive="active" title="Penny Hits">
+            <i class="pi pi-bullseye"></i>
+            <span class="nav-label">Penny</span>
+          </a>
           <a class="nav-item" routerLink="/dma-simulator" routerLinkActive="active" title="DMA Crossovers">
             <i class="pi pi-chart-bar"></i>
             <span class="nav-label">Crossovers</span>

@@ -35,6 +35,11 @@ export const routes: Routes = [
     title: 'Recommendations'
   },
   {
+    path: 'penny-hits',
+    loadComponent: () => import('./features/penny-hits/penny-hits.component').then(m => m.PennyHitsComponent),
+    title: 'Penny Hits'
+  },
+  {
     path: 'watchlists',
     loadComponent: () => import('./features/watchlists/watchlists.component').then(m => m.WatchlistsComponent),
     canActivate: [authGuard],

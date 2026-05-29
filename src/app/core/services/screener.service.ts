@@ -15,7 +15,7 @@ import {
 } from '../models/filter.model';
 import { environment } from '../../../environments/environment';
 
-export type ScreenerQuickView = 'raising-stocks' | 'top-gainers' | 'top-losers' | null;
+export type ScreenerQuickView = 'raising-stocks' | 'top-gainers' | 'top-losers' | 'penny-hits' | null;
 export type TopMoverType = 'gainers' | 'losers';
 export type TopMoverPeriod = '1d' | '1m' | '1y';
 
@@ -89,6 +89,16 @@ export class ScreenerService {
     this._activeQuickView() === 'raising-stocks'
     || (this.isTopMoversQuickView() && this._activeMoverPeriod() !== '1d')
   );
+
+  /** Penny Hits uses a focused, performance-oriented column layout. */
+  public showPennyHitsColumns = computed(() => this._activeQuickView() === 'penny-hits');
+
+  /** Total visible column count, used for the empty-state colspan. */
+  public resultsColumnCount = computed(() => {
+    // Penny Hits: Symbol, Score, Price, Change, 1W, 1M, 3M, 6M, 1Y, Mkt Cap, Volume.
+    if (this.showPennyHitsColumns()) return 11;
+    return this.showPerformanceColumns() ? 19 : 15;
+  });
 
   public quickViewContext = computed(() => {
     if (this._activeQuickView() === 'raising-stocks') {
@@ -647,6 +657,120 @@ export class ScreenerService {
         return of(null);
       })
     ).subscribe();
+  }
+
+  /**
+   * Run the Penny Hits quick view. Reads the daily-cached Penny Hits list
+   * (US-only) and maps it into the results table.
+   */
+  runPennyHits(): void {
+    this._loading.set(true);
+    this._error.set(null);
+    this._activeQuickView.set('penny-hits');
+    this._activeMoverPeriod.set('1d');
+
+    this._cachedStocks.set([]);
+    this._filteredStocks.set([]);
+    this._hasClientFilters = false;
+    this._technicalsCalculated = false;
+    this._rsiFilter.set(null);
+    this._macdFilter.set(null);
+    this._sectorFilter.set([]);
+    this._industryFilter.set([]);
+    this._sort.set({ field: 'changePercent', direction: 'desc' });
+
+    const startTime = performance.now();
+
+    this.http.get<{ picks?: any[]; error?: string; message?: string }>(`/api/stocks?action=penny-hits&market=US`).pipe(
+      tap(result => {
+        if (result.error) {
+          throw new Error(result.message || result.error);
+        }
+
+        const stocks = (result.picks || []).map(p => this.mapPennyHitToStock(p));
+        this._cachedStocks.set(stocks);
+        this._totalCount.set(stocks.length);
+        this._pagination.update(current => ({
+          ...current,
+          page: 0,
+          totalRecords: stocks.length
+        }));
+
+        this.paginateFromCache();
+        this._executionTime.set(performance.now() - startTime);
+        this._loading.set(false);
+      }),
+      catchError(error => {
+        this._loading.set(false);
+        this._error.set(error.message || 'An error occurred while loading Penny Hits');
+        this._results.set([]);
+        this._cachedStocks.set([]);
+        this._totalCount.set(0);
+        console.error('Penny hits error:', error);
+        return of(null);
+      })
+    ).subscribe();
+  }
+
+  /**
+   * Map a cached Penny Hit row (snake_case) into a Stock for the results table.
+   */
+  private mapPennyHitToStock(p: any): Stock {
+    return {
+      symbol: p.symbol,
+      name: p.name,
+      price: p.price ?? 0,
+      change: 0,
+      changePercent: p.change_percent ?? 0,
+      market: 'US',
+      exchange: 'US',
+      currency: 'USD',
+      marketCap: p.market_cap ?? 0,
+      marketCapCategory: 'micro',
+      fiftyTwoWeekHigh: 0,
+      fiftyTwoWeekLow: 0,
+      percentFromFiftyTwoWeekHigh: 0,
+      percentFromFiftyTwoWeekLow: 0,
+      peRatio: null,
+      forwardPeRatio: null,
+      pbRatio: null,
+      psRatio: null,
+      eps: null,
+      forwardEps: null,
+      earningsGrowth: null,
+      revenueGrowth: null,
+      dividendYield: null,
+      avgVolume: p.avg_volume ?? 0,
+      volume: p.volume ?? 0,
+      relativeVolume: p.relative_volume ?? 1,
+      sector: p.sector ?? 'Unknown',
+      industry: 'Unknown',
+      beta: null,
+      fiftyDayMA: null,
+      twoHundredDayMA: null,
+      percentFromFiftyDayMA: null,
+      percentFromTwoHundredDayMA: null,
+      rsi: null,
+      macdLine: null,
+      macdSignal: null,
+      macdHistogram: null,
+      macdSignalType: null,
+      targetMeanPrice: p.target_mean_price ?? null,
+      targetHighPrice: null,
+      targetLowPrice: null,
+      numberOfAnalystOpinions: p.num_analysts ?? null,
+      recommendationMean: p.recommendation_mean ?? null,
+      heldPercentInstitutions: null,
+      heldPercentInsiders: null,
+      earningsTimestamp: null,
+      oneWeekChangePercent: p.one_week_change_percent ?? null,
+      oneMonthChangePercent: p.one_month_change_percent ?? null,
+      threeMonthChangePercent: p.three_month_change_percent ?? null,
+      sixMonthChangePercent: p.six_month_change_percent ?? null,
+      oneYearChangePercent: p.one_year_change_percent ?? null,
+      pennyScore: p.score ?? null,
+      lastUpdated: new Date(),
+    };
   }
 
   /**

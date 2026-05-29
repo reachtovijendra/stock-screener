@@ -1001,67 +1001,7 @@ async function fetchScreenerRange(
     const market: Market = isIndia ? 'IN' : 'US';
     for (const q of quotes) {
       if (!q || !q.symbol) continue;
-      const price = q.regularMarketPrice || 0;
-      const high52 = q.fiftyTwoWeekHigh || price;
-      const low52 = q.fiftyTwoWeekLow || price;
-      const fiftyDayMA = q.fiftyDayAverage || null;
-      const twoHundredDayMA = q.twoHundredDayAverage || null;
-      const avgVol = q.averageDailyVolume3Month || q.averageDailyVolume10Day || 1;
-      const vol = q.regularMarketVolume || 0;
-      const mktCap = q.marketCap || 0;
-      const eps = q.epsTrailingTwelveMonths || null;
-      const fwdEps = q.epsForward || null;
-
-      results.push({
-        symbol: q.symbol,
-        name: q.shortName || q.longName || q.symbol,
-        price,
-        change: q.regularMarketChange || 0,
-        changePercent: q.regularMarketChangePercent || 0,
-        market,
-        exchange: q.exchange || 'Unknown',
-        currency: q.currency || (isIndia ? 'INR' : 'USD'),
-        marketCap: mktCap,
-        marketCapCategory: categorizeMarketCap(mktCap, market),
-        fiftyTwoWeekHigh: high52,
-        fiftyTwoWeekLow: low52,
-        percentFromFiftyTwoWeekHigh: high52 > 0 ? ((price - high52) / high52) * 100 : 0,
-        percentFromFiftyTwoWeekLow: low52 > 0 ? ((price - low52) / low52) * 100 : 0,
-        peRatio: q.trailingPE ?? (eps && eps !== 0 ? price / eps : null),
-        forwardPeRatio: q.forwardPE ?? (fwdEps && fwdEps !== 0 ? price / fwdEps : null),
-        pbRatio: q.priceToBook || null,
-        psRatio: q.priceToSalesTrailing12Months || null,
-        eps,
-        forwardEps: fwdEps,
-        earningsGrowth: q.earningsQuarterlyGrowth ? q.earningsQuarterlyGrowth * 100 : null,
-        revenueGrowth: q.revenueGrowth ? q.revenueGrowth * 100 : null,
-        dividendYield: q.trailingAnnualDividendYield ? q.trailingAnnualDividendYield * 100 : (q.dividendYield || null),
-        avgVolume: avgVol,
-        volume: vol,
-        relativeVolume: avgVol > 0 ? vol / avgVol : 1,
-        sector: q.sector || getStaticSectorInfo(q.symbol)?.sector || 'Unknown',
-        industry: q.industry || getStaticSectorInfo(q.symbol)?.industry || 'Unknown',
-        beta: q.beta || null,
-        fiftyDayMA,
-        twoHundredDayMA,
-        percentFromFiftyDayMA: fiftyDayMA && fiftyDayMA > 0 ? ((price - fiftyDayMA) / fiftyDayMA) * 100 : null,
-        percentFromTwoHundredDayMA: twoHundredDayMA && twoHundredDayMA > 0 ? ((price - twoHundredDayMA) / twoHundredDayMA) * 100 : null,
-        preMarketPrice: q.preMarketPrice || null,
-        preMarketChange: q.preMarketChange || null,
-        preMarketChangePercent: q.preMarketChangePercent || null,
-        preMarketVolume: q.preMarketVolume || null,
-        earningsTimestamp: q.earningsTimestamp || null,
-        earningsTimestampStart: q.earningsTimestampStart || null,
-        earningsTimestampEnd: q.earningsTimestampEnd || null,
-        targetMeanPrice: q.targetMeanPrice || null,
-        targetHighPrice: q.targetHighPrice || null,
-        targetLowPrice: q.targetLowPrice || null,
-        numberOfAnalystOpinions: q.numberOfAnalystOpinions || null,
-        recommendationMean: q.recommendationMean || null,
-        heldPercentInstitutions: q.heldPercentInstitutions != null ? q.heldPercentInstitutions : null,
-        heldPercentInsiders: q.heldPercentInsiders != null ? q.heldPercentInsiders : null,
-        lastUpdated: new Date()
-      });
+      results.push(mapYahooScreenerQuote(q, market));
     }
 
     if (quotes.length < 250) break;
@@ -1072,4 +1012,192 @@ async function fetchScreenerRange(
   }
 
   return results;
+}
+
+/**
+ * Map a raw Yahoo screener quote object into our StockQuote shape.
+ * Shared by fetchScreenerRange and fetchPennyUniverse.
+ */
+function mapYahooScreenerQuote(q: any, market: Market): StockQuote {
+  const isIndia = market === 'IN';
+  const price = q.regularMarketPrice || 0;
+  const high52 = q.fiftyTwoWeekHigh || price;
+  const low52 = q.fiftyTwoWeekLow || price;
+  const fiftyDayMA = q.fiftyDayAverage || null;
+  const twoHundredDayMA = q.twoHundredDayAverage || null;
+  const avgVol = q.averageDailyVolume3Month || q.averageDailyVolume10Day || 1;
+  const vol = q.regularMarketVolume || 0;
+  const mktCap = q.marketCap || 0;
+  const eps = q.epsTrailingTwelveMonths || null;
+  const fwdEps = q.epsForward || null;
+
+  return {
+    symbol: q.symbol,
+    name: q.shortName || q.longName || q.symbol,
+    price,
+    change: q.regularMarketChange || 0,
+    changePercent: q.regularMarketChangePercent || 0,
+    market,
+    exchange: q.exchange || 'Unknown',
+    currency: q.currency || (isIndia ? 'INR' : 'USD'),
+    marketCap: mktCap,
+    marketCapCategory: categorizeMarketCap(mktCap, market),
+    fiftyTwoWeekHigh: high52,
+    fiftyTwoWeekLow: low52,
+    percentFromFiftyTwoWeekHigh: high52 > 0 ? ((price - high52) / high52) * 100 : 0,
+    percentFromFiftyTwoWeekLow: low52 > 0 ? ((price - low52) / low52) * 100 : 0,
+    peRatio: q.trailingPE ?? (eps && eps !== 0 ? price / eps : null),
+    forwardPeRatio: q.forwardPE ?? (fwdEps && fwdEps !== 0 ? price / fwdEps : null),
+    pbRatio: q.priceToBook || null,
+    psRatio: q.priceToSalesTrailing12Months || null,
+    eps,
+    forwardEps: fwdEps,
+    earningsGrowth: q.earningsQuarterlyGrowth ? q.earningsQuarterlyGrowth * 100 : null,
+    revenueGrowth: q.revenueGrowth ? q.revenueGrowth * 100 : null,
+    dividendYield: q.trailingAnnualDividendYield ? q.trailingAnnualDividendYield * 100 : (q.dividendYield || null),
+    avgVolume: avgVol,
+    volume: vol,
+    relativeVolume: avgVol > 0 ? vol / avgVol : 1,
+    sector: q.sector || getStaticSectorInfo(q.symbol)?.sector || 'Unknown',
+    industry: q.industry || getStaticSectorInfo(q.symbol)?.industry || 'Unknown',
+    beta: q.beta || null,
+    fiftyDayMA,
+    twoHundredDayMA,
+    percentFromFiftyDayMA: fiftyDayMA && fiftyDayMA > 0 ? ((price - fiftyDayMA) / fiftyDayMA) * 100 : null,
+    percentFromTwoHundredDayMA: twoHundredDayMA && twoHundredDayMA > 0 ? ((price - twoHundredDayMA) / twoHundredDayMA) * 100 : null,
+    preMarketPrice: q.preMarketPrice || null,
+    preMarketChange: q.preMarketChange || null,
+    preMarketChangePercent: q.preMarketChangePercent || null,
+    preMarketVolume: q.preMarketVolume || null,
+    earningsTimestamp: q.earningsTimestamp || null,
+    earningsTimestampStart: q.earningsTimestampStart || null,
+    earningsTimestampEnd: q.earningsTimestampEnd || null,
+    targetMeanPrice: q.targetMeanPrice || null,
+    targetHighPrice: q.targetHighPrice || null,
+    targetLowPrice: q.targetLowPrice || null,
+    numberOfAnalystOpinions: q.numberOfAnalystOpinions || null,
+    recommendationMean: q.recommendationMean || null,
+    heldPercentInstitutions: q.heldPercentInstitutions != null ? q.heldPercentInstitutions : null,
+    heldPercentInsiders: q.heldPercentInsiders != null ? q.heldPercentInsiders : null,
+    lastUpdated: new Date()
+  };
+}
+
+/**
+ * Fetch a universe of low-priced (penny) US stocks for the Penny Hits feature.
+ *
+ * Unlike fetchScreenerStocks (which enforces a >=$1B market-cap floor), this
+ * queries Yahoo's screener for price < $20 with a small price/liquidity floor
+ * and NO market-cap minimum, sorted by trading volume (most active first).
+ */
+export async function fetchPennyUniverse(
+  market: Market = 'US',
+  opts: { maxPrice?: number; minPrice?: number; minAvgVolume?: number; maxResults?: number } = {}
+): Promise<StockQuote[]> {
+  const maxPrice = opts.maxPrice ?? 20;
+  const minPrice = opts.minPrice ?? 1;
+  const minAvgVolume = opts.minAvgVolume ?? 100_000;
+  const maxResults = opts.maxResults ?? 1000;
+
+  const auth = await getYahooCrumb();
+  const region = market === 'IN' ? 'in' : 'us';
+  const isIndia = market === 'IN';
+
+  const results: StockQuote[] = [];
+  const seenSymbols = new Set<string>();
+  let offset = 0;
+
+  while (offset < maxResults) {
+    const screenerQuery: any = {
+      size: 250,
+      offset,
+      sortField: 'dayvolume',
+      sortType: 'DESC',
+      quoteType: 'EQUITY',
+      query: {
+        operator: 'AND',
+        operands: [
+          { operator: 'eq', operands: ['region', region] },
+          { operator: 'lt', operands: ['intradayprice', maxPrice] },
+          { operator: 'gte', operands: ['intradayprice', minPrice] },
+          { operator: 'gte', operands: ['avgdailyvol3m', minAvgVolume] },
+        ],
+      },
+      userId: '',
+      userIdType: 'guid',
+    };
+
+    if (isIndia) {
+      screenerQuery.query.operands.push({
+        operator: 'or',
+        operands: [
+          { operator: 'eq', operands: ['exchange', 'NSI'] },
+          { operator: 'eq', operands: ['exchange', 'BSE'] },
+          { operator: 'eq', operands: ['exchange', 'BOM'] },
+        ],
+      });
+    } else {
+      screenerQuery.query.operands.push({
+        operator: 'or',
+        operands: [
+          { operator: 'eq', operands: ['exchange', 'NMS'] },
+          { operator: 'eq', operands: ['exchange', 'NYQ'] },
+          { operator: 'eq', operands: ['exchange', 'NGM'] },
+          { operator: 'eq', operands: ['exchange', 'NCM'] },
+          { operator: 'eq', operands: ['exchange', 'NYS'] },
+        ],
+      });
+    }
+
+    const postData = JSON.stringify(screenerQuery);
+    const url = '/v1/finance/screener?crumb=' + encodeURIComponent(auth.crumb || '');
+
+    let response;
+    try {
+      response = await httpsRequest({
+        hostname: 'query1.finance.yahoo.com',
+        port: 443,
+        path: url,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(postData).toString(),
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Accept': 'application/json',
+          'Cookie': auth.cookies || '',
+        },
+      }, postData);
+    } catch (err: any) {
+      console.error('[PennyUniverse] Request failed:', err.message);
+      break;
+    }
+
+    if (response.statusCode !== 200) {
+      console.log(`[PennyUniverse] Query returned ${response.statusCode}`);
+      break;
+    }
+
+    const data = JSON.parse(response.body);
+    const quotes = data?.finance?.result?.[0]?.quotes || [];
+    if (quotes.length === 0) break;
+
+    for (const q of quotes) {
+      if (!q || !q.symbol) continue;
+      if (seenSymbols.has(q.symbol)) continue;
+      seenSymbols.add(q.symbol);
+      results.push(mapYahooScreenerQuote(q, market));
+    }
+
+    if (quotes.length < 250) break;
+    offset += 250;
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+
+  // Final guard: enforce price/liquidity gates client-side too (Yahoo can be loose).
+  const filtered = results.filter(s =>
+    s.price >= minPrice && s.price < maxPrice && (s.avgVolume ?? 0) >= minAvgVolume
+  );
+
+  console.log(`[PennyUniverse] ${market}: ${results.length} raw -> ${filtered.length} after gates`);
+  return filtered;
 }

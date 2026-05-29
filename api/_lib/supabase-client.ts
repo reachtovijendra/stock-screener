@@ -71,3 +71,47 @@ export async function saveDailyPicks(picks: DailyPickRow[]): Promise<number> {
   console.log(`[Supabase] Saved ${data?.length ?? 0} picks`);
   return data?.length ?? 0;
 }
+
+export interface PennyHitRow {
+  market: 'US';
+  pick_date: string; // YYYY-MM-DD
+  symbol: string;
+  name: string;
+  sector: string | null;
+  market_cap: number | null;
+  price: number;
+  score: number;
+  catalysts: string[];
+  thesis: string;
+  target_mean_price: number | null;
+  upside_percent: number | null;
+  recommendation_mean: number | null;
+  num_analysts: number | null;
+  insider_net_shares: number | null;
+  insider_net_value: number | null;
+  relative_volume: number | null;
+  one_month_change_percent: number | null;
+  change_percent: number | null;
+}
+
+/**
+ * Saves Penny Hits to Supabase. Uses upsert to handle re-runs gracefully.
+ * Returns the number of rows saved, or -1 if DB is not configured.
+ */
+export async function savePennyHits(rows: PennyHitRow[]): Promise<number> {
+  const supabase = getSupabaseClient();
+  if (!supabase || rows.length === 0) return rows.length === 0 ? 0 : -1;
+
+  const { data, error } = await supabase
+    .from('penny_hits')
+    .upsert(rows, { onConflict: 'market,pick_date,symbol' })
+    .select('id');
+
+  if (error) {
+    console.error('[Supabase] Failed to save penny hits:', error.message);
+    throw new Error(`Supabase insert failed: ${error.message}`);
+  }
+
+  console.log(`[Supabase] Saved ${data?.length ?? 0} penny hits`);
+  return data?.length ?? 0;
+}

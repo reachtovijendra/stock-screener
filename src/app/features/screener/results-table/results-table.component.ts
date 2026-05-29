@@ -191,13 +191,23 @@ import { SortConfig } from '../../../core/models/filter.model';
               <th pSortableColumn="symbol" class="col-symbol">
                 Symbol <p-sortIcon field="symbol"></p-sortIcon>
               </th>
+              @if (screenerService.showPennyHitsColumns()) {
+                <th pSortableColumn="pennyScore" class="col-score text-right">
+                  Score <p-sortIcon field="pennyScore"></p-sortIcon>
+                </th>
+              }
               <th pSortableColumn="price" class="col-price text-right">
                 Price <p-sortIcon field="price"></p-sortIcon>
               </th>
               <th pSortableColumn="changePercent" class="col-change text-right">
                 Change <p-sortIcon field="changePercent"></p-sortIcon>
               </th>
-              @if (screenerService.showPerformanceColumns()) {
+              @if (screenerService.showPennyHitsColumns()) {
+                <th pSortableColumn="oneWeekChangePercent" class="col-period text-right">
+                  1W <p-sortIcon field="oneWeekChangePercent"></p-sortIcon>
+                </th>
+              }
+              @if (screenerService.showPerformanceColumns() || screenerService.showPennyHitsColumns()) {
                 <th pSortableColumn="oneMonthChangePercent" class="col-period text-right">
                   1M <p-sortIcon field="oneMonthChangePercent"></p-sortIcon>
                 </th>
@@ -214,39 +224,43 @@ import { SortConfig } from '../../../core/models/filter.model';
               <th pSortableColumn="marketCap" class="col-cap text-right">
                 Mkt Cap <p-sortIcon field="marketCap"></p-sortIcon>
               </th>
-              <th pSortableColumn="peRatio" class="col-pe text-right">
-                P/E <p-sortIcon field="peRatio"></p-sortIcon>
-              </th>
-              <th pSortableColumn="forwardPeRatio" class="col-fpe text-right">
-                Fwd P/E <p-sortIcon field="forwardPeRatio"></p-sortIcon>
-              </th>
-              <th pSortableColumn="fiftyTwoWeekLow" class="col-range text-center">
-                52W Range <p-sortIcon field="fiftyTwoWeekLow"></p-sortIcon>
-              </th>
+              @if (!screenerService.showPennyHitsColumns()) {
+                <th pSortableColumn="peRatio" class="col-pe text-right">
+                  P/E <p-sortIcon field="peRatio"></p-sortIcon>
+                </th>
+                <th pSortableColumn="forwardPeRatio" class="col-fpe text-right">
+                  Fwd P/E <p-sortIcon field="forwardPeRatio"></p-sortIcon>
+                </th>
+                <th pSortableColumn="fiftyTwoWeekLow" class="col-range text-center">
+                  52W Range <p-sortIcon field="fiftyTwoWeekLow"></p-sortIcon>
+                </th>
+              }
               <th pSortableColumn="volume" class="col-vol text-right">
                 Volume <p-sortIcon field="volume"></p-sortIcon>
               </th>
-              <th pSortableColumn="rsi" class="col-rsi text-right">
-                RSI <p-sortIcon field="rsi"></p-sortIcon>
-              </th>
-              <th pSortableColumn="macdHistogram" class="col-macd text-right">
-                MACD <p-sortIcon field="macdHistogram"></p-sortIcon>
-              </th>
-              <th class="col-earnings text-center">
-                Earnings
-              </th>
-              <th pSortableColumn="targetMeanPrice" class="col-target text-right">
-                Target <p-sortIcon field="targetMeanPrice"></p-sortIcon>
-              </th>
-              <th pSortableColumn="heldPercentInstitutions" class="col-inst text-right">
-                Inst. % <p-sortIcon field="heldPercentInstitutions"></p-sortIcon>
-              </th>
-              <th pSortableColumn="sector" class="col-sector">
-                Sector <p-sortIcon field="sector"></p-sortIcon>
-              </th>
-              <th pSortableColumn="industry" class="col-industry">
-                Industry <p-sortIcon field="industry"></p-sortIcon>
-              </th>
+              @if (!screenerService.showPennyHitsColumns()) {
+                <th pSortableColumn="rsi" class="col-rsi text-right">
+                  RSI <p-sortIcon field="rsi"></p-sortIcon>
+                </th>
+                <th pSortableColumn="macdHistogram" class="col-macd text-right">
+                  MACD <p-sortIcon field="macdHistogram"></p-sortIcon>
+                </th>
+                <th class="col-earnings text-center">
+                  Earnings
+                </th>
+                <th pSortableColumn="targetMeanPrice" class="col-target text-right">
+                  Target <p-sortIcon field="targetMeanPrice"></p-sortIcon>
+                </th>
+                <th pSortableColumn="heldPercentInstitutions" class="col-inst text-right">
+                  Inst. % <p-sortIcon field="heldPercentInstitutions"></p-sortIcon>
+                </th>
+                <th pSortableColumn="sector" class="col-sector">
+                  Sector <p-sortIcon field="sector"></p-sortIcon>
+                </th>
+                <th pSortableColumn="industry" class="col-industry">
+                  Industry <p-sortIcon field="industry"></p-sortIcon>
+                </th>
+              }
             </tr>
           </ng-template>
 
@@ -259,6 +273,17 @@ import { SortConfig } from '../../../core/models/filter.model';
                   <span class="name" [pTooltip]="stock.name" tooltipPosition="top">{{ stock.name | slice:0:20 }}{{ stock.name.length > 20 ? '...' : '' }}</span>
                 </div>
               </td>
+
+              @if (screenerService.showPennyHitsColumns()) {
+                <td class="col-score text-right">
+                  <span class="penny-score"
+                        [class.tier-high]="stock.pennyScore != null && stock.pennyScore >= 60"
+                        [class.tier-mid]="stock.pennyScore != null && stock.pennyScore >= 40 && stock.pennyScore < 60"
+                        [class.tier-low]="stock.pennyScore != null && stock.pennyScore < 40">
+                    {{ stock.pennyScore != null ? stock.pennyScore : '—' }}
+                  </span>
+                </td>
+              }
               
               <!-- Price -->
               <td class="col-price text-right">
@@ -272,7 +297,17 @@ import { SortConfig } from '../../../core/models/filter.model';
                 </span>
               </td>
 
-              @if (screenerService.showPerformanceColumns()) {
+              @if (screenerService.showPennyHitsColumns()) {
+                <td class="col-period text-right">
+                  <span class="period-value"
+                        [class.positive]="stock.oneWeekChangePercent != null && stock.oneWeekChangePercent >= 0"
+                        [class.negative]="stock.oneWeekChangePercent != null && stock.oneWeekChangePercent < 0"
+                        [class.muted]="stock.oneWeekChangePercent == null">
+                    {{ formatPeriodChange(stock.oneWeekChangePercent) }}
+                  </span>
+                </td>
+              }
+              @if (screenerService.showPerformanceColumns() || screenerService.showPennyHitsColumns()) {
                 <td class="col-period text-right">
                   <span class="period-value"
                         [class.positive]="stock.oneMonthChangePercent != null && stock.oneMonthChangePercent >= 0"
@@ -312,32 +347,35 @@ import { SortConfig } from '../../../core/models/filter.model';
                 <span class="cap-value">{{ marketService.formatMarketCap(stock.marketCap, stock.market) }}</span>
               </td>
               
-              <!-- P/E -->
-              <td class="col-pe text-right">
-                <span [class.muted]="stock.peRatio === null">
-                  {{ stock.peRatio !== null ? (stock.peRatio | number:'1.1-1') : '—' }}
-                </span>
-              </td>
-              
-              <!-- Forward P/E -->
-              <td class="col-fpe text-right">
-                <span [class.muted]="stock.forwardPeRatio === null">
-                  {{ stock.forwardPeRatio !== null ? (stock.forwardPeRatio | number:'1.1-1') : '—' }}
-                </span>
-              </td>
-              
-              <!-- 52W Range -->
-              <td class="col-range text-center">
-                <span class="range-value">
-                  {{ formatPrice(stock.fiftyTwoWeekLow, stock.market) }} - {{ formatPrice(stock.fiftyTwoWeekHigh, stock.market) }}
-                </span>
-              </td>
+              @if (!screenerService.showPennyHitsColumns()) {
+                <!-- P/E -->
+                <td class="col-pe text-right">
+                  <span [class.muted]="stock.peRatio === null">
+                    {{ stock.peRatio !== null ? (stock.peRatio | number:'1.1-1') : '—' }}
+                  </span>
+                </td>
+                
+                <!-- Forward P/E -->
+                <td class="col-fpe text-right">
+                  <span [class.muted]="stock.forwardPeRatio === null">
+                    {{ stock.forwardPeRatio !== null ? (stock.forwardPeRatio | number:'1.1-1') : '—' }}
+                  </span>
+                </td>
+                
+                <!-- 52W Range -->
+                <td class="col-range text-center">
+                  <span class="range-value">
+                    {{ formatPrice(stock.fiftyTwoWeekLow, stock.market) }} - {{ formatPrice(stock.fiftyTwoWeekHigh, stock.market) }}
+                  </span>
+                </td>
+              }
               
               <!-- Volume -->
               <td class="col-vol text-right">
                 <span class="vol-value">{{ marketService.formatVolume(stock.volume) }}</span>
               </td>
               
+              @if (!screenerService.showPennyHitsColumns()) {
               <!-- RSI -->
               <td class="col-rsi text-right">
                 @if (stock.rsi !== null && stock.rsi !== undefined) {
@@ -407,12 +445,13 @@ import { SortConfig } from '../../../core/models/filter.model';
               <td class="col-industry">
                 <span class="industry-text">{{ stock.industry }}</span>
               </td>
+              }
             </tr>
           </ng-template>
 
           <ng-template pTemplate="emptymessage">
             <tr>
-              <td [attr.colspan]="screenerService.showPerformanceColumns() ? 19 : 15" class="text-center p-4">No stocks match your criteria.</td>
+              <td [attr.colspan]="screenerService.resultsColumnCount()" class="text-center p-4">No stocks match your criteria.</td>
             </tr>
           </ng-template>
         </p-table>
@@ -761,9 +800,23 @@ import { SortConfig } from '../../../core/models/filter.model';
 
     /* Column widths - Optimized to fit without horizontal scroll */
     .col-symbol { width: 85px; max-width: 85px; }
+    .col-score { width: 52px; max-width: 52px; }
     .col-price { width: 65px; max-width: 65px; }
     .col-change { width: 55px; max-width: 55px; }
     .col-period { width: 48px; max-width: 48px; }
+
+    .penny-score {
+      display: inline-block;
+      min-width: 30px;
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 0.8rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .penny-score.tier-high { color: #34d399; background: rgba(52, 211, 153, 0.14); }
+    .penny-score.tier-mid { color: #fbbf24; background: rgba(251, 191, 36, 0.14); }
+    .penny-score.tier-low { color: #94a3b8; background: rgba(148, 163, 184, 0.12); }
     .col-cap { width: 70px; max-width: 70px; }
     .col-pe { width: 40px; max-width: 40px; }
     .col-fpe { width: 50px; max-width: 50px; }
@@ -1365,6 +1418,8 @@ export class ResultsTableComponent {
         return `Top Gainers (${this.screenerService.getMoverPeriodLabel(this.screenerService.activeMoverPeriod())})`;
       case 'top-losers':
         return `Top Losers (${this.screenerService.getMoverPeriodLabel(this.screenerService.activeMoverPeriod())})`;
+      case 'penny-hits':
+        return 'Penny Hits';
       default:
         return 'Results';
     }

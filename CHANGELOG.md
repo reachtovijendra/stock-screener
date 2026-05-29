@@ -8,12 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Penny Hits screener quick-view now uses a focused, performance-oriented column layout: it shows 1W, 1M, 3M, 6M, and 1Y price-change columns and hides the columns that are not meaningful for penny stocks (P/E, Fwd P/E, 52W Range, RSI, MACD, Earnings, Target, Inst. %, Sector, Industry). The local `mock-server.js` Penny Hits scan now enriches each pick with multi-period performance (and volume) so these columns are populated; `mapPennyHitToStock` maps the new fields, and the results table reacts to a new `showPennyHitsColumns` signal.
 - Redesigned FIRE Progress panel with horizontal layout (ring + stats side-by-side) to eliminate vertical scrollbar and empty space on the dashboard.
 - Restructured dashboard grid from 4-row layout to compact 3-row layout: FIRE + Portfolio (row 1), Today's Picks + Paper Trading/Email (row 2), Market News as full-width horizontal card strip (row 3).
 - Reduced dashboard vertical spacing (padding, greeting margin, grid gap, panel padding) for tighter fit within viewport.
 - Market News panel now displays items as horizontal scrollable cards instead of vertical list when full-width.
 
 ### Added
+- Penny Hits feature: a US-only, catalyst-driven screen for low-priced stocks (under $20, no market-cap minimum) at `/penny-hits`, plus a Screener quick-view button. Each pick has a composite Penny Hit Score (Catalyst 40%, Analyst 15%, Growth 15%, Insider 15%, Activity 15%) with catalyst badges and a one-line thesis. Hard gates: price between $1 and $20 and average volume of at least 100k shares/day.
+- Finnhub free-tier integration (`api/_lib/finnhub-client.ts`) providing real news catalysts, insider-buying transactions, and analyst recommendation trends, with an in-process rate limiter and graceful degradation when `FINNHUB_API_KEY` is absent.
+- Catalyst classifier (`api/_lib/penny-catalyst.ts`) that detects contract wins, FDA/regulatory approvals, M&A, partnerships, guidance raises, earnings beats, analyst upgrades, and product launches from news headlines.
+- Penny Hits scoring engine (`api/_lib/penny-hits-scorer.ts`), daily cron (`api/cron/penny-hits.ts`), Supabase cache table `penny_hits`, and list endpoint `GET /api/stocks?action=penny-hits`.
+- Local development support for Penny Hits in `mock-server.js`: when the Supabase `penny_hits` cache is empty (no service-role key locally), the `GET /api/stocks?action=penny-hits` endpoint now computes the list live (Yahoo penny universe + scoring engine, with optional Finnhub enrichment) and caches it in memory for the day, so the page and quick-view return data without the production cron.
+- `fetchPennyUniverse()` in the Yahoo client to source sub-$20 US stocks with no market-cap floor (the existing screener enforces a $1B minimum).
+- Penny navigation item in the sidebar.
+- Documentation for the Penny Hits design in `documentation/plan/2026-05-28-penny-hits-design.md`.
 - Dashboard home page at `/` with personalized greeting, bento-grid layout, and overview panels for FIRE progress, portfolio growth, today's picks, paper trading, market news, and email preferences (placeholder). Uses V2 luxury theme with Fraunces/Plus Jakarta Sans typography, gold accents, glass morphism, and staggered entrance animations. All panels are market-aware (US/India) and link to their corresponding detail pages.
 - Home navigation item in sidebar with gold gradient icon.
 - DashboardService aggregating data from FireGoals, Portfolio, PaperTrading, Recommendations, and News APIs.

@@ -158,6 +158,9 @@ export interface Stock {
   /** One-year price change percentage */
   oneYearChangePercent?: number | null;
 
+  /** Composite Penny Hit score (0-100); only populated for Penny Hits rows */
+  pennyScore?: number | null;
+
   /** Timestamp of last quote update */
   lastUpdated: Date;
 }

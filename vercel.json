@@ -26,6 +26,10 @@
     {
       "path": "/api/cron/evaluate-picks",
       "schedule": "30 2 * * 2-6"
+    },
+    {
+      "path": "/api/cron/penny-hits",
+      "schedule": "0 12 * * 1-5"
     }
   ],
   "rewrites": [

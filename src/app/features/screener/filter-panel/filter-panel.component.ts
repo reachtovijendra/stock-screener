@@ -613,6 +613,20 @@ interface FilterOption<T> {
           }
           <span>Raising Stocks</span>
         </button>
+        <button
+          class="quick-view-action"
+          [class.active]="screenerService.activeQuickView() === 'penny-hits'"
+          [class.loading]="screenerService.loading() && screenerService.activeQuickView() === 'penny-hits'"
+          [disabled]="screenerService.loading()"
+          (click)="runPennyHits()"
+          title="Low-priced US stocks (under $20) with strong catalysts">
+          @if (screenerService.loading() && screenerService.activeQuickView() === 'penny-hits') {
+            <i class="pi pi-spin pi-spinner"></i>
+          } @else {
+            <i class="pi pi-bullseye"></i>
+          }
+          <span>Penny Hits</span>
+        </button>
         @if (screenerService.activeFilterCount() > 0) {
           <button class="reset-action" (click)="resetFilters()" title="Reset all filters">
             <i class="pi pi-refresh"></i>
@@ -2115,6 +2129,11 @@ export class FilterPanelComponent implements OnInit {
 
   runRaisingStocks(): void {
     this.screenerService.runRaisingStocks();
+    this.screenRun.emit();
+  }
+
+  runPennyHits(): void {
+    this.screenerService.runPennyHits();
     this.screenRun.emit();
   }
 

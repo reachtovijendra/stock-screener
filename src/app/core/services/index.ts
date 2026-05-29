@@ -7,3 +7,4 @@ export * from './paper-trading.service';
 export * from './fire-goals.service';
 export * from './currency-conversion.service';
 export * from './analytics.service';
+export * from './penny-hits.service';

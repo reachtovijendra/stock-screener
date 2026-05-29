@@ -9,6 +9,7 @@ import { handleDmaCrossovers } from './_lib/handlers/stocks-dma-crossovers';
 import { handleDailyPicksList } from './_lib/handlers/daily-picks-list';
 import { handleRaisingStocks } from './_lib/handlers/stocks-raising';
 import { handleTopMovers } from './_lib/handlers/stocks-movers';
+import { handlePennyHits } from './_lib/handlers/stocks-penny-hits';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -42,6 +43,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleRaisingStocks(req, res);
     case 'movers':
       return handleTopMovers(req, res);
+    case 'penny-hits':
+      return handlePennyHits(req, res);
     default:
       return res.status(400).json({ error: `Unknown action: ${action}` });
   }

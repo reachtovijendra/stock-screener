@@ -70,6 +70,8 @@ export interface RecommendationTrendSummary {
   totalCount: number;
   /** True when strong-buy count rose vs the prior period. */
   strongBuyRising: boolean;
+  /** Weighted mean on Yahoo's 1 (Strong Buy) - 5 (Strong Sell) scale, or null when no analysts. */
+  recommendationMean: number | null;
 }
 
 export function isFinnhubConfigured(): boolean {
@@ -186,5 +188,16 @@ export async function getRecommendationTrend(symbol: string): Promise<Recommenda
     (latest.strongBuy || 0) + (latest.buy || 0) + (latest.hold || 0) + (latest.sell || 0) + (latest.strongSell || 0);
   const strongBuyRising = prior ? (latest.strongBuy || 0) > (prior.strongBuy || 0) : false;
 
-  return { bullishCount, totalCount, strongBuyRising };
+  // Weighted mean on the 1 (Strong Buy) - 5 (Strong Sell) scale, matching Yahoo's recommendationMean.
+  const recommendationMean =
+    totalCount > 0
+      ? ((latest.strongBuy || 0) * 1 +
+          (latest.buy || 0) * 2 +
+          (latest.hold || 0) * 3 +
+          (latest.sell || 0) * 4 +
+          (latest.strongSell || 0) * 5) /
+        totalCount
+      : null;
+
+  return { bullishCount, totalCount, strongBuyRising, recommendationMean };
 }

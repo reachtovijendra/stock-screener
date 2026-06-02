@@ -1909,13 +1909,17 @@ const FINNHUB_MAX_CALLS_PER_MINUTE = 55;
 const FINNHUB_RATE_WINDOW_MS = 60000;
 let finnhubCallTimestamps = [];
 
-const PENNY_WEIGHTS = { catalyst: 40, analyst: 15, growth: 15, insider: 15, activity: 15 };
-const PENNY_GATES = { maxPrice: 20, minPrice: 1, minAvgVolume: 100000 };
-const PENNY_MAX_ENRICH = 50;
-const PENNY_MAX_PICKS = 25;
+// Live two-stage funnel weights (sum 100); mirrors api/_lib/penny-hits-scorer.ts.
+const PENNY_WEIGHTS = { catalyst: 25, momentumVolume: 25, trend: 20, analyst: 20, growth: 10 };
+const PENNY_GATES = { maxPrice: 20, minPrice: 1, minAvgVolume: 100000, minTodayChangePercent: -10, maxBelowFiftyDayMA: -15 };
+const PENNY_PERF_POOL = 40;   // candidates enriched with historical performance
+const PENNY_SHORTLIST = 20;   // names sent to Finnhub
+const PENNY_FINAL = 15;       // names returned
+const PENNY_FINNHUB_CONCURRENCY = 5;
+const PENNY_CACHE_TTL_MS = 4 * 60 * 1000;
 
-// In-memory cache so repeated clicks in a session reuse one expensive scan.
-let pennyScanCache = { date: null, market: null, picks: null, runningPromise: null };
+// In-memory cache (TTL) so repeated loads reuse one scan within a short window.
+let pennyScanCache = { date: null, market: null, ts: 0, picks: null, runningPromise: null };
 
 function isFinnhubConfigured() {
   return !!process.env.FINNHUB_API_KEY;
@@ -1995,7 +1999,10 @@ async function getRecommendationTrend(symbol) {
   const bullishCount = (latest.strongBuy || 0) + (latest.buy || 0);
   const totalCount = (latest.strongBuy || 0) + (latest.buy || 0) + (latest.hold || 0) + (latest.sell || 0) + (latest.strongSell || 0);
   const strongBuyRising = prior ? (latest.strongBuy || 0) > (prior.strongBuy || 0) : false;
-  return { bullishCount, totalCount, strongBuyRising };
+  const recommendationMean = totalCount > 0
+    ? ((latest.strongBuy || 0) * 1 + (latest.buy || 0) * 2 + (latest.hold || 0) * 3 + (latest.sell || 0) * 4 + (latest.strongSell || 0) * 5) / totalCount
+    : null;
+  return { bullishCount, totalCount, strongBuyRising, recommendationMean };
 }
 
 const PENNY_CATALYST_DEFINITIONS = [
@@ -2009,6 +2016,21 @@ const PENNY_CATALYST_DEFINITIONS = [
   { tag: 'product_launch', label: 'Product Launch', weight: 0.5, patterns: ['launches', 'unveils', 'announces launch', 'product launch', 'now available', 'rolls out', 'introduces new'] },
 ];
 
+const PENNY_NEGATIVE_PATTERNS = [
+  'rejects', 'rejection', 'reject', 'fails', 'failed', 'failure', 'misses', 'missed',
+  'disappointing', 'halts', 'halted', 'clinical hold', 'recall', 'recalls',
+  'offering', 'dilution', 'dilutive', 'priced offering', 'prices offering',
+  'registered direct', 'reverse split', 'downgrade', 'downgraded', 'cut to', 'lowers',
+  'lowered guidance', 'cuts guidance', 'going concern', 'delisting', 'delist',
+  'investigation', 'sec probe', 'lawsuit', 'securities fraud', 'bankruptcy',
+  'chapter 11', 'warning letter', 'subpoena', 'default', 'restatement',
+];
+
+function hasNegativeSentiment(text) {
+  const lower = text.toLowerCase();
+  return PENNY_NEGATIVE_PATTERNS.some(p => lower.includes(p));
+}
+
 function matchCatalyst(text) {
   const lower = text.toLowerCase();
   for (const def of PENNY_CATALYST_DEFINITIONS) {
@@ -2019,8 +2041,10 @@ function matchCatalyst(text) {
 
 function detectCatalysts(news) {
   const byTag = new Map();
+  let negativeCount = 0;
   for (const item of news) {
     const text = `${item.headline || ''} ${item.summary || ''}`;
+    if (hasNegativeSentiment(text)) { negativeCount++; continue; }
     const def = matchCatalyst(text);
     if (!def) continue;
     const existing = byTag.get(def.tag);
@@ -2029,7 +2053,8 @@ function detectCatalysts(news) {
     }
   }
   const catalysts = Array.from(byTag.values()).sort((a, b) => b.weight - a.weight);
-  return { catalysts, strength: catalysts.length > 0 ? catalysts[0].weight : 0, articleCount: news.length };
+  const negativeDominant = negativeCount >= 2 && negativeCount > catalysts.length;
+  return { catalysts, strength: catalysts.length > 0 ? catalysts[0].weight : 0, articleCount: news.length, negativeCount, negativeDominant };
 }
 
 function pennyClamp01(n) {
@@ -2043,39 +2068,79 @@ function pennyMomentum(quote) {
   return null;
 }
 
+function pennyUpside(quote) {
+  if (quote.targetMeanPrice && quote.price > 0) {
+    return ((quote.targetMeanPrice - quote.price) / quote.price) * 100;
+  }
+  return null;
+}
+
+// Momentum + volume: blends intraday move with ~1-month momentum so an
+// established uptrend still scores on a flat/mildly-red day. Volume counts as
+// accumulation only when the trend or the day is up.
+function pennyMomentumVolumeScore(quote) {
+  const today = quote.changePercent != null ? quote.changePercent : 0;
+  const oneMonth = pennyMomentum(quote) != null ? pennyMomentum(quote) : 0;
+  const todayNorm = pennyClamp01(today / 15);
+  const monthNorm = pennyClamp01(oneMonth / 40);
+  const momNorm = pennyClamp01(todayNorm * 0.5 + monthNorm * 0.5);
+  const upDirection = oneMonth > 0 || today > 0;
+  const rvNorm = upDirection ? pennyClamp01(((quote.relativeVolume || 0) - 1) / 4) : 0;
+  return pennyClamp01(momNorm * 0.6 + rvNorm * 0.4);
+}
+
+function pennyTrendScore(quote) {
+  let maNorm = 0;
+  if (quote.percentFromFiftyDayMA != null && quote.percentFromFiftyDayMA > 0) maNorm += 0.5;
+  if (quote.percentFromTwoHundredDayMA != null && quote.percentFromTwoHundredDayMA > 0) maNorm += 0.3;
+  if (quote.fiftyDayMA && quote.twoHundredDayMA && quote.fiftyDayMA > quote.twoHundredDayMA) maNorm += 0.2;
+
+  const m1 = typeof quote.oneMonthChangePercent === 'number' ? quote.oneMonthChangePercent : null;
+  const m3 = typeof quote.threeMonthChangePercent === 'number' ? quote.threeMonthChangePercent : null;
+  const m6 = typeof quote.sixMonthChangePercent === 'number' ? quote.sixMonthChangePercent : null;
+  let structureNorm = 0;
+  if (m1 != null && m1 > 0) structureNorm += 0.5;
+  if (m1 != null && m3 != null && m1 >= m3) structureNorm += 0.25;
+  if (m3 != null && m6 != null && m3 >= m6) structureNorm += 0.25;
+
+  const fromHigh = quote.percentFromFiftyTwoWeekHigh != null ? quote.percentFromFiftyTwoWeekHigh : -100;
+  const highNorm = pennyClamp01((fromHigh + 50) / 50);
+
+  return pennyClamp01(maNorm * 0.5 + structureNorm * 0.35 + highNorm * 0.15);
+}
+
 function pennyAnalystScore(quote, recTrend) {
-  const mean = quote.recommendationMean;
+  const mean = quote.recommendationMean != null ? quote.recommendationMean : (recTrend && recTrend.recommendationMean != null ? recTrend.recommendationMean : null);
+  const coverage = quote.numberOfAnalystOpinions != null ? quote.numberOfAnalystOpinions : (recTrend && recTrend.totalCount ? recTrend.totalCount : 0);
   const recNorm = mean != null ? pennyClamp01((5 - mean) / 4) : 0.3;
-  const coverageNorm = pennyClamp01((quote.numberOfAnalystOpinions || 0) / 15);
+  const coverageNorm = pennyClamp01(coverage / 15);
+  const upside = pennyUpside(quote);
+  const upsideNorm = upside != null ? pennyClamp01(upside / 100) : 0;
   const trendBonus = recTrend && recTrend.strongBuyRising ? 0.1 : 0;
-  return pennyClamp01(recNorm * 0.75 + coverageNorm * 0.15 + trendBonus);
+  return pennyClamp01(recNorm * 0.5 + coverageNorm * 0.15 + upsideNorm * 0.3 + trendBonus);
 }
 
 function pennyGrowthScore(quote) {
-  let upsideNorm = 0;
-  if (quote.targetMeanPrice && quote.price > 0) {
-    const upside = ((quote.targetMeanPrice - quote.price) / quote.price) * 100;
-    upsideNorm = pennyClamp01(upside / 100);
-  }
   const growthRaw = quote.earningsGrowth != null ? quote.earningsGrowth : (quote.revenueGrowth != null ? quote.revenueGrowth : 0);
-  const growthNorm = pennyClamp01(growthRaw / 100);
-  return pennyClamp01(upsideNorm * 0.6 + growthNorm * 0.4);
+  return pennyClamp01(growthRaw / 100);
 }
 
-function pennyInsiderScore(insider) {
-  if (!insider) return 0;
-  const netBuys = insider.buyCount - insider.sellCount;
-  let score = pennyClamp01(netBuys / 4);
-  if (insider.netValue > 0) score = pennyClamp01(score + 0.2);
-  if (insider.netShares > 0 && score === 0) score = 0.1;
-  return pennyClamp01(score);
+function pennyCatalystScore(enrichment) {
+  if (enrichment.negativeDominant) return 0;
+  return pennyClamp01(enrichment.catalystStrength);
 }
 
-function pennyActivityScore(quote) {
-  const rvNorm = pennyClamp01(((quote.relativeVolume || 0) - 1) / 4);
-  const mom = pennyMomentum(quote);
-  const momNorm = mom != null ? pennyClamp01(mom / 30) : 0;
-  return pennyClamp01(rvNorm * 0.6 + momNorm * 0.4);
+function pennyAntiChaseMultiplier(quote) {
+  let mult = 1;
+  const oneMonth = pennyMomentum(quote);
+  if (oneMonth != null) {
+    if (oneMonth > 150) mult = Math.min(mult, 0.6);
+    else if (oneMonth > 100) mult = Math.min(mult, 0.8);
+  }
+  const today = quote.changePercent != null ? quote.changePercent : 0;
+  if (today > 50) mult = Math.min(mult, 0.6);
+  else if (today > 40 && (quote.relativeVolume || 0) > 15) mult = Math.min(mult, 0.5);
+  return mult;
 }
 
 function passesPennyGates(quote) {
@@ -2084,26 +2149,30 @@ function passesPennyGates(quote) {
   return true;
 }
 
+function passesPennyLiveGates(quote) {
+  if ((quote.changePercent != null ? quote.changePercent : 0) < PENNY_GATES.minTodayChangePercent) return false;
+  if (quote.percentFromFiftyDayMA != null && quote.percentFromFiftyDayMA < PENNY_GATES.maxBelowFiftyDayMA) return false;
+  return true;
+}
+
 function preScorePenny(quote) {
   return (
+    pennyMomentumVolumeScore(quote) * PENNY_WEIGHTS.momentumVolume +
+    pennyTrendScore(quote) * PENNY_WEIGHTS.trend +
     pennyAnalystScore(quote, null) * PENNY_WEIGHTS.analyst +
-    pennyGrowthScore(quote) * PENNY_WEIGHTS.growth +
-    pennyActivityScore(quote) * PENNY_WEIGHTS.activity
-  );
+    pennyGrowthScore(quote) * PENNY_WEIGHTS.growth
+  ) * pennyAntiChaseMultiplier(quote);
 }
 
 function pennyBuildThesis(quote, enrichment) {
   const parts = [];
   if (enrichment.catalysts.length > 0) parts.push(enrichment.catalysts[0].label.toLowerCase() + ' catalyst');
-  if (quote.recommendationMean != null && quote.recommendationMean <= 2) parts.push('strong analyst buy rating');
-  if (quote.targetMeanPrice && quote.price > 0) {
-    const upside = ((quote.targetMeanPrice - quote.price) / quote.price) * 100;
-    if (upside >= 15) parts.push(`${upside.toFixed(0)}% target upside`);
-  }
-  if (enrichment.insider.buyCount > enrichment.insider.sellCount && enrichment.insider.netValue > 0) parts.push('insider buying');
-  if ((quote.relativeVolume || 0) >= 3) parts.push(`${quote.relativeVolume.toFixed(1)}x volume surge`);
-  const growthRaw = quote.earningsGrowth != null ? quote.earningsGrowth : quote.revenueGrowth;
-  if (growthRaw != null && growthRaw >= 25) parts.push(`${growthRaw.toFixed(0)}% growth`);
+  if ((quote.changePercent || 0) >= 5) parts.push(`up ${(quote.changePercent || 0).toFixed(1)}% today`);
+  if ((quote.relativeVolume || 0) >= 3) parts.push(`${quote.relativeVolume.toFixed(1)}x volume`);
+  const mean = quote.recommendationMean != null ? quote.recommendationMean : (enrichment.recTrend && enrichment.recTrend.recommendationMean);
+  if (mean != null && mean <= 2) parts.push('analyst buy rating');
+  const upside = pennyUpside(quote);
+  if (upside != null && upside >= 15) parts.push(`${upside.toFixed(0)}% target upside`);
   if (parts.length === 0) return 'Low-priced momentum candidate.';
   const text = parts.slice(0, 3).join(', ');
   return text.charAt(0).toUpperCase() + text.slice(1) + '.';
@@ -2112,34 +2181,41 @@ function pennyBuildThesis(quote, enrichment) {
 function pennyBuildBadges(quote, enrichment) {
   const badges = [];
   for (const c of enrichment.catalysts.slice(0, 2)) badges.push(c.label);
-  if (enrichment.insider.buyCount > enrichment.insider.sellCount && enrichment.insider.netValue > 0) badges.push('Insider Buying');
-  if ((quote.relativeVolume || 0) >= 3 && !badges.includes('Volume Surge')) badges.push('Volume Surge');
-  if (quote.recommendationMean != null && quote.recommendationMean <= 2 && !badges.some(b => b.includes('Analyst'))) badges.push('Analyst Buy');
   if (enrichment.recTrend && enrichment.recTrend.strongBuyRising) badges.push('Rising Coverage');
-  return badges;
+  if ((quote.relativeVolume || 0) >= 3 && !badges.includes('Volume Surge')) badges.push('Volume Surge');
+  if ((quote.changePercent || 0) >= 10) badges.push('Intraday Surge');
+  if ((quote.percentFromFiftyDayMA != null ? quote.percentFromFiftyDayMA : -1) > 0 && (quote.percentFromTwoHundredDayMA != null ? quote.percentFromTwoHundredDayMA : -1) > 0) badges.push('Uptrend');
+  if ((quote.percentFromFiftyTwoWeekHigh != null ? quote.percentFromFiftyTwoWeekHigh : -100) >= -10) badges.push('Near 52W High');
+  const mean = quote.recommendationMean != null ? quote.recommendationMean : (enrichment.recTrend && enrichment.recTrend.recommendationMean);
+  if (mean != null && mean <= 2 && !badges.some(b => b.includes('Analyst'))) badges.push('Strong Buy');
+  const upside = pennyUpside(quote);
+  if (upside != null && upside >= 25) badges.push('High Upside');
+  const growthRaw = quote.earningsGrowth != null ? quote.earningsGrowth : quote.revenueGrowth;
+  if (growthRaw != null && growthRaw >= 25) badges.push('Growth');
+  return Array.from(new Set(badges)).slice(0, 5);
 }
 
 function scorePennyHitRow(quote, enrichment, pickDate) {
-  const catalyst = pennyClamp01(enrichment.catalystStrength);
+  const catalyst = pennyCatalystScore(enrichment);
+  const momentumVolume = pennyMomentumVolumeScore(quote);
+  const trend = pennyTrendScore(quote);
   const analyst = pennyAnalystScore(quote, enrichment.recTrend);
   const growth = pennyGrowthScore(quote);
-  const insider = pennyInsiderScore(enrichment.insider);
-  const activity = pennyActivityScore(quote);
-  const score =
+  const raw =
     catalyst * PENNY_WEIGHTS.catalyst +
+    momentumVolume * PENNY_WEIGHTS.momentumVolume +
+    trend * PENNY_WEIGHTS.trend +
     analyst * PENNY_WEIGHTS.analyst +
-    growth * PENNY_WEIGHTS.growth +
-    insider * PENNY_WEIGHTS.insider +
-    activity * PENNY_WEIGHTS.activity;
-  const upsidePercent = quote.targetMeanPrice && quote.price > 0
-    ? ((quote.targetMeanPrice - quote.price) / quote.price) * 100
-    : null;
+    growth * PENNY_WEIGHTS.growth;
+  const score = raw * pennyAntiChaseMultiplier(quote);
+  const upsidePercent = pennyUpside(quote);
   return {
     market: 'US',
     pick_date: pickDate,
     symbol: quote.symbol,
     name: quote.name,
     sector: quote.sector || null,
+    industry: quote.industry || null,
     market_cap: quote.marketCap || null,
     price: quote.price,
     score: Math.round(score),
@@ -2147,18 +2223,18 @@ function scorePennyHitRow(quote, enrichment, pickDate) {
     thesis: pennyBuildThesis(quote, enrichment),
     target_mean_price: quote.targetMeanPrice || null,
     upside_percent: upsidePercent,
-    recommendation_mean: quote.recommendationMean || null,
-    num_analysts: quote.numberOfAnalystOpinions || null,
-    insider_net_shares: enrichment.insider.netShares,
-    insider_net_value: enrichment.insider.netValue,
+    recommendation_mean: quote.recommendationMean != null ? quote.recommendationMean : (enrichment.recTrend && enrichment.recTrend.recommendationMean) || null,
+    num_analysts: quote.numberOfAnalystOpinions != null ? quote.numberOfAnalystOpinions : (enrichment.recTrend && enrichment.recTrend.totalCount) || null,
+    insider_net_shares: null,
+    insider_net_value: null,
     relative_volume: quote.relativeVolume || null,
     volume: quote.volume || null,
     avg_volume: quote.avgVolume || null,
-    one_week_change_percent: null,
+    one_week_change_percent: quote.oneWeekChangePercent != null ? quote.oneWeekChangePercent : null,
     one_month_change_percent: pennyMomentum(quote),
-    three_month_change_percent: null,
-    six_month_change_percent: null,
-    one_year_change_percent: null,
+    three_month_change_percent: quote.threeMonthChangePercent != null ? quote.threeMonthChangePercent : null,
+    six_month_change_percent: quote.sixMonthChangePercent != null ? quote.sixMonthChangePercent : null,
+    one_year_change_percent: quote.oneYearChangePercent != null ? quote.oneYearChangePercent : null,
     change_percent: quote.changePercent != null ? quote.changePercent : 0,
   };
 }
@@ -2239,9 +2315,24 @@ async function fetchPennyUniverseLocal(auth, region = 'us') {
   return results;
 }
 
+async function pennyMapWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let next = 0;
+  async function run() {
+    while (next < items.length) {
+      const i = next++;
+      results[i] = await worker(items[i], i);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, run));
+  return results;
+}
+
 async function runPennyHitsScan(market) {
   const today = new Date().toISOString().slice(0, 10);
-  if (pennyScanCache.picks && pennyScanCache.date === today && pennyScanCache.market === market) {
+  const now = Date.now();
+  if (pennyScanCache.picks && pennyScanCache.date === today && pennyScanCache.market === market
+      && (now - pennyScanCache.ts) < PENNY_CACHE_TTL_MS) {
     return { date: today, picks: pennyScanCache.picks };
   }
   if (pennyScanCache.runningPromise && pennyScanCache.date === today && pennyScanCache.market === market) {
@@ -2250,126 +2341,83 @@ async function runPennyHitsScan(market) {
 
   const run = (async () => {
     const startTime = Date.now();
-    console.log('[PennyHits] Computing live Penny Hits scan...');
+    console.log('[PennyHits] Computing live two-stage Penny Hits scan...');
+
+    // --- Stage 1: broad Yahoo scan -> shortlist ---
     const auth = await getYahooCrumb();
     const universe = await fetchPennyUniverseLocal(auth, market === 'IN' ? 'in' : 'us');
-    const eligible = universe.filter(passesPennyGates);
-    console.log(`[PennyHits] Universe: ${universe.length} -> ${eligible.length} eligible`);
+    const eligible = universe.filter(s => passesPennyGates(s) && passesPennyLiveGates(s));
+    console.log(`[PennyHits] Universe: ${universe.length} -> ${eligible.length} eligible (live gates)`);
 
-    const candidates = [...eligible].sort((a, b) => preScorePenny(b) - preScorePenny(a)).slice(0, PENNY_MAX_ENRICH);
+    const pool = [...eligible].sort((a, b) => preScorePenny(b) - preScorePenny(a)).slice(0, PENNY_PERF_POOL);
+
+    // Enrich the pool with multi-period performance for trend/anti-chase.
+    await pennyMapWithConcurrency(pool, 8, async stock => {
+      try { await enrichWithPerformance(stock); } catch (err) { /* leave perf null */ }
+      return stock;
+    });
+
+    const shortlist = [...pool].sort((a, b) => preScorePenny(b) - preScorePenny(a)).slice(0, PENNY_SHORTLIST);
+
+    // --- Stage 2: Finnhub enrichment on the shortlist only ---
     const finnhubOn = isFinnhubConfigured();
     if (!finnhubOn) {
-      console.warn('[PennyHits] FINNHUB_API_KEY not set - scoring with quote data only (catalyst factor = 0)');
+      console.warn('[PennyHits] FINNHUB_API_KEY not set - returning Yahoo-only live list (no catalyst chips)');
     }
 
-    const picks = [];
-    for (const stock of candidates) {
-      let enrichment = {
-        catalysts: [],
-        catalystStrength: 0,
-        articleCount: 0,
-        insider: { netShares: 0, buyCount: 0, sellCount: 0, netValue: 0 },
-        recTrend: null,
-      };
-      if (finnhubOn) {
-        try {
-          const [news, insider, recTrend] = await Promise.all([
-            getCompanyNews(stock.symbol, 14),
-            getInsiderSummary(stock.symbol, 90),
-            getRecommendationTrend(stock.symbol),
-          ]);
-          const catalystResult = detectCatalysts(news);
-          enrichment = {
-            catalysts: catalystResult.catalysts,
-            catalystStrength: catalystResult.strength,
-            articleCount: catalystResult.articleCount,
-            insider,
-            recTrend,
-          };
-        } catch (err) {
-          console.warn(`[PennyHits] Enrichment failed for ${stock.symbol}:`, err.message || err);
-        }
+    let picks;
+    if (finnhubOn) {
+      try {
+        const enriched = await pennyMapWithConcurrency(shortlist, PENNY_FINNHUB_CONCURRENCY, async stock => {
+          let enrichment = { catalysts: [], catalystStrength: 0, articleCount: 0, negativeCount: 0, negativeDominant: false, recTrend: null };
+          try {
+            const [news, recTrend] = await Promise.all([
+              getCompanyNews(stock.symbol, 14),
+              getRecommendationTrend(stock.symbol),
+            ]);
+            const cat = detectCatalysts(news);
+            enrichment = { catalysts: cat.catalysts, catalystStrength: cat.strength, articleCount: cat.articleCount, negativeCount: cat.negativeCount, negativeDominant: cat.negativeDominant, recTrend };
+          } catch (err) {
+            console.warn(`[PennyHits] Stage 2 enrichment failed for ${stock.symbol}:`, err.message || err);
+          }
+          return { stock, enrichment };
+        });
+        picks = enriched
+          .filter(e => !e.enrichment.negativeDominant)
+          .map(e => scorePennyHitRow(e.stock, e.enrichment, today));
+      } catch (err) {
+        console.warn('[PennyHits] Stage 2 failed; falling back to Yahoo-only list:', err.message || err);
+        const empty = { catalysts: [], catalystStrength: 0, articleCount: 0, negativeCount: 0, negativeDominant: false, recTrend: null };
+        picks = shortlist.map(s => scorePennyHitRow(s, empty, today));
       }
-      picks.push(scorePennyHitRow(stock, enrichment, today));
+    } else {
+      const empty = { catalysts: [], catalystStrength: 0, articleCount: 0, negativeCount: 0, negativeDominant: false, recTrend: null };
+      picks = shortlist.map(s => scorePennyHitRow(s, empty, today));
     }
 
-    const top = picks.sort((a, b) => b.score - a.score).slice(0, PENNY_MAX_PICKS);
-
-    // Enrich the final picks with multi-period performance (1W/1M/3M/6M/1Y).
-    let perfIndex = 0;
-    async function perfWorker() {
-      while (perfIndex < top.length) {
-        const row = top[perfIndex++];
-        try {
-          const s = { symbol: row.symbol, price: row.price };
-          await enrichWithPerformance(s);
-          row.one_week_change_percent = s.oneWeekChangePercent != null ? s.oneWeekChangePercent : null;
-          if (s.oneMonthChangePercent != null) row.one_month_change_percent = s.oneMonthChangePercent;
-          row.three_month_change_percent = s.threeMonthChangePercent != null ? s.threeMonthChangePercent : null;
-          row.six_month_change_percent = s.sixMonthChangePercent != null ? s.sixMonthChangePercent : null;
-          row.one_year_change_percent = s.oneYearChangePercent != null ? s.oneYearChangePercent : null;
-        } catch (err) {
-          // Leave performance fields as null on failure.
-        }
-      }
-    }
-    await Promise.all(Array.from({ length: Math.min(8, top.length) }, perfWorker));
+    const top = picks.sort((a, b) => b.score - a.score).slice(0, PENNY_FINAL);
 
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     console.log(`[PennyHits] Live scan produced ${top.length} picks in ${elapsed}s (finnhub=${finnhubOn})`);
 
-    pennyScanCache = { date: today, market, picks: top, runningPromise: null };
+    pennyScanCache = { date: today, market, ts: Date.now(), picks: top, runningPromise: null };
     return { date: today, picks: top };
   })();
 
-  pennyScanCache = { date: today, market, picks: null, runningPromise: run };
+  pennyScanCache = { date: today, market, ts: now, picks: null, runningPromise: run };
   return run;
 }
 
 async function fetchPennyHitsList(market) {
-  // Find the latest pick_date for this market.
-  const latestParams = new URLSearchParams({
-    select: 'pick_date',
-    market: `eq.${market}`,
-    order: 'pick_date.desc',
-    limit: '1',
-  });
-  const latestResponse = await fetch(`${SUPABASE_URL}/rest/v1/penny_hits?${latestParams.toString()}`, {
-    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-  });
-  if (!latestResponse.ok) {
-    const message = await latestResponse.text();
-    throw new Error(`Supabase penny hits query failed (${latestResponse.status}): ${message}`);
+  // Live two-stage funnel computed on each load (cached in memory for a few
+  // minutes). No Supabase dependency.
+  try {
+    const { date, picks } = await runPennyHitsScan(market);
+    return { market, date, count: picks.length, picks, source: isFinnhubConfigured() ? 'live' : 'live-yahoo-only' };
+  } catch (err) {
+    console.error('[PennyHits] Live scan failed:', err.message);
+    return { market, date: null, count: 0, picks: [] };
   }
-  const latest = await latestResponse.json();
-  const latestDate = latest?.[0]?.pick_date;
-  if (!latestDate) {
-    // No pre-computed rows in Supabase (local dev: no service-role key to write).
-    // Compute the list live and serve it directly.
-    try {
-      const { date, picks } = await runPennyHitsScan(market);
-      return { market, date, count: picks.length, picks, source: 'live' };
-    } catch (err) {
-      console.error('[PennyHits] Live scan failed:', err.message);
-      return { market, date: null, count: 0, picks: [] };
-    }
-  }
-
-  const params = new URLSearchParams({
-    select: '*',
-    market: `eq.${market}`,
-    pick_date: `eq.${latestDate}`,
-    order: 'score.desc',
-  });
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/penny_hits?${params.toString()}`, {
-    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` },
-  });
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(`Supabase penny hits query failed (${response.status}): ${message}`);
-  }
-  const picks = await response.json();
-  return { market, date: latestDate, count: picks.length, picks };
 }
 
 /**

@@ -1,7 +1,19 @@
 # Design: Penny Hits
 
 Date: 2026-05-28
-Status: Implemented
+Status: Superseded in part (see update below)
+
+> Update (2026-06-02): The daily cron + Supabase snapshot described here has been
+> replaced by a live, request-time two-stage funnel. Stage 1 ranks the live Yahoo
+> penny universe on direction-aware momentum + volume, trend/MA structure, analyst
+> conviction + upside, and growth (hard gates require an up day and reject deep
+> downtrends; an anti-chase penalty de-rates parabolic/blow-off names) and narrows
+> to a ~20-name shortlist. Stage 2 enriches only the shortlist with Finnhub (news
+> catalysts + recommendation trend), applies sentiment filtering, blends a catalyst
+> factor (catalyst 25 / momentum+volume 25 / trend 20 / analyst+upside 20 / growth 10),
+> and returns the top 15. Results are cached in memory (~3-5 min, single-flight) and
+> fall back to a Yahoo-only list when Finnhub is unavailable. The `/api/cron/penny-hits`
+> job and the `penny_hits` Supabase dependency have been retired.
 
 ## Summary
 

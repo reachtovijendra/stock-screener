@@ -16,7 +16,7 @@ import { PennyHitsService, PennyHit } from '../../core/services';
         <header class="penny-header">
           <div class="header-left">
             <h1><i class="pi pi-bullseye"></i> Penny Hits</h1>
-            <p>Low-priced US stocks (under $20) with strong catalysts, analyst conviction, and buying activity.</p>
+            <p>Live scan of low-priced US stocks (under $20) showing upward momentum on heavy volume, a healthy trend, and confirming catalysts.</p>
           </div>
           <div class="header-right">
             @if (svc.pickDate()) {
@@ -57,13 +57,37 @@ import { PennyHitsService, PennyHit } from '../../core/services';
                   <div class="sym-block">
                     <span class="sym">{{ hit.symbol }}</span>
                     <span class="name">{{ hit.name }}</span>
-                    <span class="sector">{{ hit.sector }}</span>
+                    @if (classification(hit); as cls) {
+                      <span class="sector">{{ cls }}</span>
+                    }
                   </div>
                   <div class="price-block">
                     <span class="price">\${{ hit.price | number:'1.2-2' }}</span>
                     <span class="chg" [class.up]="(hit.change_percent ?? 0) >= 0" [class.down]="(hit.change_percent ?? 0) < 0">
                       {{ (hit.change_percent ?? 0) >= 0 ? '+' : '' }}{{ hit.change_percent | number:'1.1-1' }}%
                     </span>
+                  </div>
+                </div>
+
+                <div class="price-row">
+                  <div class="card-actions">
+                    <a class="robinhood-link"
+                       [href]="'https://robinhood.com/stocks/' + hit.symbol + '?source=search'"
+                       target="_blank"
+                       rel="noopener noreferrer"
+                       (click)="$event.stopPropagation()"
+                       pTooltip="Trade on Robinhood"
+                       tooltipPosition="top">
+                      <img src="robinhood.png" alt="Robinhood" class="robinhood-icon" />
+                    </a>
+                    <a class="detail-link"
+                       [href]="'/stock/' + hit.symbol"
+                       target="_blank"
+                       (click)="$event.stopPropagation()"
+                       pTooltip="Stock details"
+                       tooltipPosition="top">
+                      <img src="stock-detail.svg" alt="Details" class="detail-icon" />
+                    </a>
                   </div>
                 </div>
 
@@ -75,13 +99,17 @@ import { PennyHitsService, PennyHit } from '../../core/services';
                   </div>
                 }
 
-                <p class="thesis">{{ hit.thesis }}</p>
-
                 <div class="metrics">
-                  @if (hit.target_mean_price) {
+                  @if (ratingLabel(hit.recommendation_mean); as rating) {
                     <div class="metric">
-                      <span class="m-lbl">Target</span>
-                      <span class="m-val">\${{ hit.target_mean_price | number:'1.2-2' }}</span>
+                      <span class="m-lbl">Rating</span>
+                      <span class="m-val" [ngClass]="ratingClass(hit.recommendation_mean)">{{ rating }}</span>
+                    </div>
+                  }
+                  @if (hit.num_analysts) {
+                    <div class="metric">
+                      <span class="m-lbl">Analysts</span>
+                      <span class="m-val">{{ hit.num_analysts }}</span>
                     </div>
                   }
                   @if (hit.upside_percent != null) {
@@ -92,16 +120,22 @@ import { PennyHitsService, PennyHit } from '../../core/services';
                       </span>
                     </div>
                   }
-                  @if (hit.num_analysts) {
+                  @if (hit.target_mean_price) {
                     <div class="metric">
-                      <span class="m-lbl">Analysts</span>
-                      <span class="m-val">{{ hit.num_analysts }}</span>
+                      <span class="m-lbl">Target</span>
+                      <span class="m-val">\${{ hit.target_mean_price | number:'1.2-2' }}</span>
                     </div>
                   }
                   @if (hit.relative_volume != null) {
                     <div class="metric">
                       <span class="m-lbl">Rel Vol</span>
-                      <span class="m-val">{{ hit.relative_volume | number:'1.1-1' }}x</span>
+                      <span class="m-val" [class.up]="hit.relative_volume >= 1.5">{{ hit.relative_volume | number:'1.1-1' }}x</span>
+                    </div>
+                  }
+                  @if (formatInsider(hit.insider_net_value); as insider) {
+                    <div class="metric">
+                      <span class="m-lbl">Insider</span>
+                      <span class="m-val" [class.up]="(hit.insider_net_value ?? 0) > 0" [class.down]="(hit.insider_net_value ?? 0) < 0">{{ insider }}</span>
                     </div>
                   }
                 </div>
@@ -218,8 +252,8 @@ import { PennyHitsService, PennyHit } from '../../core/services';
     }
     .score-badge .score-num { font-size: 1.25rem; line-height: 1; }
     .score-badge .score-lbl { font-size: 0.55rem; text-transform: uppercase; letter-spacing: 0.05em; opacity: 0.8; }
-    .score-badge.high { background: rgba(52, 211, 153, 0.15); color: #34d399; }
-    .score-badge.mid { background: rgba(245, 200, 66, 0.15); color: #f5c842; }
+    .score-badge.high { background: rgba(96, 165, 250, 0.18); color: #60a5fa; }
+    .score-badge.mid { background: rgba(167, 139, 250, 0.16); color: #a78bfa; }
     .score-badge.low { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.6); }
 
     .sym-block { display: flex; flex-direction: column; min-width: 0; flex: 1; }
@@ -227,11 +261,92 @@ import { PennyHitsService, PennyHit } from '../../core/services';
     .sym-block .name { font-size: 0.78rem; color: rgba(255,255,255,0.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .sym-block .sector { font-size: 0.68rem; color: rgba(255,255,255,0.35); }
 
-    .price-block { display: flex; flex-direction: column; align-items: flex-end; }
-    .price-block .price { font-weight: 700; color: #f5f5f7; font-size: 1rem; }
-    .chg { font-size: 0.78rem; font-weight: 600; }
+    .price-row {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 0.75rem;
+      /* Pull the action icons up so they sit just beneath the price,
+         instead of a full row below the taller score-badge header. */
+      margin-top: -2.1rem;
+      /* Breathing room between the last icon and the card edge. */
+      padding-right: 0.35rem;
+    }
+
+    .price-block {
+      display: flex;
+      align-items: baseline;
+      gap: 0.5rem;
+      align-self: flex-start;
+      flex-shrink: 0;
+    }
+    .price-block .price {
+      font-weight: 700;
+      color: #f5f5f7;
+      font-size: 1.15rem;
+      font-variant-numeric: tabular-nums;
+    }
+    .chg {
+      font-size: 0.82rem;
+      font-weight: 600;
+      font-variant-numeric: tabular-nums;
+    }
     .chg.up, .m-val.up { color: #34d399; }
     .chg.down, .m-val.down { color: #f87171; }
+
+    .card-actions {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      flex-shrink: 0;
+    }
+
+    .robinhood-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.2s;
+      &:hover {
+        transform: scale(1.1);
+        box-shadow: 0 0 8px rgba(192, 255, 0, 0.4);
+      }
+    }
+
+    .robinhood-icon {
+      width: 26px;
+      height: 26px;
+      flex-shrink: 0;
+      object-fit: cover;
+      display: block;
+    }
+
+    .detail-link {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 26px;
+      height: 26px;
+      border-radius: 6px;
+      overflow: hidden;
+      transition: transform 0.15s, box-shadow 0.2s;
+      text-decoration: none;
+      &:hover {
+        transform: scale(1.1);
+        box-shadow: 0 0 8px rgba(99, 102, 241, 0.5);
+      }
+    }
+
+    .detail-icon {
+      width: 26px;
+      height: 26px;
+      flex-shrink: 0;
+      object-fit: cover;
+      display: block;
+    }
 
     .catalyst-chips { display: flex; flex-wrap: wrap; gap: 0.35rem; }
     .chip {
@@ -243,22 +358,24 @@ import { PennyHitsService, PennyHit } from '../../core/services';
       color: rgba(255,255,255,0.7);
     }
     .chip.catalyst { background: rgba(124, 58, 237, 0.18); color: #c4b5fd; }
-    .chip.insider { background: rgba(52, 211, 153, 0.15); color: #34d399; }
+    .chip.tech { background: rgba(34, 211, 238, 0.15); color: #67e8f9; }
     .chip.volume { background: rgba(96, 165, 250, 0.15); color: #93c5fd; }
-    .chip.analyst { background: rgba(245, 200, 66, 0.15); color: #f5c842; }
-
-    .thesis { margin: 0; font-size: 0.82rem; color: rgba(255,255,255,0.7); line-height: 1.4; }
+    .chip.analyst { background: rgba(244, 114, 182, 0.15); color: #f9a8d4; }
 
     .metrics {
-      display: flex;
-      gap: 0;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(62px, 1fr));
+      gap: 0.6rem 0.5rem;
       border-top: 1px solid rgba(255,255,255,0.06);
       padding-top: 0.6rem;
       margin-top: auto;
     }
-    .metric { flex: 1; display: flex; flex-direction: column; gap: 0.1rem; }
-    .metric .m-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(255,255,255,0.4); }
-    .metric .m-val { font-size: 0.85rem; font-weight: 600; color: #f5f5f7; }
+    .metric { display: flex; flex-direction: column; gap: 0.12rem; min-width: 0; }
+    .metric .m-lbl { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.04em; color: rgba(255,255,255,0.4); white-space: nowrap; }
+    .metric .m-val { font-size: 0.85rem; font-weight: 600; color: #f5f5f7; white-space: nowrap; }
+    .m-val.rating-buy { color: #34d399; }
+    .m-val.rating-hold { color: #f5c842; }
+    .m-val.rating-sell { color: #f87171; }
 
     .disclaimer { margin: 1.5rem 0 0; font-size: 0.72rem; color: rgba(255,255,255,0.35); line-height: 1.5; }
 
@@ -292,9 +409,45 @@ export class PennyHitsComponent implements OnInit {
 
   chipClass(label: string): string {
     const l = label.toLowerCase();
-    if (l.includes('insider')) return 'insider';
-    if (l.includes('volume')) return 'volume';
-    if (l.includes('analyst') || l.includes('coverage')) return 'analyst';
+    if (l.includes('volume') || l.includes('surge') || l.includes('intraday')) return 'volume';
+    if (l.includes('upside') || l.includes('buy') || l.includes('analyst') || l.includes('coverage')) return 'analyst';
+    if (l.includes('uptrend') || l.includes('52w') || l.includes('near') || l.includes('growth')) return 'tech';
     return 'catalyst';
+  }
+
+  /** Prefer the more specific industry, fall back to sector; hide "Unknown"/empty. */
+  classification(hit: PennyHit): string | null {
+    const meaningful = (v?: string | null): string | null =>
+      v && v.toLowerCase() !== 'unknown' ? v : null;
+    return meaningful(hit.industry) ?? meaningful(hit.sector);
+  }
+
+  /** Map Yahoo's 1 (Strong Buy) - 5 (Strong Sell) recommendation mean to a label. */
+  ratingLabel(mean: number | null): string | null {
+    if (mean == null || mean <= 0) return null;
+    if (mean <= 1.5) return 'Strong Buy';
+    if (mean <= 2.5) return 'Buy';
+    if (mean <= 3.5) return 'Hold';
+    if (mean <= 4.5) return 'Sell';
+    return 'Strong Sell';
+  }
+
+  ratingClass(mean: number | null): string {
+    if (mean == null || mean <= 0) return '';
+    if (mean <= 2.5) return 'rating-buy';
+    if (mean <= 3.5) return 'rating-hold';
+    return 'rating-sell';
+  }
+
+  /** Compact signed currency, e.g. +$1.2M, -$340K. Returns null when there is no net activity. */
+  formatInsider(value: number | null): string | null {
+    if (value == null || value === 0) return null;
+    const sign = value > 0 ? '+' : '-';
+    const abs = Math.abs(value);
+    let body: string;
+    if (abs >= 1_000_000) body = `$${(abs / 1_000_000).toFixed(abs >= 10_000_000 ? 0 : 1)}M`;
+    else if (abs >= 1_000) body = `$${(abs / 1_000).toFixed(0)}K`;
+    else body = `$${abs.toFixed(0)}`;
+    return `${sign}${body}`;
   }
 }

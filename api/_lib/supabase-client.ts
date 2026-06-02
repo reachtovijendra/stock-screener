@@ -95,12 +95,29 @@ export interface PennyHitRow {
 }
 
 /**
- * Saves Penny Hits to Supabase. Uses upsert to handle re-runs gracefully.
+ * Saves Penny Hits to Supabase as a full snapshot per (market, pick_date).
+ * Existing rows for the same market/date are cleared first so a re-run fully
+ * replaces the day's picks instead of accumulating stale symbols.
  * Returns the number of rows saved, or -1 if DB is not configured.
  */
 export async function savePennyHits(rows: PennyHitRow[]): Promise<number> {
   const supabase = getSupabaseClient();
   if (!supabase || rows.length === 0) return rows.length === 0 ? 0 : -1;
+
+  // Clear the existing snapshot for each market/date being written.
+  const combos = new Map<string, { market: string; pick_date: string }>();
+  for (const r of rows) combos.set(`${r.market}|${r.pick_date}`, { market: r.market, pick_date: r.pick_date });
+  for (const { market, pick_date } of combos.values()) {
+    const { error: deleteError } = await supabase
+      .from('penny_hits')
+      .delete()
+      .eq('market', market)
+      .eq('pick_date', pick_date);
+    if (deleteError) {
+      console.error('[Supabase] Failed to clear existing penny hits:', deleteError.message);
+      throw new Error(`Supabase delete failed: ${deleteError.message}`);
+    }
+  }
 
   const { data, error } = await supabase
     .from('penny_hits')

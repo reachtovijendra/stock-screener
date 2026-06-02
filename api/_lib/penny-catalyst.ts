@@ -109,6 +109,27 @@ const CATALYST_DEFINITIONS: CatalystDefinition[] = [
   },
 ];
 
+/**
+ * Negative-polarity phrases. When a headline carries one of these, we do NOT
+ * count it as a positive catalyst (e.g. "FDA rejects", "phase 3 trial fails",
+ * "prices offering" / dilution) and we track it so the scorer can penalize or
+ * exclude names whose recent news is dominated by bad news.
+ */
+const NEGATIVE_PATTERNS: string[] = [
+  'rejects', 'rejection', 'reject', 'fails', 'failed', 'failure', 'misses', 'missed',
+  'disappointing', 'halts', 'halted', 'clinical hold', 'recall', 'recalls',
+  'offering', 'dilution', 'dilutive', 'priced offering', 'prices offering',
+  'registered direct', 'reverse split', 'downgrade', 'downgraded', 'cut to', 'lowers',
+  'lowered guidance', 'cuts guidance', 'going concern', 'delisting', 'delist',
+  'investigation', 'sec probe', 'lawsuit', 'securities fraud', 'bankruptcy',
+  'chapter 11', 'warning letter', 'subpoena', 'default', 'restatement',
+];
+
+function hasNegativeSentiment(text: string): boolean {
+  const lower = text.toLowerCase();
+  return NEGATIVE_PATTERNS.some(p => lower.includes(p));
+}
+
 export interface DetectedCatalyst {
   tag: CatalystTag;
   label: string;
@@ -128,6 +149,10 @@ export interface CatalystResult {
   strength: number;
   /** Total number of news articles scanned (a rough buzz proxy). */
   articleCount: number;
+  /** Count of recent articles carrying negative sentiment. */
+  negativeCount: number;
+  /** True when negative news outweighs positive catalysts (a red flag). */
+  negativeDominant: boolean;
 }
 
 function matchCatalyst(text: string): CatalystDefinition | null {
@@ -141,13 +166,23 @@ function matchCatalyst(text: string): CatalystDefinition | null {
 }
 
 /**
- * Scan a list of news items and return the strongest detected catalysts.
+ * Scan a list of news items and return the strongest detected catalysts,
+ * ignoring negative-sentiment headlines and tracking how much bad news there is.
  */
 export function detectCatalysts(news: FinnhubNewsItem[]): CatalystResult {
   const byTag = new Map<CatalystTag, DetectedCatalyst>();
+  let negativeCount = 0;
 
   for (const item of news) {
     const text = `${item.headline || ''} ${item.summary || ''}`;
+
+    // A negative headline never counts as a positive catalyst, even if it
+    // also matches a catalyst keyword (e.g. "phase 3 trial fails").
+    if (hasNegativeSentiment(text)) {
+      negativeCount++;
+      continue;
+    }
+
     const def = matchCatalyst(text);
     if (!def) continue;
 
@@ -167,10 +202,15 @@ export function detectCatalysts(news: FinnhubNewsItem[]): CatalystResult {
 
   const catalysts = Array.from(byTag.values()).sort((a, b) => b.weight - a.weight);
   const strength = catalysts.length > 0 ? catalysts[0].weight : 0;
+  // Bad news outweighs the good when there are multiple negative articles and
+  // no strong positive catalyst to offset them.
+  const negativeDominant = negativeCount >= 2 && negativeCount > catalysts.length;
 
   return {
     catalysts,
     strength,
     articleCount: news.length,
+    negativeCount,
+    negativeDominant,
   };
 }

@@ -11,11 +11,16 @@ import { ProgressSpinnerModule } from 'primeng/progressspinner';
 import { TooltipModule } from 'primeng/tooltip';
 import { DividerModule } from 'primeng/divider';
 import { MultiSelectModule } from 'primeng/multiselect';
+import { ChartModule } from 'primeng/chart';
+import { DialogModule } from 'primeng/dialog';
+import { ChartData, ChartOptions } from 'chart.js';
 
 import { Stock } from '../../core/models/stock.model';
 import { AuthService } from '../../core/services/auth.service';
 import { WatchlistService, Watchlist } from '../../core/services/watchlist.service';
 import { MarketService } from '../../core/services';
+import { buildForecast, ForecastResult, NewsType } from './forecast-engine';
+import { buildChatGptForecast, ChatGptForecast } from './chatgpt-forecast-engine';
 
 interface FilterOption {
   label: string;
@@ -61,6 +66,8 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
     TooltipModule,
     DividerModule,
     MultiSelectModule,
+    ChartModule,
+    DialogModule,
     DecimalPipe
   ],
   template: `
@@ -144,7 +151,80 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
               <i class="pi pi-sign-in"></i> Sign in to save
             </button>
           </div>
-          
+
+          <!-- The Call: always-visible forecast headline -->
+          @if (forecast(); as f) {
+            <div class="call-band" [class]="'call-' + recTone(f.recommendation)">
+              <!-- Verdict with directional steps motif -->
+              <div class="call-verdict">
+                <div class="call-steps" [class]="recTone(f.recommendation)" aria-hidden="true">
+                  @switch (recTone(f.recommendation)) {
+                    @case ('bull') {
+                      <svg viewBox="0 0 64 44">
+                        <polyline points="4,40 17,40 17,30 30,30 30,20 43,20 43,11 56,11" fill="none" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+                        <polygon points="56,2 47,14 63,14"/>
+                      </svg>
+                    }
+                    @case ('bear') {
+                      <svg viewBox="0 0 64 44">
+                        <polyline points="4,4 17,4 17,14 30,14 30,24 43,24 43,33 56,33" fill="none" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round"/>
+                        <polygon points="56,42 47,30 63,30"/>
+                      </svg>
+                    }
+                    @default {
+                      <svg viewBox="0 0 64 44">
+                        <line x1="4" y1="22" x2="52" y2="22" stroke-width="3.5" stroke-linecap="round" stroke-dasharray="3 7"/>
+                        <polygon points="62,22 50,15 50,29"/>
+                      </svg>
+                    }
+                  }
+                </div>
+                <div class="call-verdict-text">
+                  <span class="call-eyebrow">The Call &middot; 12-Month Outlook</span>
+                  <span class="call-rec-pill" [class]="'rec-' + f.recommendation">{{ f.recommendationLabel }}</span>
+                </div>
+              </div>
+
+              <!-- Price flow: current -> upside -> target -->
+              <div class="call-numbers">
+                <div class="call-num-col">
+                  <span class="call-num-label">Current</span>
+                  <span class="call-num-now">{{ marketService.formatCurrency(f.price, s.market) }}</span>
+                </div>
+                <i class="pi pi-angle-right call-flow"></i>
+                <div class="call-upside" [class.positive]="f.upsidePercent >= 0" [class.negative]="f.upsidePercent < 0">
+                  <span class="call-num-label">Upside</span>
+                  <span class="call-upside-value">{{ f.upsidePercent >= 0 ? '+' : '' }}{{ f.upsidePercent | number:'1.2-2' }}%</span>
+                </div>
+                <i class="pi pi-angle-right call-flow"></i>
+                <div class="call-num-col call-num-target-col">
+                  <span class="call-num-label">12-Mo Target</span>
+                  <span class="call-num-target">{{ marketService.formatCurrency(f.targetPrice, s.market) }}</span>
+                  <span class="call-num-range">
+                    <span class="bear">Bear {{ marketService.formatCurrency(f.targetLow, s.market) }}</span>
+                    <span class="bull">Bull {{ marketService.formatCurrency(f.targetHigh, s.market) }}</span>
+                  </span>
+                </div>
+              </div>
+
+              <!-- Confidence + drill-in -->
+              <div class="call-side">
+                <div class="call-confidence">
+                  <div class="call-confidence-head">
+                    <span class="call-metric-name">Confidence
+                      <button type="button" class="call-info" aria-label="What is confidence?" [pTooltip]="confidenceHelp" tooltipPosition="bottom" tooltipStyleClass="signal-explain-tooltip"><i class="pi pi-info-circle"></i></button>
+                    </span>
+                    <span class="call-confidence-tag" [class]="'conf-' + f.confidenceLabel.toLowerCase()">{{ f.confidenceLabel }} &middot; {{ f.confidence | number:'1.0-0' }}%</span>
+                  </div>
+                  <div class="call-confidence-bar"><div class="call-confidence-fill" [class]="'conf-' + f.confidenceLabel.toLowerCase()" [style.width.%]="f.confidence"></div></div>
+                </div>
+                <button type="button" class="call-explain-btn" (click)="openForecast()">
+                  <i class="pi pi-compass"></i> How we got there
+                </button>
+              </div>
+            </div>
+          }
+
           <div class="header-metrics">
             <section class="metric-section performance-section">
               <div class="metric-section-title">Performance</div>
@@ -284,6 +364,375 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
             </div>
           </div>
         </div>
+
+        <!-- Forecast & Recommendation Dialog -->
+        <p-dialog
+          [visible]="showForecastDialog()"
+          (visibleChange)="showForecastDialog.set($event)"
+          [modal]="true"
+          [draggable]="false"
+          [dismissableMask]="true"
+          [style]="{ width: 'min(1100px, 95vw)' }"
+          [contentStyle]="{ padding: '0' }"
+          styleClass="forecast-dialog">
+          @if (forecast(); as f) {
+            <ng-template pTemplate="header">
+              <div class="fc-dialog-header" [class]="'fc-' + recTone(f.recommendation)">
+                <div class="fc-dialog-head-left">
+                  <span class="fc-eyebrow">How we got there · {{ s.symbol }}</span>
+                  <p class="fc-summary">{{ f.summary }}</p>
+                </div>
+                <div class="fc-dialog-head-call">
+                  <span class="fc-rec-pill" [class]="'rec-' + f.recommendation">{{ f.recommendationLabel }}</span>
+                  <span class="fc-dialog-target">{{ marketService.formatCurrency(f.targetPrice, s.market) }}
+                    <span [class.positive]="f.upsidePercent >= 0" [class.negative]="f.upsidePercent < 0">({{ f.upsidePercent >= 0 ? '+' : '' }}{{ f.upsidePercent | number:'1.1-1' }}%)</span>
+                  </span>
+                </div>
+              </div>
+            </ng-template>
+
+            <div class="forecast-dialog-body">
+
+            <div class="fc-tabbar">
+              <div class="fc-tabs" role="tablist" aria-label="Forecast detail tabs">
+                <button type="button" class="fc-tab" [class.active]="forecastTab() === 'analysis'" (click)="forecastTab.set('analysis')" role="tab" [attr.aria-selected]="forecastTab() === 'analysis'">
+                  <i class="pi pi-sliders-h"></i> Analysis &amp; Trade Plan
+                </button>
+                <button type="button" class="fc-tab" [class.active]="forecastTab() === 'projection'" (click)="forecastTab.set('projection')" role="tab" [attr.aria-selected]="forecastTab() === 'projection'">
+                  <i class="pi pi-chart-line"></i> {{ f.horizonYears }}-Year Projection
+                </button>
+                <button type="button" class="fc-tab fc-tab-experimental" [class.active]="forecastTab() === 'chatgpt'" (click)="forecastTab.set('chatgpt')" role="tab" [attr.aria-selected]="forecastTab() === 'chatgpt'">
+                  <i class="pi pi-sparkles"></i> Per ChatGPT <span class="fc-exp-badge">beta</span>
+                </button>
+              </div>
+              <div class="fc-tech-strip" aria-label="Key technicals">
+                <div class="fc-tech">
+                  <span class="fc-tech-cap">P/E</span>
+                  <span class="fc-tech-val">{{ s.peRatio != null ? (s.peRatio | number:'1.1-1') : '—' }}</span>
+                </div>
+                <div class="fc-tech">
+                  <span class="fc-tech-cap">Fwd P/E</span>
+                  <span class="fc-tech-val">{{ s.forwardPeRatio != null ? (s.forwardPeRatio | number:'1.1-1') : '—' }}</span>
+                </div>
+                <div class="fc-tech">
+                  <span class="fc-tech-cap">50D MA</span>
+                  <span class="fc-tech-val">{{ s.fiftyDayMA != null ? marketService.formatCurrency(s.fiftyDayMA, s.market) : '—' }}</span>
+                </div>
+                <div class="fc-tech">
+                  <span class="fc-tech-cap">200D MA</span>
+                  <span class="fc-tech-val">{{ s.twoHundredDayMA != null ? marketService.formatCurrency(s.twoHundredDayMA, s.market) : '—' }}</span>
+                </div>
+                <div class="fc-tech">
+                  <span class="fc-tech-cap">RSI</span>
+                  <span class="fc-tech-val" [class]="getRsiClass(s.rsi)">{{ s.rsi != null ? (s.rsi | number:'1.0-1') : '—' }}</span>
+                </div>
+                <div class="fc-tech">
+                  <span class="fc-tech-cap">MACD</span>
+                  <span class="fc-tech-val" [class]="getMacdSignalClass(s.macdSignalType)">{{ getMacdSignalLabel(s.macdSignalType) }}</span>
+                </div>
+              </div>
+            </div>
+
+            @if (forecastTab() === 'analysis') {
+            <div class="fc-tab-panel">
+            <div class="fc-grid">
+              <!-- Trade plan -->
+              <section class="fc-card">
+                <h3 class="fc-card-title">Trade plan <span class="fc-horizon">{{ f.tradePlan.horizon }}</span></h3>
+                <div class="fc-levels">
+                  <div class="fc-level entry">
+                    <span class="fc-level-label">Entry zone</span>
+                    <span class="fc-level-value">{{ marketService.formatCurrency(f.tradePlan.entryLow, s.market) }} – {{ marketService.formatCurrency(f.tradePlan.entryHigh, s.market) }}</span>
+                  </div>
+                  <div class="fc-level target">
+                    <span class="fc-level-label">Target</span>
+                    <span class="fc-level-value">{{ marketService.formatCurrency(f.tradePlan.target, s.market) }}</span>
+                  </div>
+                  <div class="fc-level stop">
+                    <span class="fc-level-label">Stop-loss</span>
+                    <span class="fc-level-value">{{ marketService.formatCurrency(f.tradePlan.stop, s.market) }}</span>
+                  </div>
+                  <div class="fc-level rr">
+                    <span class="fc-level-label">Reward : Risk</span>
+                    <span class="fc-level-value">{{ f.tradePlan.riskReward != null ? (f.tradePlan.riskReward | number:'1.1-1') + ' : 1' : '—' }}</span>
+                  </div>
+                </div>
+                <p class="fc-trade-note">{{ f.tradePlan.note }}</p>
+              </section>
+
+              <!-- Bull / Bear cases -->
+              <section class="fc-card fc-cases">
+                <div class="fc-case fc-case-bull">
+                  <h4 class="fc-case-title bull"><i class="pi pi-arrow-up-right"></i> Bull case</h4>
+                  <ul>
+                    @for (b of f.bullCase; track b.label) {
+                      <li><strong>{{ b.label }}.</strong> {{ b.detail }}</li>
+                    }
+                  </ul>
+                </div>
+                <div class="fc-case fc-case-bear">
+                  <h4 class="fc-case-title bear"><i class="pi pi-arrow-down-right"></i> Bear case</h4>
+                  <ul>
+                    @for (b of f.bearCase; track b.label) {
+                      <li><strong>{{ b.label }}.</strong> {{ b.detail }}</li>
+                    }
+                  </ul>
+                </div>
+              </section>
+            </div>
+
+            <div class="fc-grid">
+              <!-- How we got there -->
+              <section class="fc-card">
+                <h3 class="fc-card-title">How we got there</h3>
+                <p class="fc-card-sub">Independent fair-value estimates, weighted into a base valuation.</p>
+                <div class="fc-bars">
+                  @for (e of f.estimates; track e.label) {
+                    <div class="fc-bar-row">
+                      <div class="fc-bar-head">
+                        <span class="fc-bar-label" [pTooltip]="e.detail" tooltipPosition="top" tooltipStyleClass="signal-explain-tooltip">{{ e.label }}</span>
+                        <span class="fc-bar-weight">{{ e.weight * 100 | number:'1.0-0' }}% weight</span>
+                      </div>
+                      <div class="fc-bar-track">
+                        <div class="fc-bar-fill" [style.width.%]="barPct(e.value, f)"></div>
+                        <span class="fc-bar-value">{{ marketService.formatCurrency(e.value, s.market) }}</span>
+                      </div>
+                    </div>
+                  }
+                  <div class="fc-bar-row fc-bar-base">
+                    <div class="fc-bar-head">
+                      <span class="fc-bar-label">Weighted base valuation</span>
+                    </div>
+                    <div class="fc-bar-track">
+                      <div class="fc-bar-fill base" [style.width.%]="barPct(f.baseValuation, f)"></div>
+                      <span class="fc-bar-value">{{ marketService.formatCurrency(f.baseValuation, s.market) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </section>
+
+              <!-- Adjustments waterfall -->
+              <section class="fc-card">
+                <h3 class="fc-card-title">Our adjustments</h3>
+                <p class="fc-card-sub">Factor tilts applied to the base to reach the target.</p>
+                @if (f.adjustments.length > 0) {
+                  <div class="fc-adjustments">
+                    @for (a of f.adjustments; track a.label) {
+                      <div class="fc-adj-row" [class]="'adj-' + a.direction">
+                        <div class="fc-adj-info">
+                          <span class="fc-adj-label">{{ a.label }}</span>
+                          <span class="fc-adj-reason">{{ a.reason }}</span>
+                        </div>
+                        <span class="fc-adj-pct" [class]="'adj-' + a.direction">
+                          {{ a.pct >= 0 ? '+' : '' }}{{ a.pct * 100 | number:'1.1-1' }}%
+                        </span>
+                      </div>
+                    }
+                  </div>
+                } @else {
+                  <p class="fc-empty">No material factor tilts — the base valuation carries the call.</p>
+                }
+
+                @let adjTotal = f.baseValuation > 0 ? (f.targetPrice - f.baseValuation) / f.baseValuation * 100 : 0;
+                <div class="fc-adj-chain">
+                  <div class="fc-chain-node">
+                    <span class="fc-chain-cap">Weighted base</span>
+                    <span class="fc-chain-num">{{ marketService.formatCurrency(f.baseValuation, s.market) }}</span>
+                  </div>
+                  <div class="fc-chain-op" [class.positive]="adjTotal >= 0" [class.negative]="adjTotal < 0">
+                    <span class="fc-chain-pct">{{ adjTotal >= 0 ? '+' : '' }}{{ adjTotal | number:'1.1-1' }}%</span>
+                    <i class="pi pi-arrow-right"></i>
+                  </div>
+                  <div class="fc-chain-node target">
+                    <span class="fc-chain-cap">12-Mo Target</span>
+                    <span class="fc-chain-num">{{ marketService.formatCurrency(f.targetPrice, s.market) }}</span>
+                  </div>
+                </div>
+              </section>
+            </div>
+            </div>
+            } @else if (forecastTab() === 'projection') {
+            <div class="fc-tab-panel">
+              <!-- Multi-year projection -->
+              <section class="fc-card fc-projection">
+                <div class="fc-card-head-row">
+                  <div>
+                    <h3 class="fc-card-title">{{ f.horizonYears }}-year price projection</h3>
+                    <p class="fc-card-sub">Scenario paths from today's price, compounding the 12-month call.</p>
+                  </div>
+                </div>
+                <div class="fc-chart-frame">
+                  @if (scenarioChartData(); as data) {
+                    <p-chart type="line" [data]="data" [options]="scenarioChartOptions()" height="340px" ariaLabel="Multi-year price projection scenarios"></p-chart>
+                  }
+                </div>
+                <div class="fc-scenario-cards">
+                  @for (sc of f.scenarios; track sc.key) {
+                    <div class="fc-scenario" [class]="'sc-' + sc.key">
+                      <span class="fc-scenario-label">{{ sc.label }}</span>
+                      <span class="fc-scenario-value">{{ marketService.formatCurrency(sc.endValue, s.market) }}</span>
+                      <span class="fc-scenario-change" [class.positive]="sc.changePercent >= 0" [class.negative]="sc.changePercent < 0">
+                        {{ sc.changePercent >= 0 ? '+' : '' }}{{ sc.changePercent | number:'1.0-0' }}% · {{ sc.cagr >= 0 ? '+' : '' }}{{ sc.cagr | number:'1.1-1' }}% CAGR
+                      </span>
+                    </div>
+                  }
+                </div>
+              </section>
+            </div>
+            } @else if (forecastTab() === 'chatgpt') {
+            @if (chatGptForecast(); as g) {
+            <div class="fc-tab-panel">
+              <div class="gpt-banner">
+                <i class="pi pi-sparkles"></i>
+                <span><strong>Experimental model.</strong> A separate, fundamentals-first valuation per ChatGPT's design: pure intrinsic value (no price anchor, no analyst input), with technicals driving a confidence score instead of the price. Does not affect the main call.</span>
+              </div>
+
+              <!-- Headline: fundamental target + confidence -->
+              <div class="gpt-headline">
+                <div class="gpt-head-call">
+                  <span class="fc-rec-pill" [class]="'rec-' + g.recommendation">{{ g.recommendationLabel }}</span>
+                  <div class="gpt-head-target">
+                    <span class="gpt-head-num">{{ marketService.formatCurrency(g.fundamentalTarget, s.market) }}</span>
+                    <span class="gpt-head-up" [class.positive]="g.upsidePercent >= 0" [class.negative]="g.upsidePercent < 0">{{ g.upsidePercent >= 0 ? '+' : '' }}{{ g.upsidePercent | number:'1.1-1' }}%</span>
+                  </div>
+                  <span class="gpt-head-cap">Fundamental fair value (12-mo)</span>
+                </div>
+                <div class="gpt-head-conf">
+                  <div class="gpt-conf-ring" [style.--conf.%]="g.confidence">
+                    <span class="gpt-conf-num">{{ g.confidence | number:'1.0-0' }}%</span>
+                  </div>
+                  <span class="gpt-head-cap">Probability of reaching target · {{ g.confidenceLabel }}</span>
+                </div>
+              </div>
+
+              <div class="fc-grid">
+                <!-- Layer 1 + 2: fundamentals & justified multiple -->
+                <section class="fc-card">
+                  <h3 class="fc-card-title">Fundamentals &amp; justified multiple</h3>
+                  <p class="fc-card-sub">Forward EPS at a multiple justified by history, peers and growth.</p>
+                  <div class="gpt-stat-row">
+                    <div class="gpt-stat"><span class="gpt-stat-cap">Trailing EPS</span><span class="gpt-stat-val">{{ g.trailingEps != null ? (g.trailingEps | number:'1.2-2') : '—' }}</span></div>
+                    <div class="gpt-stat"><span class="gpt-stat-cap">Forward EPS</span><span class="gpt-stat-val">{{ g.forwardEps != null ? (g.forwardEps | number:'1.2-2') : '—' }}</span></div>
+                    <div class="gpt-stat"><span class="gpt-stat-cap">Implied growth</span><span class="gpt-stat-val">{{ g.impliedGrowthPct != null ? ((g.impliedGrowthPct >= 0 ? '+' : '') + (g.impliedGrowthPct | number:'1.0-0') + '%') : '—' }}</span></div>
+                    <div class="gpt-stat gpt-stat-accent"><span class="gpt-stat-cap">Justified P/E</span><span class="gpt-stat-val">{{ g.justifiedPe | number:'1.1-1' }}x</span></div>
+                  </div>
+                  <div class="gpt-pe-list">
+                    @for (p of g.peComponents; track p.label) {
+                      <div class="gpt-pe-row" [pTooltip]="p.detail" tooltipPosition="top" tooltipStyleClass="signal-explain-tooltip">
+                        <span class="gpt-pe-label">{{ p.label }}</span>
+                        <span class="gpt-pe-val">{{ p.value | number:'1.1-1' }}x</span>
+                      </div>
+                    }
+                  </div>
+                </section>
+
+                <!-- Intrinsic value blend -->
+                <section class="fc-card">
+                  <h3 class="fc-card-title">Intrinsic value blend</h3>
+                  <p class="fc-card-sub">Earnings-multiple, peer-relative and DCF values, weighted.</p>
+                  <div class="fc-bars">
+                    @for (c of g.components; track c.label) {
+                      <div class="fc-bar-row">
+                        <div class="fc-bar-head">
+                          <span class="fc-bar-label" [pTooltip]="c.detail" tooltipPosition="top" tooltipStyleClass="signal-explain-tooltip">{{ c.label }}</span>
+                          <span class="fc-bar-weight">{{ c.weight * 100 | number:'1.0-0' }}% weight</span>
+                        </div>
+                        <div class="fc-bar-track">
+                          <div class="fc-bar-fill" [style.width.%]="gptBarPct(c.value, g)"></div>
+                          <span class="fc-bar-value">{{ marketService.formatCurrency(c.value, s.market) }}</span>
+                        </div>
+                      </div>
+                    }
+                    <div class="fc-bar-row fc-bar-base">
+                      <div class="fc-bar-head"><span class="fc-bar-label">Fundamental fair value</span></div>
+                      <div class="fc-bar-track">
+                        <div class="fc-bar-fill base" [style.width.%]="gptBarPct(g.fundamentalTarget, g)"></div>
+                        <span class="fc-bar-value">{{ marketService.formatCurrency(g.fundamentalTarget, s.market) }}</span>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+              </div>
+
+              <!-- Layer 3: Bull / Base / Bear scenarios -->
+              <section class="fc-card">
+                <h3 class="fc-card-title">Scenarios <span class="fc-horizon">EPS × P/E</span></h3>
+                <p class="fc-card-sub">Bear / Base / Bull from earnings and multiple ranges, with reward:risk vs the volatility stop.</p>
+                <div class="gpt-scn-grid">
+                  @for (sc of g.scenarios; track sc.key) {
+                    <div class="gpt-scn" [class]="'scn-' + sc.key">
+                      <span class="gpt-scn-label">{{ sc.label }}</span>
+                      <span class="gpt-scn-value">{{ marketService.formatCurrency(sc.value, s.market) }}</span>
+                      <span class="gpt-scn-change" [class.positive]="sc.changePercent >= 0" [class.negative]="sc.changePercent < 0">{{ sc.changePercent >= 0 ? '+' : '' }}{{ sc.changePercent | number:'1.0-0' }}%</span>
+                      <span class="gpt-scn-meta">{{ sc.eps | number:'1.2-2' }} EPS · {{ sc.pe | number:'1.1-1' }}x</span>
+                      <span class="gpt-scn-rr">R:R {{ sc.rewardRisk != null ? (sc.rewardRisk | number:'1.1-1') + ' : 1' : '—' }}</span>
+                    </div>
+                  }
+                </div>
+              </section>
+
+              <div class="fc-grid">
+                <!-- Layer 4: technical confidence -->
+                <section class="fc-card">
+                  <h3 class="fc-card-title">Technical confidence overlay</h3>
+                  <p class="fc-card-sub">Technicals adjust probability, never the price target.</p>
+                  @if (g.confidenceFactors.length > 0) {
+                    <div class="fc-adjustments">
+                      @for (cf of g.confidenceFactors; track cf.label) {
+                        <div class="fc-adj-row" [class]="'adj-' + (cf.effect >= 0 ? 'positive' : 'negative')">
+                          <div class="fc-adj-info">
+                            <span class="fc-adj-label">{{ cf.label }}</span>
+                            <span class="fc-adj-reason">{{ cf.note }}</span>
+                          </div>
+                          <span class="fc-adj-pct" [class]="'adj-' + (cf.effect >= 0 ? 'positive' : 'negative')">{{ cf.effect >= 0 ? '+' : '' }}{{ cf.effect }} pts</span>
+                        </div>
+                      }
+                    </div>
+                  } @else {
+                    <p class="fc-empty">No technical signals available — confidence stays at the 50% baseline.</p>
+                  }
+                </section>
+
+                <!-- Model vs Street + risk -->
+                <section class="fc-card">
+                  <h3 class="fc-card-title">Model vs Street</h3>
+                  <p class="fc-card-sub">Analyst consensus shown for validation only — not a model input.</p>
+                  <div class="gpt-vs">
+                    <div class="gpt-vs-side">
+                      <span class="gpt-vs-cap">Model</span>
+                      <span class="gpt-vs-num">{{ marketService.formatCurrency(g.fundamentalTarget, s.market) }}</span>
+                    </div>
+                    <div class="gpt-vs-delta" [class.positive]="(g.street.deltaPct ?? 0) >= 0" [class.negative]="(g.street.deltaPct ?? 0) < 0">
+                      {{ g.street.deltaPct != null ? ((g.street.deltaPct >= 0 ? '+' : '') + (g.street.deltaPct | number:'1.1-1') + '%') : '—' }}
+                    </div>
+                    <div class="gpt-vs-side">
+                      <span class="gpt-vs-cap">Street{{ g.street.opinions != null ? ' (' + g.street.opinions + ')' : '' }}</span>
+                      <span class="gpt-vs-num">{{ g.street.target != null ? marketService.formatCurrency(g.street.target, s.market) : '—' }}</span>
+                    </div>
+                  </div>
+                  <div class="gpt-risk">
+                    <div class="gpt-stat"><span class="gpt-stat-cap">Entry zone</span><span class="gpt-stat-val">{{ marketService.formatCurrency(g.tradePlan.entryLow, s.market) }} – {{ marketService.formatCurrency(g.tradePlan.entryHigh, s.market) }}</span></div>
+                    <div class="gpt-stat"><span class="gpt-stat-cap">Vol. stop</span><span class="gpt-stat-val">{{ marketService.formatCurrency(g.tradePlan.stop, s.market) }} (−{{ g.tradePlan.volatilityPct * 100 | number:'1.0-0' }}%)</span></div>
+                  </div>
+                  <p class="fc-trade-note">{{ g.tradePlan.note }}</p>
+                </section>
+              </div>
+
+              <ul class="gpt-notes">
+                @for (n of g.notes; track n) { <li><i class="pi pi-info-circle"></i> {{ n }}</li> }
+              </ul>
+            </div>
+            }
+            }
+
+            <!-- Footer / disclaimer -->
+            <div class="fc-footer">
+              <span class="fc-footer-sources"><i class="pi pi-database"></i> {{ f.sources.join(' · ') }}</span>
+              <span class="fc-footer-disclaimer">Model-based estimate generated from live data — not financial advice. Do your own research.</span>
+            </div>
+            </div>
+          }
+        </p-dialog>
 
         <!-- Two Column Layout: Technical Analysis + News -->
         <div class="content-grid">
@@ -1513,6 +1962,391 @@ type SignalType = 'strong_sell' | 'sell' | 'neutral' | 'buy' | 'strong_buy';
       color: var(--text-color-secondary);
     }
 
+    /* ===================== The Call band (always visible) ===================== */
+    .call-band {
+      display: flex;
+      align-items: stretch;
+      margin-bottom: 1rem;
+      border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.16);
+      border-left: 4px solid #475569;
+      background:
+        radial-gradient(circle at 0% 0%, rgba(59, 130, 246, 0.1), transparent 40%),
+        linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(17, 24, 39, 0.97));
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.26);
+      overflow: hidden;
+      animation: callBandIn 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    }
+    .call-band.call-bull { border-left-color: #22c55e; background: radial-gradient(circle at 0% 0%, rgba(34, 197, 94, 0.12), transparent 42%), linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(17, 24, 39, 0.97)); }
+    .call-band.call-bear { border-left-color: #ef4444; background: radial-gradient(circle at 0% 0%, rgba(239, 68, 68, 0.1), transparent 42%), linear-gradient(145deg, rgba(15, 23, 42, 0.94), rgba(17, 24, 39, 0.97)); }
+    .call-band.call-neutral { border-left-color: #f59e0b; }
+
+    @keyframes callBandIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Verdict segment */
+    .call-verdict {
+      flex: 0 0 auto;
+      display: flex; align-items: center; gap: 1.1rem;
+      padding: 0.95rem 1.6rem;
+      border-right: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .call-steps { width: 64px; height: 44px; flex-shrink: 0; }
+    .call-steps svg { width: 100%; height: 100%; overflow: visible; }
+    .call-steps polyline, .call-steps line { stroke: currentColor; }
+    .call-steps polygon { fill: currentColor; }
+    .call-steps.bull { color: #34d399; filter: drop-shadow(0 0 9px rgba(52, 211, 153, 0.5)); animation: stepsRise 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .call-steps.bear { color: #f87171; filter: drop-shadow(0 0 9px rgba(248, 113, 113, 0.5)); animation: stepsFall 600ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+    .call-steps.neutral { color: #fbbf24; filter: drop-shadow(0 0 8px rgba(251, 191, 36, 0.4)); }
+    @keyframes stepsRise { from { opacity: 0; transform: translate(-6px, 6px); } to { opacity: 1; transform: translate(0, 0); } }
+    @keyframes stepsFall { from { opacity: 0; transform: translate(-6px, -6px); } to { opacity: 1; transform: translate(0, 0); } }
+
+    .call-verdict-text { display: flex; flex-direction: column; align-items: flex-start; gap: 0.4rem; }
+    .call-eyebrow {
+      color: #93c5fd; font-size: 0.56rem; font-weight: 800;
+      letter-spacing: 0.14em; text-transform: uppercase;
+    }
+    .call-metric-name {
+      font-size: 0.56rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em;
+      display: inline-flex; align-items: center; gap: 0.3rem;
+    }
+    .call-info { background: none; border: none; padding: 0; margin: 0; color: #64748b; cursor: help; display: inline-flex; align-items: center; transition: color 0.15s; }
+    .call-info:hover, .call-info:focus-visible { color: #93c5fd; outline: none; }
+    .call-info .pi { font-size: 0.7rem; }
+
+    /* Shared recommendation pill (band + dialog header) */
+    .call-rec-pill, .fc-rec-pill { font-weight: 800; letter-spacing: 0.02em; text-transform: uppercase; border-radius: 11px; line-height: 1; white-space: nowrap; }
+    .call-rec-pill { font-size: 1.35rem; padding: 0.5rem 1.35rem; }
+    .fc-rec-pill { font-size: 1.05rem; padding: 0.35rem 0.9rem; }
+    .call-rec-pill.rec-strong_buy, .fc-rec-pill.rec-strong_buy { background: rgba(22, 163, 74, 0.28); color: #bbf7d0; box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.5); }
+    .call-rec-pill.rec-buy, .fc-rec-pill.rec-buy { background: rgba(34, 197, 94, 0.2); color: #bbf7d0; box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.4); }
+    .call-rec-pill.rec-hold, .fc-rec-pill.rec-hold { background: rgba(251, 191, 36, 0.18); color: #fde68a; box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.4); }
+    .call-rec-pill.rec-sell, .fc-rec-pill.rec-sell { background: rgba(249, 115, 22, 0.2); color: #fed7aa; box-shadow: inset 0 0 0 1px rgba(249, 115, 22, 0.4); }
+    .call-rec-pill.rec-strong_sell, .fc-rec-pill.rec-strong_sell { background: rgba(239, 68, 68, 0.24); color: #fecaca; box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.5); }
+
+    /* Numbers segment grows to fill the band and spreads its content evenly */
+    .call-numbers {
+      flex: 1 1 auto;
+      display: flex; align-items: center; justify-content: space-evenly; gap: 1rem;
+      padding: 0.95rem 1.5rem;
+      border-right: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .call-num-col { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; }
+    .call-num-label { font-size: 0.56rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; }
+    .call-num-now { font-family: var(--font-mono); font-size: 1.35rem; font-weight: 700; color: #cbd5e1; }
+    .call-num-target { font-family: var(--font-mono); font-size: 1.7rem; font-weight: 800; color: #f8fafc; line-height: 1; }
+    .call-num-range { display: flex; gap: 0.65rem; font-size: 0.6rem; font-weight: 700; }
+    .call-num-range .bear { color: #f87171; }
+    .call-num-range .bull { color: #34d399; }
+    .call-flow { color: #475569; font-size: 1.05rem; }
+    .call-upside { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; }
+    .call-upside-value { font-family: var(--font-mono); font-size: 1.95rem; font-weight: 800; line-height: 1; }
+    .call-upside.positive .call-upside-value { color: #4ade80; }
+    .call-upside.negative .call-upside-value { color: #f87171; }
+
+    /* Confidence + CTA segment */
+    .call-side { flex: 0 0 auto; width: 240px; display: flex; flex-direction: column; justify-content: center; gap: 0.65rem; padding: 0.95rem 1.5rem; }
+    .call-confidence-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.62rem; color: #94a3b8; margin-bottom: 0.35rem; gap: 0.5rem; }
+    .call-confidence-tag { font-weight: 700; padding: 0.12rem 0.45rem; border-radius: 999px; white-space: nowrap; }
+    .call-confidence-tag.conf-high { background: rgba(34, 197, 94, 0.18); color: #bbf7d0; }
+    .call-confidence-tag.conf-moderate { background: rgba(251, 191, 36, 0.16); color: #fde68a; }
+    .call-confidence-tag.conf-low { background: rgba(148, 163, 184, 0.16); color: #cbd5e1; }
+    .call-confidence-bar { height: 7px; border-radius: 999px; background: rgba(148, 163, 184, 0.16); overflow: hidden; }
+    .call-confidence-fill { height: 100%; border-radius: 999px; transition: width 0.6s ease; }
+    .call-confidence-fill.conf-high { background: linear-gradient(90deg, #22c55e, #4ade80); }
+    .call-confidence-fill.conf-moderate { background: linear-gradient(90deg, #f59e0b, #fbbf24); }
+    .call-confidence-fill.conf-low { background: linear-gradient(90deg, #64748b, #94a3b8); }
+    .call-explain-btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; width: 100%;
+      padding: 0.55rem 1rem; border-radius: 10px; cursor: pointer; font-family: inherit;
+      font-size: 0.8rem; font-weight: 700; color: #e8edff;
+      border: 1px solid rgba(96, 165, 250, 0.45);
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.22), rgba(139, 92, 246, 0.22));
+      transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+    }
+    .call-explain-btn:hover { transform: translateY(-1px); border-color: rgba(96, 165, 250, 0.7); box-shadow: 0 8px 20px rgba(37, 99, 235, 0.25); }
+    .call-explain-btn .pi { color: #93c5fd; }
+
+    @media (max-width: 1080px) {
+      .call-band { flex-wrap: wrap; }
+      .call-verdict, .call-numbers, .call-side {
+        flex: 1 1 100%; width: auto;
+        border-right: none; border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+      }
+      .call-verdict { justify-content: center; }
+      .call-side { border-bottom: none; }
+    }
+
+    /* ===================== Forecast Dialog ===================== */
+    .fc-eyebrow {
+      color: #93c5fd; font-size: 0.6rem; font-weight: 700;
+      letter-spacing: 0.16em; text-transform: uppercase;
+    }
+    .fc-summary { margin: 0.15rem 0 0; font-size: 0.82rem; line-height: 1.5; color: #cbd5e1; }
+
+    .fc-dialog-header { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: 100%; }
+    .fc-dialog-head-left { display: flex; flex-direction: column; gap: 0.3rem; min-width: 0; }
+    .fc-dialog-head-call { display: flex; flex-direction: column; align-items: flex-end; gap: 0.4rem; flex-shrink: 0; }
+    .fc-dialog-target { font-size: 1rem; font-weight: 800; color: #f1f5f9; white-space: nowrap; }
+    .fc-dialog-target .positive { color: #4ade80; font-size: 0.85rem; }
+    .fc-dialog-target .negative { color: #f87171; font-size: 0.85rem; }
+    .forecast-dialog-body { display: flex; flex-direction: column; gap: 0.85rem; padding: 1.25rem; }
+
+    /* Tabs */
+    .fc-tabbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
+    .fc-tech-strip { display: flex; align-items: stretch; gap: 0.4rem; flex-wrap: wrap; }
+    .fc-tech {
+      display: flex; flex-direction: column; justify-content: center; gap: 0.12rem;
+      padding: 0.32rem 0.65rem; border-radius: 9px;
+      background: rgba(15, 23, 42, 0.6); border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    .fc-tech-cap { font-size: 0.52rem; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; font-weight: 700; }
+    .fc-tech-val { font-family: var(--font-mono); font-size: 0.82rem; font-weight: 800; color: #e2e8f0; white-space: nowrap; line-height: 1.1; }
+    .fc-tech-val.buy, .fc-tech-val.oversold { color: #4ade80; }
+    .fc-tech-val.sell, .fc-tech-val.overbought { color: #f87171; }
+    .fc-tech-val.neutral { color: #e2e8f0; }
+
+    .fc-tabs {
+      display: inline-flex; gap: 0.3rem; align-self: flex-start;
+      padding: 0.3rem; border-radius: 12px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid rgba(148, 163, 184, 0.14);
+    }
+    .fc-tab {
+      display: inline-flex; align-items: center; gap: 0.45rem;
+      padding: 0.5rem 1.1rem; border-radius: 9px; cursor: pointer;
+      font-family: inherit; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.01em;
+      color: #94a3b8; background: transparent; border: none;
+      transition: color 0.15s, background 0.2s, box-shadow 0.2s;
+    }
+    .fc-tab:hover { color: #cbd5e1; }
+    .fc-tab .pi { font-size: 0.8rem; }
+    .fc-tab.active {
+      color: #e8edff;
+      background: linear-gradient(135deg, rgba(59, 130, 246, 0.28), rgba(139, 92, 246, 0.26));
+      box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.45), 0 4px 14px rgba(37, 99, 235, 0.22);
+    }
+    .fc-tab.active .pi { color: #93c5fd; }
+    .fc-tab-panel { display: flex; flex-direction: column; gap: 0.85rem; animation: fcTabIn 240ms ease both; }
+    @keyframes fcTabIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* Experimental "Per ChatGPT" tab */
+    .fc-tab-experimental .fc-exp-badge {
+      font-size: 0.6rem; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+      padding: 0.05rem 0.35rem; border-radius: 999px; margin-left: 0.1rem;
+      background: rgba(168, 85, 247, 0.25); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.4);
+    }
+    .gpt-banner {
+      display: flex; align-items: flex-start; gap: 0.6rem; padding: 0.7rem 0.9rem; border-radius: 12px;
+      background: linear-gradient(135deg, rgba(139, 92, 246, 0.14), rgba(59, 130, 246, 0.1));
+      border: 1px solid rgba(168, 85, 247, 0.28); color: #c7d2fe; font-size: 0.82rem; line-height: 1.4;
+    }
+    .gpt-banner .pi { color: #c084fc; margin-top: 0.1rem; }
+    .gpt-banner strong { color: #e9d5ff; }
+
+    .gpt-headline {
+      display: flex; flex-wrap: wrap; gap: 1rem; align-items: center; justify-content: space-between;
+      padding: 1rem 1.1rem; border-radius: 14px;
+      background: linear-gradient(160deg, rgba(17, 24, 39, 0.7), rgba(15, 23, 42, 0.7));
+      border: 1px solid rgba(148, 163, 184, 0.16);
+    }
+    .gpt-head-call { display: flex; flex-direction: column; gap: 0.4rem; }
+    .gpt-head-target { display: flex; align-items: baseline; gap: 0.5rem; }
+    .gpt-head-num { font-family: var(--font-mono, monospace); font-size: 1.7rem; font-weight: 700; color: #f1f5f9; }
+    .gpt-head-up { font-family: var(--font-mono, monospace); font-size: 1rem; font-weight: 600; }
+    .gpt-head-up.positive { color: #34d399; }
+    .gpt-head-up.negative { color: #f87171; }
+    .gpt-head-cap { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; }
+    .gpt-head-conf { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; }
+    .gpt-conf-ring {
+      --conf: 50; width: 84px; height: 84px; border-radius: 50%; position: relative;
+      background: conic-gradient(#a855f7 calc(var(--conf) * 1%), rgba(148, 163, 184, 0.18) 0);
+      display: grid; place-items: center;
+    }
+    .gpt-conf-ring::after { content: ''; position: absolute; width: 64px; height: 64px; border-radius: 50%; background: #0f172a; }
+    .gpt-conf-num { position: relative; z-index: 1; font-family: var(--font-mono, monospace); font-weight: 700; color: #e9d5ff; font-size: 1.05rem; }
+
+    .gpt-stat-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.7rem; }
+    .gpt-stat {
+      flex: 1 1 90px; display: flex; flex-direction: column; gap: 0.2rem; padding: 0.5rem 0.6rem;
+      border-radius: 10px; background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .gpt-stat-cap { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; }
+    .gpt-stat-val { font-family: var(--font-mono, monospace); font-weight: 600; color: #e2e8f0; font-size: 0.92rem; }
+    .gpt-stat-accent { background: rgba(168, 85, 247, 0.12); border-color: rgba(168, 85, 247, 0.3); }
+    .gpt-stat-accent .gpt-stat-val { color: #d8b4fe; }
+
+    .gpt-pe-list { display: flex; flex-direction: column; gap: 0.35rem; }
+    .gpt-pe-row { display: flex; align-items: center; justify-content: space-between; padding: 0.35rem 0.1rem; border-bottom: 1px dashed rgba(148, 163, 184, 0.12); }
+    .gpt-pe-row:last-child { border-bottom: none; }
+    .gpt-pe-label { font-size: 0.82rem; color: #cbd5e1; }
+    .gpt-pe-val { font-family: var(--font-mono, monospace); font-weight: 600; color: #e2e8f0; }
+
+    .gpt-scn-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; }
+    .gpt-scn { display: flex; flex-direction: column; gap: 0.25rem; padding: 0.7rem 0.8rem; border-radius: 12px; background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(148, 163, 184, 0.14); }
+    .gpt-scn.scn-bear { border-color: rgba(248, 113, 113, 0.35); }
+    .gpt-scn.scn-base { border-color: rgba(96, 165, 250, 0.4); }
+    .gpt-scn.scn-bull { border-color: rgba(52, 211, 153, 0.4); }
+    .gpt-scn-label { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; }
+    .gpt-scn-value { font-family: var(--font-mono, monospace); font-size: 1.15rem; font-weight: 700; color: #f1f5f9; }
+    .gpt-scn-change { font-family: var(--font-mono, monospace); font-weight: 600; font-size: 0.85rem; }
+    .gpt-scn-change.positive { color: #34d399; }
+    .gpt-scn-change.negative { color: #f87171; }
+    .gpt-scn-meta { font-size: 0.72rem; color: #94a3b8; }
+    .gpt-scn-rr { font-size: 0.74rem; color: #cbd5e1; }
+
+    .gpt-vs { display: flex; align-items: center; justify-content: space-between; gap: 0.6rem; padding: 0.5rem 0; }
+    .gpt-vs-side { display: flex; flex-direction: column; gap: 0.2rem; }
+    .gpt-vs-cap { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; }
+    .gpt-vs-num { font-family: var(--font-mono, monospace); font-weight: 700; color: #e2e8f0; font-size: 1.05rem; }
+    .gpt-vs-delta { font-family: var(--font-mono, monospace); font-weight: 700; font-size: 0.95rem; padding: 0.25rem 0.5rem; border-radius: 8px; background: rgba(148, 163, 184, 0.1); }
+    .gpt-vs-delta.positive { color: #34d399; }
+    .gpt-vs-delta.negative { color: #f87171; }
+    .gpt-risk { display: flex; gap: 0.5rem; margin-top: 0.5rem; }
+
+    .gpt-notes { list-style: none; padding: 0; margin: 0.2rem 0 0; display: flex; flex-direction: column; gap: 0.3rem; }
+    .gpt-notes li { font-size: 0.74rem; color: #94a3b8; display: flex; align-items: flex-start; gap: 0.4rem; }
+    .gpt-notes .pi { color: #c084fc; margin-top: 0.1rem; font-size: 0.7rem; }
+
+    @media (max-width: 640px) { .gpt-scn-grid { grid-template-columns: 1fr; } }
+
+    :host ::ng-deep .forecast-dialog .p-dialog { border: 1px solid rgba(148, 163, 184, 0.18); border-radius: 18px; box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5); overflow: hidden; }
+    :host ::ng-deep .forecast-dialog .p-dialog-header { background: linear-gradient(145deg, rgba(15, 23, 42, 0.98), rgba(17, 24, 39, 0.98)); border-bottom: 1px solid rgba(148, 163, 184, 0.14); padding: 1rem 1.25rem; }
+    :host ::ng-deep .forecast-dialog .p-dialog-content { background: linear-gradient(160deg, rgba(13, 18, 30, 0.98), rgba(15, 23, 42, 0.98)); color: #e2e8f0; }
+    :host ::ng-deep .forecast-dialog .p-dialog-header-icon { color: #cbd5e1; }
+
+    /* Cards */
+    .fc-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem; }
+    .fc-card {
+      padding: 1rem 1.15rem; border-radius: 16px;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      background: linear-gradient(145deg, rgba(17, 24, 39, 0.7), rgba(15, 23, 42, 0.78));
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+    }
+    .fc-card-title { margin: 0; font-size: 0.95rem; font-weight: 700; color: #f1f5f9; display: flex; align-items: center; gap: 0.5rem; }
+    .fc-horizon { font-size: 0.62rem; font-weight: 700; color: #93c5fd; background: rgba(147, 197, 253, 0.12); padding: 0.12rem 0.45rem; border-radius: 999px; }
+    .fc-card-sub { margin: 0.25rem 0 0.85rem; font-size: 0.7rem; color: #94a3b8; line-height: 1.4; }
+    .fc-empty { font-size: 0.78rem; color: #94a3b8; }
+    .fc-card-head-row { display: flex; justify-content: space-between; align-items: flex-start; }
+
+    /* Valuation bars */
+    .fc-bars { display: flex; flex-direction: column; gap: 0.7rem; }
+    .fc-bar-row { display: flex; flex-direction: column; gap: 0.3rem; }
+    .fc-bar-head { display: flex; justify-content: space-between; align-items: center; }
+    .fc-bar-label { font-size: 0.74rem; font-weight: 600; color: #cbd5e1; }
+    .fc-bar-weight { font-size: 0.62rem; color: #64748b; font-weight: 600; }
+    .fc-bar-track { position: relative; height: 26px; border-radius: 7px; background: rgba(148, 163, 184, 0.08); display: flex; align-items: center; }
+    .fc-bar-fill { position: absolute; left: 0; top: 0; height: 100%; border-radius: 7px; background: linear-gradient(90deg, rgba(96, 165, 250, 0.35), rgba(96, 165, 250, 0.6)); transition: width 0.5s ease; }
+    .fc-bar-fill.base { background: linear-gradient(90deg, rgba(52, 211, 153, 0.4), rgba(52, 211, 153, 0.7)); }
+    .fc-bar-value { position: relative; z-index: 1; margin-left: auto; padding-right: 0.6rem; font-size: 0.76rem; font-weight: 800; color: #f1f5f9; font-variant-numeric: tabular-nums; }
+    .fc-bar-base .fc-bar-label { color: #6ee7b7; font-weight: 700; }
+
+    /* Adjustments */
+    .fc-adjustments { display: flex; flex-direction: column; gap: 0.5rem; }
+    .fc-adj-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
+      padding: 0.5rem 0.65rem; border-radius: 10px;
+      background: rgba(15, 23, 42, 0.5);
+      border-left: 3px solid #64748b;
+    }
+    .fc-adj-row.adj-positive { border-left-color: #22c55e; }
+    .fc-adj-row.adj-negative { border-left-color: #ef4444; }
+    .fc-adj-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+    .fc-adj-label { font-size: 0.74rem; font-weight: 700; color: #e2e8f0; }
+    .fc-adj-reason { font-size: 0.66rem; color: #94a3b8; line-height: 1.35; }
+    .fc-adj-pct { font-size: 0.82rem; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .fc-adj-pct.adj-positive { color: #4ade80; }
+    .fc-adj-pct.adj-negative { color: #f87171; }
+    .fc-adj-pct.adj-neutral { color: #94a3b8; }
+
+    /* Adjustments -> target chain */
+    .fc-adj-chain {
+      display: flex; align-items: stretch; gap: 0.6rem; margin-top: 0.9rem;
+      padding-top: 0.9rem; border-top: 1px dashed rgba(148, 163, 184, 0.18);
+    }
+    .fc-chain-node {
+      flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.2rem;
+      padding: 0.55rem 0.8rem; border-radius: 12px;
+      background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .fc-chain-node.target { border-color: rgba(96, 165, 250, 0.4); background: linear-gradient(135deg, rgba(59, 130, 246, 0.16), rgba(15, 23, 42, 0.55)); }
+    .fc-chain-cap { font-size: 0.56rem; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; font-weight: 700; }
+    .fc-chain-node.target .fc-chain-cap { color: #93c5fd; }
+    .fc-chain-num { font-family: var(--font-mono); font-size: 1.05rem; font-weight: 800; color: #f1f5f9; }
+    .fc-chain-op {
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.1rem;
+      min-width: 60px; font-weight: 800; font-size: 0.8rem;
+    }
+    .fc-chain-op .pi { font-size: 0.95rem; opacity: 0.55; }
+    .fc-chain-op.positive { color: #4ade80; }
+    .fc-chain-op.negative { color: #f87171; }
+
+    /* Projection */
+    .fc-projection { display: flex; flex-direction: column; }
+    .fc-chart-frame { position: relative; width: 100%; height: 300px; margin-top: 0.5rem; }
+    .fc-scenario-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.65rem; margin-top: 0.85rem; }
+    .fc-scenario {
+      display: flex; flex-direction: column; gap: 0.2rem; padding: 0.7rem 0.85rem;
+      border-radius: 12px; background: rgba(15, 23, 42, 0.55); border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .fc-scenario.sc-optimistic { border-top: 2px solid #34d399; }
+    .fc-scenario.sc-target { border-top: 2px solid #60a5fa; }
+    .fc-scenario.sc-conservative { border-top: 2px solid #f87171; }
+    .fc-scenario-label { font-size: 0.62rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #94a3b8; }
+    .fc-scenario-value { font-size: 1.15rem; font-weight: 800; color: #f1f5f9; }
+    .fc-scenario-change { font-size: 0.66rem; font-weight: 700; }
+    .fc-scenario-change.positive { color: #4ade80; }
+    .fc-scenario-change.negative { color: #f87171; }
+
+    /* Trade plan */
+    .fc-levels { display: grid; grid-template-columns: 1fr 1fr; gap: 0.6rem; }
+    .fc-level {
+      display: flex; flex-direction: column; gap: 0.25rem; padding: 0.6rem 0.7rem;
+      border-radius: 10px; background: rgba(15, 23, 42, 0.5); border: 1px solid rgba(148, 163, 184, 0.12);
+    }
+    .fc-level-label { font-size: 0.62rem; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; }
+    .fc-level-value { font-size: 0.92rem; font-weight: 800; color: #f1f5f9; font-variant-numeric: tabular-nums; }
+    .fc-level.entry { border-left: 3px solid #60a5fa; }
+    .fc-level.target { border-left: 3px solid #34d399; }
+    .fc-level.stop { border-left: 3px solid #f87171; }
+    .fc-level.rr { border-left: 3px solid #a78bfa; }
+    .fc-trade-note { margin: 0.7rem 0 0; font-size: 0.7rem; color: #94a3b8; line-height: 1.45; }
+
+    /* Bull / bear */
+    .fc-cases { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .fc-case-title { margin: 0 0 0.5rem; font-size: 0.8rem; font-weight: 800; display: flex; align-items: center; gap: 0.4rem; }
+    .fc-case-title.bull { color: #4ade80; }
+    .fc-case-title.bear { color: #f87171; }
+    .fc-case ul { margin: 0; padding-left: 1.05rem; display: flex; flex-direction: column; gap: 0.4rem; }
+    .fc-case li { font-size: 0.74rem; color: #cbd5e1; line-height: 1.4; }
+    .fc-case li strong { color: #f1f5f9; }
+    .fc-case-bull li::marker { color: #22c55e; }
+    .fc-case-bear li::marker { color: #ef4444; }
+
+    /* Footer */
+    .fc-footer {
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap;
+      padding: 0.7rem 1rem; border-radius: 12px;
+      background: rgba(15, 23, 42, 0.5); border: 1px dashed rgba(148, 163, 184, 0.2);
+    }
+    .fc-footer-sources { font-size: 0.66rem; color: #94a3b8; display: inline-flex; align-items: center; gap: 0.4rem; }
+    .fc-footer-sources .pi { color: #64748b; font-size: 0.7rem; }
+    .fc-footer-disclaimer { font-size: 0.64rem; color: #64748b; font-style: italic; }
+
+    @media (max-width: 1100px) {
+      .fc-grid { grid-template-columns: 1fr; }
+      .fc-cases { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 640px) {
+      .fc-scenario-cards { grid-template-columns: 1fr; }
+      .fc-levels { grid-template-columns: 1fr; }
+      .forecast-cta-sub { display: none; }
+      .fc-footer { flex-direction: column; align-items: flex-start; }
+    }
+
     /* Responsive adjustments */
     @media (max-width: 1400px) {
       .stock-detail-container {
@@ -1632,6 +2466,23 @@ export class StockDetailComponent implements OnInit {
   stock = signal<Stock | null>(null);
   loading = signal(true);
   error = signal<string | null>(null);
+
+  // Forecast dialog state
+  showForecastDialog = signal(false);
+  forecastTab = signal<'analysis' | 'projection' | 'chatgpt'>('analysis');
+
+  openForecast(): void {
+    this.forecastTab.set('analysis');
+    this.showForecastDialog.set(true);
+  }
+
+  // Plain-language explanation for the single headline trust metric.
+  // (Direction and strength are conveyed by the Buy/Hold/Sell pill and the upside %.)
+  readonly confidenceHelp =
+    'Confidence is how trustworthy this call is - not how bullish it is (a Strong Sell can be high-confidence). ' +
+    'It rises when many analysts cover the stock, the independent valuations agree with each other, ' +
+    'and the signals all point the same way; lower means more uncertainty. ' +
+    'It reflects data quality and agreement today, not a backtested hit-rate.';
 
   // Watchlist state
   showWlDropdown = false;
@@ -1759,6 +2610,144 @@ export class StockDetailComponent implements OnInit {
   overallScore = computed(() => {
     return (this.technicalScore() + this.maScore()) / 2;
   });
+
+  // --- Forecast engine ---
+
+  /** Deterministic forecast derived from the loaded stock + news catalysts. */
+  forecast = computed<ForecastResult | null>(() => {
+    const s = this.stock();
+    if (!s) return null;
+    const newsTypes = this.news().map(n => n.type as NewsType);
+    return buildForecast(s, newsTypes);
+  });
+
+  /**
+   * EXPERIMENTAL — parallel "Per ChatGPT" model powering its own dialog tab.
+   * Independent of the production forecast above; see chatgpt-forecast-engine.ts.
+   */
+  chatGptForecast = computed<ChatGptForecast | null>(() => {
+    const s = this.stock();
+    if (!s) return null;
+    return buildChatGptForecast(s);
+  });
+
+  private currencySymbol(): string {
+    const c = this.stock()?.currency;
+    if (c === 'INR') return '₹';
+    if (c === 'USD') return '$';
+    return c ? c + ' ' : '$';
+  }
+
+  scenarioChartData = computed<ChartData<'line'> | null>(() => {
+    const f = this.forecast();
+    if (!f) return null;
+    const find = (key: string) => f.scenarios.find(s => s.key === key)?.path ?? [];
+    return {
+      labels: f.scenarioLabels,
+      datasets: [
+        {
+          label: 'Optimistic',
+          data: find('optimistic'),
+          borderColor: '#34d399',
+          backgroundColor: 'rgba(52, 211, 153, 0.06)',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: 0.35,
+          fill: false,
+        },
+        {
+          label: 'Target',
+          data: find('target'),
+          borderColor: '#60a5fa',
+          backgroundColor: 'rgba(96, 165, 250, 0.14)',
+          borderWidth: 3,
+          pointRadius: 0,
+          pointHoverRadius: 5,
+          tension: 0.35,
+          fill: true,
+        },
+        {
+          label: 'Conservative',
+          data: find('conservative'),
+          borderColor: '#f87171',
+          backgroundColor: 'rgba(248, 113, 113, 0.05)',
+          borderWidth: 2,
+          borderDash: [6, 4],
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: 0.35,
+          fill: false,
+        },
+      ],
+    };
+  });
+
+  scenarioChartOptions = computed<ChartOptions<'line'>>(() => {
+    const sym = this.currencySymbol();
+    return {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: '#94a3b8', usePointStyle: true, boxWidth: 8, font: { size: 11 } },
+        },
+        tooltip: {
+          backgroundColor: 'rgba(15, 23, 42, 0.96)',
+          borderColor: 'rgba(96, 165, 250, 0.35)',
+          borderWidth: 1,
+          titleColor: '#f8fafc',
+          bodyColor: '#cbd5e1',
+          padding: 10,
+          callbacks: {
+            label: (ctx) => `${ctx.dataset.label}: ${sym}${Number(ctx.parsed.y).toLocaleString(undefined, { maximumFractionDigits: 2 })}`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(148, 163, 184, 0.08)' },
+          ticks: { color: '#94a3b8', font: { size: 11 } },
+        },
+        y: {
+          grid: { color: 'rgba(148, 163, 184, 0.08)' },
+          ticks: {
+            color: '#94a3b8',
+            font: { size: 11 },
+            callback: (value) => sym + Number(value).toLocaleString(),
+          },
+        },
+      },
+    };
+  });
+
+  /** Tone class for the hero background: bull / neutral / bear. */
+  recTone(rec: ForecastResult['recommendation']): 'bull' | 'neutral' | 'bear' {
+    if (rec === 'buy' || rec === 'strong_buy') return 'bull';
+    if (rec === 'hold') return 'neutral';
+    return 'bear';
+  }
+
+  /** Relative bar width (%) for a valuation estimate, scaled for visual contrast. */
+  barPct(value: number, f: ForecastResult): number {
+    const vals = f.estimates.map(e => e.value).concat([f.baseValuation]);
+    const max = Math.max(...vals);
+    const lo = Math.min(...vals) * 0.92;
+    if (max <= lo) return 100;
+    return Math.max(8, Math.min(100, ((value - lo) / (max - lo)) * 100));
+  }
+
+  /** Relative bar width (%) for the experimental "Per ChatGPT" value blend. */
+  gptBarPct(value: number, g: ChatGptForecast): number {
+    const vals = g.components.map(c => c.value).concat([g.fundamentalTarget]);
+    const max = Math.max(...vals);
+    const lo = Math.min(...vals) * 0.92;
+    if (max <= lo) return 100;
+    return Math.max(8, Math.min(100, ((value - lo) / (max - lo)) * 100));
+  }
 
   ngOnInit(): void {
     // Subscribe to route param changes to handle navigation between stock pages

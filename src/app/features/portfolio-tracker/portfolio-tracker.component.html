@@ -304,6 +304,10 @@
         <div class="summary-label">Portfolio Value</div>
         <div class="summary-value mono">{{ formatCurrency(getLatestActualTotal()) }}</div>
       </div>
+      <div class="summary-card perf-card" [class.positive]="getTotalActualProfit() > 0" [class.negative]="getTotalActualProfit() < 0">
+        <div class="summary-label">Profit</div>
+        <div class="summary-value mono">{{ formatCurrency(getTotalActualProfit()) }}</div>
+      </div>
       <div class="summary-card perf-card" [class.positive]="getAverageMonthlyProfit() > 0" [class.negative]="getAverageMonthlyProfit() < 0">
         <div class="summary-label">Avg Monthly P/L</div>
         <div class="summary-value mono">{{ formatCurrency(getAverageMonthlyProfit()) }}</div>

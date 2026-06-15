@@ -140,9 +140,14 @@ export class DashboardService {
     if (!dataSource.length) return empty;
 
     const latest = dataSource[dataSource.length - 1];
-    const totalInvested = latest.total_investment || 0;
     const totalValue = latest.total || 0;
-    const totalProfit = (latest as any).profit != null ? (latest as any).profit : totalValue - totalInvested;
+
+    // Calculate cumulative invested: first row's starting balance + sum of all additions.
+    // This matches the portfolio tracker's getCumulativeActualPrincipal logic.
+    const first = dataSource[0];
+    const totalInvested = (first.investment || 0) + dataSource.reduce((sum, e) => sum + (e.added || 0), 0);
+
+    const totalProfit = totalValue - totalInvested;
     const returnPercent = totalInvested > 0 ? (totalProfit / totalInvested) * 100 : 0;
 
     const monthsTracked = dataSource.length;
@@ -156,7 +161,6 @@ export class DashboardService {
 
     const bestMonthReturn = dataSource.reduce((best, e) => Math.max(best, e.return_percent || 0), 0);
 
-    const first = dataSource[0];
     const trackingSince = new Date(first.year, first.month - 1)
       .toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 

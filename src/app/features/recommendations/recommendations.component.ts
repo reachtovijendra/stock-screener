@@ -19,6 +19,7 @@ import type { RecommendationSimulatedTrade } from '../../core/utils/paper-tradin
 interface DailyPick {
   id: number;
   market: string;
+  model: 'old' | 'new' | null;
   pick_date: string;
   symbol: string;
   name: string;
@@ -45,6 +46,12 @@ interface DailyPick {
   actual_low: number | null;
   actual_close: number | null;
   pnl_percent: number | null;
+  // TEMPORARY: opening-momentum backtest columns (safe to remove later).
+  new_model_outcome: 'hit-target' | 'hit-sl' | 'exit-at-close' | 'no-trigger' | null;
+  new_model_pnl_percent: number | null;
+  new_model_buy_price: number | null;
+  new_model_sell_price: number | null;
+  new_model_stop_loss: number | null;
 }
 
 interface DateGroup {
@@ -100,57 +107,70 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
         </div>
       </header>
 
-      <div class="reco-tabs" role="tablist" aria-label="Recommendation views">
-        <button
-          type="button"
-          class="reco-tab"
-          [class.active]="activeTab() === 'recommendations'"
-          (click)="activeTab.set('recommendations')">
-          Recommendations
-        </button>
-        <button
-          type="button"
-          class="reco-tab"
-          [class.active]="activeTab() === 'paper-results'"
-          (click)="activeTab.set('paper-results')">
-          Automated Paper Results
-        </button>
+      <div class="reco-toolbar">
+        <div class="reco-tabs" role="tablist" aria-label="Recommendation views">
+          <button
+            type="button"
+            class="reco-tab"
+            [class.active]="activeTab() === 'recommendations'"
+            (click)="activeTab.set('recommendations')">
+            Recommendations
+          </button>
+          <button
+            type="button"
+            class="reco-tab"
+            [class.active]="activeTab() === 'paper-results'"
+            (click)="activeTab.set('paper-results')">
+            Automated Paper Results
+          </button>
+        </div>
+
+        <div class="model-toggle" role="group" aria-label="Model"
+          pTooltip="Compare the two day-trade models live. New = opening-momentum (the emailed model). Old = original breakout model. Each runs its own picks daily."
+          tooltipPosition="top">
+          <span class="model-toggle-label">Model</span>
+          <button type="button" class="model-chip" [class.active]="selectedModel() === 'new'" (click)="selectModel('new')">New</button>
+          <button type="button" class="model-chip" [class.active]="selectedModel() === 'old'" (click)="selectModel('old')">Old</button>
+        </div>
       </div>
 
       @if (activeTab() === 'recommendations') {
         @if (!loading() && dateGroups().length > 0) {
-          <section class="summary-grid" aria-label="Recommendation summary">
-            <div class="summary-card">
-              <span>Total Picks</span>
-              <strong>{{ totalPicks() }}</strong>
-            </div>
-            <div class="summary-card positive">
-              <span>Target Hit</span>
-              <strong>{{ totalTargetHit() }}</strong>
-            </div>
-            <div class="summary-card positive">
-              <span>Closed Profit</span>
-              <strong>{{ totalClosedProfitable() }}</strong>
-            </div>
-            <div class="summary-card negative">
-              <span>Closed Loss</span>
-              <strong>{{ totalClosedAtLoss() }}</strong>
-            </div>
-            <div class="summary-card negative">
-              <span>Stopped Out</span>
-              <strong>{{ totalStoppedOut() }}</strong>
-            </div>
-            <div class="summary-card pending">
-              <span>Not Traded</span>
-              <strong>{{ totalNotTraded() }}</strong>
-            </div>
-            <div class="summary-card pending">
-              <span>Pending</span>
-              <strong>{{ totalPending() }}</strong>
-            </div>
-            <div class="summary-card" [class.positive]="winRate() >= 50" [class.negative]="winRate() < 50 && winRate() >= 0">
-              <span>Win Rate</span>
-              <strong>{{ winRate() >= 0 ? (winRate() | number:'1.0-0') + '%' : '--' }}</strong>
+          <section class="summary-block" aria-label="Recommendation summary">
+            <span class="summary-caption">{{ selectedModel() === 'new' ? 'New' : 'Old' }} model</span>
+            <div class="summary-grid">
+              <div class="summary-card">
+                <span>Total Picks</span>
+                <strong>{{ totalPicks() }}</strong>
+              </div>
+              <div class="summary-card positive">
+                <span>Target Hit</span>
+                <strong>{{ totalTargetHit() }}</strong>
+              </div>
+              <div class="summary-card positive">
+                <span>Closed Profit</span>
+                <strong>{{ totalClosedProfitable() }}</strong>
+              </div>
+              <div class="summary-card negative">
+                <span>Closed Loss</span>
+                <strong>{{ totalClosedAtLoss() }}</strong>
+              </div>
+              <div class="summary-card negative">
+                <span>Stopped Out</span>
+                <strong>{{ totalStoppedOut() }}</strong>
+              </div>
+              <div class="summary-card pending">
+                <span>Not Traded</span>
+                <strong>{{ totalNotTraded() }}</strong>
+              </div>
+              <div class="summary-card pending">
+                <span>Pending</span>
+                <strong>{{ totalPending() }}</strong>
+              </div>
+              <div class="summary-card" [class.positive]="winRate() >= 50" [class.negative]="winRate() < 50 && winRate() >= 0">
+                <span>Win Rate</span>
+                <strong>{{ winRate() >= 0 ? (winRate() | number:'1.0-0') + '%' : '--' }}</strong>
+              </div>
             </div>
           </section>
         }
@@ -163,8 +183,11 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
         } @else if (dateGroups().length === 0) {
           <div class="empty-state">
             <i class="pi pi-inbox"></i>
-            <strong>No recommendations found</strong>
-            <span>No day trade picks for {{ marketService.marketInfo().name }} in {{ selectedMonthLabel() }}.</span>
+            <strong>No {{ selectedModel() === 'new' ? 'New' : 'Old' }}-model recommendations found</strong>
+            <span>No {{ selectedModel() === 'new' ? 'New' : 'Old' }}-model day trade picks for {{ marketService.marketInfo().name }} in {{ selectedMonthLabel() }}.</span>
+            @if (selectedModel() === 'new') {
+              <span>The New model starts recording its own picks once deployed — switch to <strong>Old</strong> to see historical picks and the new-structure backtest.</span>
+            }
           </div>
         } @else {
           <section class="date-groups">
@@ -322,9 +345,13 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
           <section class="paper-results">
             <div class="formula-card">
               <div>
-                <span class="eyebrow">Score-to-Investment Formula</span>
+                <span class="eyebrow">{{ selectedModel() === 'new' ? 'New' : 'Old' }} Model · Score-to-Investment Formula</span>
                 <h2>{{ currencySymbol() }}{{ investmentRange().min | number:'1.0-0' }} to {{ currencySymbol() }}{{ investmentRange().max | number:'1.0-0' }} per triggered pick</h2>
-                <p>{{ scoreFormula() }}. Scores are clamped from 0 to 100, and no cash is deployed when the buy trigger is not reached.</p>
+                @if (selectedModel() === 'new') {
+                  <p>{{ scoreFormula() }}. Scores are clamped from 0 to 100. Each {{ selectedModel() === 'new' ? 'New' : 'Old' }}-model pick is bought at the open and exited at the close (or sooner on a stop/target); no cash is deployed when a pick has no trade data.</p>
+                } @else {
+                  <p>{{ scoreFormula() }}. Scores are clamped from 0 to 100. Each Old-model pick is entered on the previous-day-high breakout and exited at target, stop, or close; no cash is deployed when the breakout never triggers.</p>
+                }
               </div>
             </div>
 
@@ -1167,6 +1194,56 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
       color: #94a3b8;
     }
 
+    .reco-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .model-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      padding: 0.3rem 0.4rem;
+      border: 1px solid rgba(148, 163, 184, 0.14);
+      border-radius: 999px;
+      background: rgba(15, 23, 42, 0.56);
+    }
+
+    .model-toggle-label {
+      color: #64748b;
+      font-size: 0.66rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0 0.3rem;
+    }
+
+    .model-chip {
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: #94a3b8;
+      padding: 0.4rem 0.85rem;
+      font: inherit;
+      font-size: 0.78rem;
+      font-weight: 900;
+      cursor: pointer;
+      transition: background 0.14s ease, color 0.14s ease;
+    }
+
+    .model-chip.active {
+      color: #fff;
+      background: linear-gradient(135deg, #38bdf8, #2563eb);
+    }
+
+    .model-chip:hover:not(.active) {
+      color: #f8fafc;
+      background: rgba(56, 189, 248, 0.08);
+    }
+
     .reco-tabs {
       width: fit-content;
       display: inline-flex;
@@ -1250,6 +1327,45 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
 
     .summary-card.pending {
       --summary-accent: #7dd3fc;
+    }
+
+    .summary-block {
+      display: flex;
+      flex-direction: column;
+      gap: 0.45rem;
+    }
+
+    .summary-caption {
+      color: #94a3b8;
+      font-size: 0.7rem;
+      font-weight: 900;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+    }
+
+    .summary-caption.backtest {
+      color: #c4b5fd;
+    }
+
+    .summary-card.backtest {
+      border-style: dashed;
+      border-color: rgba(167, 139, 250, 0.4);
+      background: rgba(76, 29, 149, 0.14);
+    }
+
+    .backtest-tag {
+      display: inline-block;
+      margin-left: 0.3rem;
+      padding: 0.04rem 0.32rem;
+      border-radius: 999px;
+      background: rgba(167, 139, 250, 0.18);
+      color: #c4b5fd;
+      font-size: 0.56rem;
+      font-style: normal;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      vertical-align: middle;
     }
 
     .date-groups,
@@ -1427,6 +1543,40 @@ type RecommendationsTab = 'recommendations' | 'paper-results';
 
     .col-signals {
       min-width: 16rem;
+    }
+
+    /* TEMPORARY: new-model (opening-momentum backtest) comparison columns */
+    /* Divider only at the start of the new-model group (the first new column). */
+    .col-targets.col-new {
+      border-left: 2px solid rgba(167, 139, 250, 0.35);
+    }
+
+    .picks-table td.col-new {
+      background: rgba(76, 29, 149, 0.06);
+    }
+
+    .picks-table thead th.col-new {
+      color: #c4b5fd;
+    }
+
+    .th-tag {
+      display: inline-block;
+      margin-left: 0.25rem;
+      padding: 0.02rem 0.3rem;
+      border-radius: 999px;
+      background: rgba(167, 139, 250, 0.18);
+      color: #c4b5fd;
+      font-size: 0.56rem;
+      font-style: normal;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      vertical-align: middle;
+    }
+
+    .no-data-cell {
+      color: #64748b;
+      font-weight: 700;
     }
 
     .numeric {
@@ -1808,7 +1958,15 @@ export class RecommendationsComponent implements OnInit {
 
   loading = signal(false);
   picks = signal<DailyPick[]>([]);
+  selectedModel = signal<'old' | 'new'>('new');
+  private modelTouched = false;
   selectedMonth = signal(this.getCurrentMonth());
+
+  /** Picks for the currently selected model (A/B). Existing/untagged rows = 'old'. */
+  visiblePicks = computed(() => {
+    const m = this.selectedModel();
+    return this.picks().filter(p => (p.model ?? 'old') === m);
+  });
   activeTab = signal<RecommendationsTab>('recommendations');
   activePlanExplanation = signal<string | null>(null);
   stockExtras = signal<Record<string, { targetMeanPrice?: number; earningsTimestamp?: number; heldPercentInstitutions?: number }>>({});
@@ -1819,7 +1977,7 @@ export class RecommendationsComponent implements OnInit {
   });
 
   dateGroups = computed<DateGroup[]>(() => {
-    const all = this.picks();
+    const all = this.visiblePicks();
     const grouped = new Map<string, DailyPick[]>();
 
     for (const pick of all) {
@@ -1863,16 +2021,16 @@ export class RecommendationsComponent implements OnInit {
     });
   });
 
-  totalPicks = computed(() => this.picks().length);
-  totalTargetHit = computed(() => this.picks().filter(p => p.outcome === 'hit-target').length);
-  totalClosedProfitable = computed(() => this.picks().filter(p => p.outcome === 'exit-at-close' && p.pnl_percent != null && p.pnl_percent > 0).length);
-  totalClosedAtLoss = computed(() => this.picks().filter(p => p.outcome === 'exit-at-close' && (p.pnl_percent == null || p.pnl_percent <= 0)).length);
-  totalStoppedOut = computed(() => this.picks().filter(p => p.outcome === 'hit-sl').length);
+  totalPicks = computed(() => this.visiblePicks().length);
+  totalTargetHit = computed(() => this.visiblePicks().filter(p => p.outcome === 'hit-target').length);
+  totalClosedProfitable = computed(() => this.visiblePicks().filter(p => p.outcome === 'exit-at-close' && p.pnl_percent != null && p.pnl_percent > 0).length);
+  totalClosedAtLoss = computed(() => this.visiblePicks().filter(p => p.outcome === 'exit-at-close' && (p.pnl_percent == null || p.pnl_percent <= 0)).length);
+  totalStoppedOut = computed(() => this.visiblePicks().filter(p => p.outcome === 'hit-sl').length);
   totalNotTraded = computed(() => {
-    return this.picks().filter(p => p.outcome === 'no-trigger' || (p.outcome == null && !this.isPickPending(p))).length;
+    return this.visiblePicks().filter(p => p.outcome === 'no-trigger' || (p.outcome == null && !this.isPickPending(p))).length;
   });
   totalPending = computed(() => {
-    return this.picks().filter(p => this.isPickPending(p)).length;
+    return this.visiblePicks().filter(p => this.isPickPending(p)).length;
   });
   winRate = computed(() => {
     const wins = this.totalTargetHit() + this.totalClosedProfitable();
@@ -1884,7 +2042,7 @@ export class RecommendationsComponent implements OnInit {
   currencySymbol = computed(() => this.marketService.marketInfo().currencySymbol);
   investmentRange = computed(() => getRecommendationInvestmentRange(this.marketService.currentMarket()));
   scoreFormula = computed(() => getScoreInvestmentFormulaLabel(this.marketService.currentMarket()));
-  paperSimulation = computed(() => buildRecommendationSimulation(this.picks(), this.marketService.currentMarket()));
+  paperSimulation = computed(() => buildRecommendationSimulation(this.visiblePicks(), this.marketService.currentMarket()));
 
   constructor() {
     // Reload when market changes
@@ -1950,9 +2108,11 @@ export class RecommendationsComponent implements OnInit {
     this.http.get<{ picks: DailyPick[] }>(`/api/stocks?action=daily-picks&market=${market}&month=${month}`)
       .subscribe({
         next: (res) => {
-          this.picks.set(res.picks || []);
+          const picks = res.picks || [];
+          this.picks.set(picks);
           this.loading.set(false);
-          this.enrichWithExtras(res.picks || [], market);
+          this.autoSelectModel(picks);
+          this.enrichWithExtras(picks, market);
         },
         error: (err) => {
           console.error('Failed to fetch picks:', err);
@@ -1960,6 +2120,25 @@ export class RecommendationsComponent implements OnInit {
           this.loading.set(false);
         },
       });
+  }
+
+  /** User explicitly chose a model — pins the choice so auto-select stops overriding it. */
+  selectModel(model: 'old' | 'new'): void {
+    this.modelTouched = true;
+    this.selectedModel.set(model);
+  }
+
+  /**
+   * Before the user touches the toggle, show whichever model actually has picks
+   * for the loaded month (preferring New). This avoids an empty default view
+   * while the New model has not yet produced live picks.
+   */
+  private autoSelectModel(picks: DailyPick[]): void {
+    if (this.modelTouched) return;
+    const hasNew = picks.some(p => (p.model ?? 'old') === 'new');
+    const hasOld = picks.some(p => (p.model ?? 'old') === 'old');
+    if (this.selectedModel() === 'new' && !hasNew && hasOld) this.selectedModel.set('old');
+    else if (this.selectedModel() === 'old' && !hasOld && hasNew) this.selectedModel.set('new');
   }
 
   private enrichWithExtras(picks: DailyPick[], market: string): void {

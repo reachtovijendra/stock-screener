@@ -84,6 +84,7 @@ describe('RecommendationsComponent', () => {
         {
           id: 1,
           market: 'US',
+          model: 'new',
           pick_date: '2026-04-01',
           symbol: 'AAPL',
           name: 'Apple',
@@ -131,7 +132,7 @@ describe('RecommendationsComponent', () => {
     expect(native.textContent).toContain('Bought');
     expect(native.textContent).toContain('Sold');
     expect(native.textContent).toContain('40');
-    expect(native.textContent).toContain('Apr 1, 2026, buy trigger hit intraday');
+    expect(native.textContent).toContain('Apr 1, 2026, bought at the open');
     expect(native.textContent).toContain('Apr 1, 2026, sell target hit intraday');
     expect(native.textContent).toContain('Sell target hit');
     const paperHeaders = Array.from(native.querySelectorAll<HTMLTableCellElement>('.paper-table th'))

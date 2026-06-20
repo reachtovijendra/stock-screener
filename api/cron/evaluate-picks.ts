@@ -3,11 +3,18 @@
  *
  * Schedule: 2:30 AM UTC daily (Tue-Sat)
  *
+ * Trade model = OPENING-MOMENTUM (see day-trade-scorer.ts): the trade is
+ * entered at the OPEN, held through the session, and exited at the close unless
+ * a protective stop or stretch target is touched first.
+ *
  * For each unevaluated pick:
  * 1. Fetch daily OHLC for the SPECIFIC pick date (not just latest day)
- * 2. Check if entry trigger was reached (high >= buy_price)
- * 3. If triggered: check target (high >= sell_price) and stop (low <= stop_loss)
- * 4. If neither target nor stop: exit at close (real P&L)
+ * 2. Enter at the actual open
+ * 3. Apply the intended stop% and target% (derived from the stored buy/stop/
+ *    sell levels) to the actual open — gap-robust
+ * 4. Outcome: stop hit (low <= stop), target hit (high >= target), else exit at
+ *    close (real P&L). If both stop and target trade in the same daily bar, the
+ *    stop is assumed first (conservative — daily bars hide intraday sequence)
  * 5. Update Supabase with outcome and actual prices
  */
 
@@ -19,6 +26,7 @@ interface PendingPick {
   id: number;
   symbol: string;
   market: string;
+  model: string;   // 'old' (breakout entry) or 'new' (opening-momentum)
   pick_date: string;
   buy_price: number;
   sell_price: number;
@@ -66,7 +74,14 @@ async function fetchOHLCForDate(symbol: string, pickDate: string): Promise<{
       }
     }
 
-    // If exact date not found, try matching by proximity (timezone offset can shift dates)
+    // If exact date not found, try matching by proximity — but ONLY to absorb a
+    // timezone date-shift (a daily bar is stamped at the local session open, so
+    // its UTC date can differ from pick_date by a few hours). The tolerance must
+    // stay BELOW one day so a non-trading pick_date (market holiday / weekend)
+    // can never be matched to an adjacent trading day's bar — doing so would
+    // fabricate an outcome from another day's price action. If pick_date was not
+    // a trading day, no bar is within tolerance and we correctly return null.
+    const MAX_TZ_SHIFT_SECONDS = 60 * 60 * 18; // 18h: covers US/IN session offsets, < 1 day
     const pickTs = new Date(pickDate + 'T12:00:00Z').getTime() / 1000;
     let closest = -1;
     let closestDiff = Infinity;
@@ -78,7 +93,7 @@ async function fetchOHLCForDate(symbol: string, pickDate: string): Promise<{
       }
     }
 
-    if (closest >= 0 && closestDiff < 86400 * 2) {
+    if (closest >= 0 && closestDiff < MAX_TZ_SHIFT_SECONDS) {
       return { open: q.open[closest], high: q.high[closest], low: q.low[closest], close: q.close[closest] };
     }
 
@@ -114,6 +129,12 @@ export function isPickReadyForEvaluation(pick: PendingPick, now = new Date()): b
 
 /**
  * Evaluate a single pick against actual OHLC for the pick date.
+ *
+ * Opening-momentum model: enter at the actual open, then exit at the stop, the
+ * stretch target, or the close (whichever comes first). The stored buy/sell/
+ * stop levels were computed pre-market from an estimated open, so we re-express
+ * them as percentage distances and apply those to the ACTUAL open — that keeps
+ * the stop/target faithful even when the stock gaps at the open.
  */
 export function evaluatePick(
   pick: PendingPick,
@@ -123,39 +144,79 @@ export function evaluatePick(
   const sellPrice = Number(pick.sell_price);
   const stopLoss = Number(pick.stop_loss);
 
-  // Step 1: Did the stock reach the entry trigger (buy_price)?
-  if (ohlc.high < buyPrice) {
-    // Entry never triggered — no trade
+  const entryPrice = ohlc.open;
+  if (!(entryPrice > 0)) {
+    // No usable open — cannot enter; treat as not traded.
     return { outcome: 'no-trigger', pnlPercent: 0, entryPrice: 0, exitPrice: 0 };
   }
 
-  // Trade was triggered. Entry at buy_price (or open if it gapped above)
-  const entryPrice = Math.max(buyPrice, Math.min(ohlc.open, buyPrice * 1.005));
+  // Intended distances from the reference entry, applied to the actual open.
+  const targetPct = buyPrice > 0 ? (sellPrice - buyPrice) / buyPrice : 0;
+  const stopPct = buyPrice > 0 ? (buyPrice - stopLoss) / buyPrice : 0;
+  const targetPrice = entryPrice * (1 + targetPct);
+  const stopPrice = entryPrice * (1 - stopPct);
 
-  // Step 2: Check if target was hit
+  const hitTarget = targetPct > 0 && ohlc.high >= targetPrice;
+  const hitStop = stopPct > 0 && ohlc.low <= stopPrice;
+
+  // Both touched in one daily bar — assume the stop filled first (conservative).
+  if (hitStop) {
+    const pnl = ((stopPrice - entryPrice) / entryPrice) * 100;
+    return { outcome: 'hit-sl', pnlPercent: round2(pnl), entryPrice, exitPrice: round2(stopPrice) };
+  }
+
+  if (hitTarget) {
+    const pnl = ((targetPrice - entryPrice) / entryPrice) * 100;
+    return { outcome: 'hit-target', pnlPercent: round2(pnl), entryPrice, exitPrice: round2(targetPrice) };
+  }
+
+  // Neither stop nor target — exit at the close (the primary planned exit).
+  const pnl = ((ohlc.close - entryPrice) / entryPrice) * 100;
+  return { outcome: 'exit-at-close', pnlPercent: round2(pnl), entryPrice, exitPrice: ohlc.close };
+}
+
+/**
+ * Evaluate an OLD-model pick (breakout entry). The trade only triggers if the
+ * day's high reaches the buy price (previous-day-high breakout); entry is at the
+ * buy price (or the open if it gapped above), then target/stop/close. Used for
+ * the live A/B comparison so old-model rows are scored by their own rules.
+ */
+export function evaluatePickOld(
+  pick: PendingPick,
+  ohlc: { open: number; high: number; low: number; close: number }
+): EvaluationResult {
+  const buyPrice = Number(pick.buy_price);
+  const sellPrice = Number(pick.sell_price);
+  const stopLoss = Number(pick.stop_loss);
+
+  // Entry only triggers on a breakout above the buy price.
+  if (ohlc.high < buyPrice) {
+    return { outcome: 'no-trigger', pnlPercent: 0, entryPrice: 0, exitPrice: 0 };
+  }
+
+  const entryPrice = Math.max(buyPrice, Math.min(ohlc.open, buyPrice * 1.005));
   const hitTarget = ohlc.high >= sellPrice;
-  // Step 3: Check if stop was hit
   const hitStop = ohlc.low <= stopLoss;
 
-  if (hitTarget && !hitStop) {
+  // Both touched in one daily bar — assume the stop filled first (conservative).
+  if (hitStop) {
+    const pnl = ((stopLoss - entryPrice) / entryPrice) * 100;
+    return { outcome: 'hit-sl', pnlPercent: round2(pnl), entryPrice, exitPrice: stopLoss };
+  }
+  if (hitTarget) {
     const pnl = ((sellPrice - entryPrice) / entryPrice) * 100;
     return { outcome: 'hit-target', pnlPercent: round2(pnl), entryPrice, exitPrice: sellPrice };
   }
-
-  if (hitStop && !hitTarget) {
-    const pnl = ((stopLoss - entryPrice) / entryPrice) * 100;
-    return { outcome: 'hit-sl', pnlPercent: round2(pnl), entryPrice, exitPrice: stopLoss };
-  }
-
-  if (hitTarget && hitStop) {
-    // Both hit — conservative: assume stop hit first
-    const pnl = ((stopLoss - entryPrice) / entryPrice) * 100;
-    return { outcome: 'hit-sl', pnlPercent: round2(pnl), entryPrice, exitPrice: stopLoss };
-  }
-
-  // Neither target nor stop hit — exit at close
   const pnl = ((ohlc.close - entryPrice) / entryPrice) * 100;
   return { outcome: 'exit-at-close', pnlPercent: round2(pnl), entryPrice, exitPrice: ohlc.close };
+}
+
+/** Dispatch to the model-appropriate evaluator. */
+export function evaluatePickForModel(
+  pick: PendingPick,
+  ohlc: { open: number; high: number; low: number; close: number }
+): EvaluationResult {
+  return pick.model === 'old' ? evaluatePickOld(pick, ohlc) : evaluatePick(pick, ohlc);
 }
 
 export function createNoDataEvaluation(): EvaluationResult {
@@ -209,7 +270,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const today = new Date().toISOString().slice(0, 10);
   const { data: unevaluatedPicks, error: fetchError } = await supabase
     .from('daily_picks')
-    .select('id, symbol, market, pick_date, buy_price, sell_price, stop_loss')
+    .select('id, symbol, market, model, pick_date, buy_price, sell_price, stop_loss')
     .lte('pick_date', today)
     .is('outcome', null)
     .order('pick_date', { ascending: false })
@@ -243,7 +304,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         // Fetch OHLC specifically for the pick date
         const ohlc = await fetchOHLCForDate(pick.symbol, pick.pick_date);
 
-        const result = ohlc ? evaluatePick(pick, ohlc) : createNoDataEvaluation();
+        const result = ohlc ? evaluatePickForModel(pick, ohlc) : createNoDataEvaluation();
         if (!ohlc) {
           console.log(`[Evaluate] No OHLC data for ${pick.symbol} on ${pick.pick_date}; marking no-trigger`);
         }

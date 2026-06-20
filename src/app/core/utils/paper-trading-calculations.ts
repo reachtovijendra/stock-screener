@@ -8,6 +8,7 @@ export interface RecommendationSimulationPick {
   symbol: string;
   name: string;
   market: Market | string;
+  model?: 'old' | 'new' | string | null;
   pick_date: string;
   score: number;
   buy_price: number;
@@ -204,7 +205,7 @@ function buildRecommendationTrade(
     exitPrice: getExitPrice(pick, outcome, pnlPercent),
     exitReason: getExitReason(outcome),
     detailedExitReason: getDetailedExitReason(outcome, pnlPercent),
-    boughtAtLabel: getBoughtAtLabel(pick.pick_date, outcome),
+    boughtAtLabel: getBoughtAtLabel(pick.pick_date, outcome, pick.model),
     soldAtLabel: getSoldAtLabel(pick.pick_date, market, outcome),
     pnlPercent,
     pnlAmount,
@@ -264,7 +265,7 @@ function getDetailedExitReason(
     return 'Closed flat';
   }
   if (outcome === 'pending') return 'Pending evaluation';
-  return "Buy price didn't hit";
+  return 'Not traded (no data)';
 }
 
 function getResultTone(
@@ -285,11 +286,13 @@ function getSharesBought(deployedInvestment: number, entryPrice: number): number
 
 function getBoughtAtLabel(
   pickDate: string,
-  outcome: RecommendationOutcome | 'pending'
+  outcome: RecommendationOutcome | 'pending',
+  model?: 'old' | 'new' | string | null
 ): string {
   if (outcome === 'pending') return 'Pending';
-  if (outcome === 'no-trigger' || outcome == null) return 'Not bought';
-  return `${formatTradeDate(pickDate)}, buy trigger hit intraday`;
+  if (outcome === 'no-trigger' || outcome == null) return 'Not traded';
+  const how = model === 'old' ? 'breakout trigger hit intraday' : 'bought at the open';
+  return `${formatTradeDate(pickDate)}, ${how}`;
 }
 
 function getSoldAtLabel(

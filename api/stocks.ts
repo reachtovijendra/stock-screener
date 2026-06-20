@@ -10,6 +10,7 @@ import { handleDailyPicksList } from './_lib/handlers/daily-picks-list';
 import { handleRaisingStocks } from './_lib/handlers/stocks-raising';
 import { handleTopMovers } from './_lib/handlers/stocks-movers';
 import { handlePennyHits } from './_lib/handlers/stocks-penny-hits';
+import { handleMarketHolidays } from './_lib/handlers/market-holidays';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -45,6 +46,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return handleTopMovers(req, res);
     case 'penny-hits':
       return handlePennyHits(req, res);
+    case 'holidays':
+      return handleMarketHolidays(req, res);
     default:
       return res.status(400).json({ error: `Unknown action: ${action}` });
   }

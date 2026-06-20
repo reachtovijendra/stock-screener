@@ -15,6 +15,7 @@ import { getQuotes, getIndexSymbols, getMarketIndices } from '../_lib/yahoo-clie
 import { runTwoPassScoring, DayTradePick } from '../_lib/day-trade-scorer';
 import { sendEmail } from '../_lib/brevo-sender';
 import { saveDailyPicks, DailyPickRow } from '../_lib/supabase-client';
+import { isMarketOpen } from '../_lib/market-calendar';
 
 const RECIPIENTS = [
   'reachtovijendra@gmail.com',
@@ -33,6 +34,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const startTime = Date.now();
 
   try {
+    // --- 0. Skip non-trading days (weekends/US market holidays) ---
+    const today = new Date().toISOString().slice(0, 10);
+    if (!isMarketOpen('US', today)) {
+      console.log(`[USPicks] ${today} is not a US trading day — skipping picks.`);
+      return res.status(200).json({ success: true, skipped: true, reason: 'market-closed', date: today });
+    }
+
     // --- 1. Fetch US stock quotes ---
     const usSymbols = getIndexSymbols('US');
     const usQuotes = await getQuotes(usSymbols, 'US');
@@ -50,26 +58,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (sp) indexChangePercent = sp.changePercent;
     } catch {}
 
-    // --- 3. Run two-pass scoring ---
-    const picks = await runTwoPassScoring({
-      market: 'US',
+    // --- 3. Run BOTH models in parallel (A/B): new is emailed, old is stored for comparison ---
+    const scoreCfg = {
+      market: 'US' as const,
       quotes: filtered,
       indexChangePercent,
       maxCandidates: 50,
       maxPicks: 5,
       minScore: 40,
       highThreshold: 55,
-      logPrefix: '[USPicks]',
-    });
+    };
+    const newPicks = await runTwoPassScoring({ ...scoreCfg, model: 'new', logPrefix: '[USPicks:new]' });
+    const oldPicks = await runTwoPassScoring({ ...scoreCfg, model: 'old', logPrefix: '[USPicks:old]' });
 
+    // The email reflects the new (live) model only.
+    const picks = newPicks;
     const highPriority = picks.filter(p => p.priority === 'High');
     const mediumPriority = picks.filter(p => p.priority === 'Medium');
 
-    // --- 4. Save picks to Supabase ---
-    const today = new Date().toISOString().slice(0, 10);
-    try {
-      const rows: DailyPickRow[] = picks.map(p => ({
+    // --- 4. Save both models' picks to Supabase ---
+    const toRows = (modelPicks: DayTradePick[], model: 'old' | 'new'): DailyPickRow[] =>
+      modelPicks.map(p => ({
         market: 'US' as const,
+        model,
         pick_date: today,
         symbol: p.symbol,
         name: p.name,
@@ -96,8 +107,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         priority: p.priority,
         signals: p.signals,
       }));
-      const saved = await saveDailyPicks(rows);
-      console.log(`[USPicks] Saved ${saved} picks to Supabase`);
+    try {
+      const saved = await saveDailyPicks([...toRows(newPicks, 'new'), ...toRows(oldPicks, 'old')]);
+      console.log(`[USPicks] Saved ${saved} picks to Supabase (new ${newPicks.length}, old ${oldPicks.length})`);
     } catch (err: any) {
       console.error('[USPicks] Supabase save failed (non-fatal):', err.message);
     }
@@ -189,9 +201,10 @@ function generateEmailHTML(data: {
     <div style="background:#1a1a2e;border-radius:8px;padding:14px 16px;margin-bottom:20px;border:1px solid #4a4a6a;">
       <p style="margin:0;font-size:12px;color:#c4b5fd;font-weight:600;">📋 How to use these setups</p>
       <p style="margin:6px 0 0 0;font-size:11px;color:#94a3b8;line-height:1.6;">
-        Each pick includes an <strong style="color:#4ade80;">Entry Trigger</strong> — the price level where the trade activates.
-        Wait for price to break the trigger level, confirm it holds above VWAP for 5 min, then enter.
-        Do NOT chase if price has already run past the Sell target.
+        These are <strong style="color:#4ade80;">opening-momentum day trades</strong>: buy at the open near the
+        listed entry, then <strong style="color:#4ade80;">hold through the session and exit at the close</strong>.
+        Use the <strong style="color:#f87171;">hard stop</strong> to cap risk, and optionally take a partial
+        into strength near the target. The trade is squared off the same day — no overnight hold.
       </p>
     </div>
 
@@ -206,29 +219,28 @@ function generateEmailHTML(data: {
     ${mediumPriority.length > 0 ? `
     <div style="margin-bottom:24px;">
       <h2 style="font-size:16px;color:#fbbf24;margin:0 0 12px 0;padding-bottom:8px;border-bottom:1px solid #334155;">
-        👀 Watch List (Score 35–54)
+        👀 Watch List (Score 40–54)
       </h2>
       ${generatePicksTable(mediumPriority, 'US')}
     </div>` : ''}
 
     <!-- Scoring Legend -->
     <div style="background:#1e293b;border-radius:8px;padding:16px;margin-bottom:20px;border:1px solid #334155;">
-      <p style="margin:0 0 8px 0;font-size:13px;color:#f8fafc;font-weight:600;">Two-Pass Scoring Model</p>
+      <p style="margin:0 0 8px 0;font-size:13px;color:#f8fafc;font-weight:600;">Opening-Momentum Scoring Model</p>
       <table style="width:100%;font-size:12px;color:#94a3b8;">
         <tr><td style="padding:3px 0;color:#4ade80;font-weight:600;" colspan="2">Bullish Signals</td></tr>
-        <tr><td style="padding:2px 0;">RSI sweet spot (trend-adjusted)</td><td style="text-align:right;">+15</td></tr>
-        <tr><td style="padding:2px 0;">MACD bullish confirmation</td><td style="text-align:right;">+12</td></tr>
-        <tr><td style="padding:2px 0;">Relative strength vs S&P</td><td style="text-align:right;">+10</td></tr>
-        <tr><td style="padding:2px 0;">Trend alignment (above DMAs)</td><td style="text-align:right;">+10</td></tr>
-        <tr><td style="padding:2px 0;">Gap + volume confirmation</td><td style="text-align:right;">+10</td></tr>
-        <tr><td style="padding:2px 0;">Multi-day uptrend</td><td style="text-align:right;">+8</td></tr>
-        <tr><td style="padding:2px 0;">Near 52W high / breakout</td><td style="text-align:right;">+8</td></tr>
-        <tr><td style="padding:2px 0;">Tight consolidation (base)</td><td style="text-align:right;">+8</td></tr>
+        <tr><td style="padding:2px 0;">Strong RSI momentum (70–82)</td><td style="text-align:right;">+20</td></tr>
+        <tr><td style="padding:2px 0;">Moderate RVOL (1.0–1.8x)</td><td style="text-align:right;">+12</td></tr>
+        <tr><td style="padding:2px 0;">Uptrend (above 50 &amp; 200 DMA)</td><td style="text-align:right;">+12</td></tr>
+        <tr><td style="padding:2px 0;">New / near 52W high</td><td style="text-align:right;">+12</td></tr>
+        <tr><td style="padding:2px 0;">Relative strength vs S&amp;P</td><td style="text-align:right;">+8</td></tr>
+        <tr><td style="padding:2px 0;">MACD bullish confirmation</td><td style="text-align:right;">+6</td></tr>
+        <tr><td style="padding:2px 0;">Tight consolidation (base)</td><td style="text-align:right;">+5</td></tr>
         <tr><td style="padding:3px 0;color:#f87171;font-weight:600;" colspan="2">Penalties</td></tr>
-        <tr><td style="padding:2px 0;">RSI > 75 (overbought)</td><td style="text-align:right;">−10</td></tr>
-        <tr><td style="padding:2px 0;">Bearish MACD</td><td style="text-align:right;">−8</td></tr>
-        <tr><td style="padding:2px 0;">Below both DMAs</td><td style="text-align:right;">−8</td></tr>
-        <tr><td style="padding:2px 0;">R:R < 2:1</td><td style="text-align:right;">−5</td></tr>
+        <tr><td style="padding:2px 0;">Volume spike (RVOL &gt; 2.5x, exhaustion)</td><td style="text-align:right;">−8</td></tr>
+        <tr><td style="padding:2px 0;">Below 50 DMA</td><td style="text-align:right;">−10</td></tr>
+        <tr><td style="padding:2px 0;">Large gap-up (&gt; 3%, chasing)</td><td style="text-align:right;">−5</td></tr>
+        <tr><td style="padding:2px 0;">Bearish MACD</td><td style="text-align:right;">−4</td></tr>
       </table>
     </div>
 

@@ -98,15 +98,15 @@ describe('paper trading calculations', () => {
     ], 'US');
 
     expect(result.trades[0].sharesBought).toBe(40);
-    expect(result.trades[0].boughtAtLabel).toBe('Apr 1, 2026, buy trigger hit intraday');
+    expect(result.trades[0].boughtAtLabel).toBe('Apr 1, 2026, bought at the open');
     expect(result.trades[0].soldAtLabel).toBe('Apr 1, 2026, sell target hit intraday');
     expect(result.trades[0].detailedExitReason).toBe('Sell target hit');
     expect(result.trades[0].resultTone).toBe('positive');
 
     expect(result.trades[1].sharesBought).toBe(0);
-    expect(result.trades[1].boughtAtLabel).toBe('Not bought');
+    expect(result.trades[1].boughtAtLabel).toBe('Not traded');
     expect(result.trades[1].soldAtLabel).toBe('Not sold');
-    expect(result.trades[1].detailedExitReason).toBe("Buy price didn't hit");
+    expect(result.trades[1].detailedExitReason).toBe('Not traded (no data)');
     expect(result.trades[1].resultTone).toBe('neutral');
 
     expect(result.trades[2].sharesBought).toBe(15);

@@ -81,6 +81,11 @@ export const routes: Routes = [
     title: 'DMA Simulator'
   },
   {
+    path: 'holidays',
+    loadComponent: () => import('./features/holidays/holidays.component').then(m => m.HolidaysComponent),
+    title: 'Market Holidays'
+  },
+  {
     path: 'stock/:symbol',
     loadComponent: () => import('./features/stock-detail/stock-detail.component').then(m => m.StockDetailComponent),
     title: 'Stock Details'

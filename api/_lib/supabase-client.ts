@@ -23,6 +23,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 
 export interface DailyPickRow {
   market: 'US' | 'IN';
+  model?: 'old' | 'new';   // which model produced this pick (A/B); defaults to 'old' in DB
   pick_date: string;       // YYYY-MM-DD
   symbol: string;
   name: string;
@@ -60,7 +61,7 @@ export async function saveDailyPicks(picks: DailyPickRow[]): Promise<number> {
 
   const { data, error } = await supabase
     .from('daily_picks')
-    .upsert(picks, { onConflict: 'market,pick_date,symbol' })
+    .upsert(picks, { onConflict: 'market,pick_date,symbol,model' })
     .select('id');
 
   if (error) {

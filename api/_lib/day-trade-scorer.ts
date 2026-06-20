@@ -287,6 +287,18 @@ function round2(n: number): number {
 
 const MIN_DAY_TRADE_ATR_PERCENT = 0.5;
 
+// --- Opening-momentum trade structure (see fullScore for rationale) ---
+// The edge is "ride the pick from the open to the close"; tight stops cut that
+// edge. Backtesting the realised picks showed a ~3.5% protective stop maximises
+// BOTH win rate (~57% US) and per-trade expectancy while capping the worst day
+// near −3.5%. The stop is therefore centred on ~3.5% (1.5 ATR, clamped 2.5–4%)
+// and the target is intentionally far (3 ATR) so it rarely caps a winner early.
+const STOP_ATR_MULT = 1.5;    // protective stop = 1.5 ATR below the open...
+const MIN_STOP_PCT = 0.025;   // ...floored at 2.5% of price...
+const MAX_STOP_PCT = 0.04;    // ...and capped at 4% of price.
+const TARGET_ATR_MULT = 3.0;  // far stretch target = 3 ATR (primary exit is the close)
+const RSI_BLOWOFF = 90;       // only reject genuine blow-off tops
+
 // ---------------------------------------------------------------------------
 // Compute full technicals for a single stock (enhanced)
 // ---------------------------------------------------------------------------
@@ -343,58 +355,46 @@ export interface QuickScoreResult {
 }
 
 /**
- * Fast scoring using only quote-level data — DATA-DRIVEN VERSION.
- * Backtested against 6 months of data. Key finding: gap UP + trend + RVOL
- * is the strongest predictor. Gap DOWN is the strongest anti-predictor.
+ * Fast scoring using only quote-level data — OPENING-MOMENTUM MODEL.
  *
- * Hard filters applied here (return -999 to reject):
- * - Gap must be UP or flat (never gap down)
- * - Must be above 50 DMA
- * - RVOL must be >= 1.0
- * - RSI must be < 80
+ * Reverse analysis of live outcomes (see fullScore + CHANGELOG) showed the
+ * previous gap-up / high-RVOL model was inverted: the day-trade names that
+ * actually follow through are strong-momentum continuation stocks in an
+ * uptrend with MODERATE volume — not gap-up volume spikes (those tend to be
+ * intraday tops). Pass 1 therefore enforces only the durable edge (trend) and
+ * ranks by trend quality. RSI / MACD refinement happens in Pass 2 where
+ * technicals are available.
+ *
+ * Hard filter (return -999 to reject):
+ * - Must be above the 50 DMA (with-trend longs only). Gap direction is NOT a
+ *   filter — it carries no edge in the live data.
  */
 export function quickScore(q: StockQuote): number {
-  // --- HARD FILTERS (backtested: these reject ALL losing patterns) ---
-
-  // Gap direction: gap down after up day = 2.8% win rate. REJECT.
-  if (q.preMarketPrice && q.price > 0) {
-    const gapPct = ((q.preMarketPrice - q.price) / q.price) * 100;
-    if (gapPct < -0.3) return -999;
-  }
-
-  // Must be above 50 DMA (trading with trend)
+  // Trend filter — momentum longs only trade above the 50 DMA.
   if (q.fiftyDayMA && q.price <= q.fiftyDayMA) return -999;
 
-  // RVOL must show some interest
-  if (q.relativeVolume < 1.0) return -999;
-
-  // --- SCORING ---
   let score = 0;
 
-  // Near 52W high + RVOL > 1.3 = best combo (44.6% win rate in backtest)
+  // Leadership: proximity to the 52-week high.
   const near52w = q.percentFromFiftyTwoWeekHigh > -5;
-  if (near52w && q.relativeVolume > 1.3) score += 15;
+  if (near52w) score += 15;
+  if (q.percentFromFiftyTwoWeekHigh > -2) score += 5; // very near / new high
 
-  // Previous session up + gap up = continuation (28% win rate)
-  if (q.preMarketPrice && q.price > 0) {
-    const gapPct = ((q.preMarketPrice - q.price) / q.price) * 100;
-    if (q.changePercent > 0.5 && gapPct > 0.3) score += 12;
+  // Trend alignment (uptrending structure).
+  if (q.fiftyDayMA && q.twoHundredDayMA && q.fiftyDayMA > q.twoHundredDayMA && q.price > q.fiftyDayMA) {
+    score += 12;
   }
 
-  // Trend alignment (above both DMAs = 10.9% vs 7.3%)
-  if (q.fiftyDayMA && q.twoHundredDayMA) {
-    if (q.fiftyDayMA > q.twoHundredDayMA && q.price > q.fiftyDayMA) score += 10;
-  }
+  // Volume: moderate participation is best; spikes are exhaustion traps.
+  if (q.relativeVolume >= 1.0 && q.relativeVolume <= 1.8) score += 8;
+  else if (q.relativeVolume > 1.8 && q.relativeVolume <= 2.5) score += 4;
+  else if (q.relativeVolume > 2.5) score -= 5;
 
-  // RVOL sweet spot 1.3-2.0 (21.6% win rate)
-  if (q.relativeVolume >= 1.3 && q.relativeVolume <= 2.0) score += 8;
-  else if (q.relativeVolume > 2.0) score += 5;
+  // Mild positive drift the prior session (not a hard requirement).
+  if (q.changePercent > 0) score += 4;
 
-  // Near 52W high (11.9% vs 8.0%)
-  if (near52w) score += 5;
-
-  // Liquidity
-  if (q.avgVolume > 5_000_000) score += 3;
+  // Liquidity.
+  if (q.avgVolume > 2_000_000) score += 3;
 
   return score;
 }
@@ -432,37 +432,21 @@ export interface FullScoreResult {
 }
 
 /**
- * Full scoring with technicals. This is where success rate is determined.
+ * Full scoring with technicals — OPENING-MOMENTUM MODEL.
  *
- * Scoring philosophy:
- *   - Technical confirmation (RSI, MACD) = highest weight — these predict continuation
- *   - Relative strength vs index = high weight — outperformers win
- *   - Trend alignment = medium weight — trade with the trend
- *   - Structure (consolidation + breakout) = medium weight — tight setups work best
- *   - Momentum (prev session, gap) = supporting evidence
- *   - Strong penalties for overbought, bearish MACD, fighting trend
- *   - R:R filter: reject if reward/risk < 2:1
- */
-/**
- * Full scoring — DATA-DRIVEN VERSION (backtested V3/V4 hybrid).
+ * Re-derived from realised pick outcomes (see CHANGELOG). Selection favours
+ * with-trend strength rather than gap/volume excitement, because the live data
+ * showed the latter was inverted:
+ *   - RSI 70-88 (strong momentum): best performers → biggest weight
+ *   - Moderate RVOL (1.0-1.8): outperforms; RVOL > 2.5 penalised (exhaustion)
+ *   - Uptrend (above 50 & 200 DMA) + 52W-high leadership: durable edge
+ *   - Relative strength vs index, MACD: supporting confirmation
+ *   - Gap direction is NOT rewarded (no edge); large gap-ups mildly penalised
  *
- * Selection weights from reverse analysis of 13,649 stock-days:
- * - 52W high + RVOL + gap UP combo: 44.6% win rate → +20
- * - Prev UP + gap UP continuation: 28.0% win rate → +15
- * - MACD bullish: 10.7% vs 7.8% → +10
- * - RSI 55-75: best range from data → +10
- * - Above both DMAs: 10.9% vs 7.3% → +8
- * - RVOL 1.3-2.0: 21.6% win rate → +8
- *
- * Entry: breakout of previous day high (9.2% base, 28% with right selection)
- * Stop: 1.0 ATR (tighter than V1's 0.7, backed by V3 data)
- * Target: 2.0 ATR (let winners run, backed by V4 data)
- *
- * Trade management rules (included in email for user execution):
- * - Take 30% partial at +1.3%
- * - Move stop to breakeven after partial
- * - Trail remainder at 0.5 ATR below high
- * - Early cut at -0.5% if no momentum
+ * Trade structure (see TRADE STRUCTURE block below): enter at the open, ride to
+ * the close, 1 ATR protective stop, 2 ATR stretch target. This is what flips
+ * the strategy from net-losing to net-profitable — the picks already rise
+ * open→close ~58-63% of the time; the old breakout entry was throwing that away.
  */
 export function fullScore(input: FullScoreInput): FullScoreResult {
   const { quote: q, tech, indexChangePercent, marketCondition } = input;
@@ -473,11 +457,13 @@ export function fullScore(input: FullScoreInput): FullScoreResult {
   const prevClose = q.price;
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // HARD FILTER: RSI > 80 reject (backtested: kills performance)
+  // HARD FILTER: only reject genuine blow-off tops (RSI > 90).
+  // (The old model rejected RSI > 80, but live data shows RSI 70-88 names are
+  //  the best performers — strong momentum continues intraday.)
   // ═══════════════════════════════════════════════════════════════════════════
-  if (tech.rsi != null && tech.rsi > 80) {
+  if (tech.rsi != null && tech.rsi > RSI_BLOWOFF) {
     return {
-      score: 0, signals: ['RSI > 80 REJECTED'], rsi: tech.rsi,
+      score: 0, signals: [`RSI > ${RSI_BLOWOFF} REJECTED`], rsi: tech.rsi,
       macdHistogram: tech.macdHistogram, atr: tech.atr, atrPercent: tech.atrPercent,
       entryTrigger: 0, buyPrice: 0, sellPrice: 0, stopLoss: 0, rewardRiskRatio: 0,
       relativeStrength: 0, entryRule: '', consolidationTightness: tech.consolidationTightness,
@@ -509,8 +495,219 @@ export function fullScore(input: FullScoreInput): FullScoreResult {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // CATALYST DETECTION
+  // CATALYST DETECTION (informational — earnings proximity only).
+  // NOTE: a relative-volume "spike" is deliberately NOT treated as a catalyst.
+  // In the live data RVOL >= 2.5 names UNDER-perform (40% win / -1.27% exp) —
+  // volume spikes mark exhaustion, not opportunity, for this strategy.
   // ═══════════════════════════════════════════════════════════════════════════
+  let hasCatalyst = false;
+  let catalystLabel: string | null = null;
+  const now = Date.now() / 1000;
+  const earningsTs = q.earningsTimestamp || q.earningsTimestampStart;
+  if (earningsTs) {
+    const daysDiff = Math.abs(earningsTs - now) / 86400;
+    if (daysDiff <= 1) { hasCatalyst = true; catalystLabel = 'Earnings today/yesterday'; signals.push('🔔 EARNINGS'); }
+    else if (daysDiff <= 3) { hasCatalyst = true; catalystLabel = 'Earnings nearby'; signals.push('Earnings nearby'); }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // SELECTION SCORING — OPENING-MOMENTUM MODEL
+  //
+  // Re-derived from realised outcomes (see CHANGELOG). The prior model rewarded
+  // gap-ups, high RVOL and an RSI 55-75 "sweet spot" while penalising RSI > 75
+  // and rejecting gap-downs. Every one of those was inverted in the live
+  // results: strong momentum (RSI 65-88) continued, MODERATE volume beat volume
+  // spikes, and gap direction carried no edge. Weights below reflect that.
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  const near52w = q.percentFromFiftyTwoWeekHigh > -5;
+  const relStr = q.changePercent - indexChangePercent;
+  let gapPercent = 0;
+  if (q.preMarketPrice && prevClose > 0) {
+    gapPercent = ((q.preMarketPrice - prevClose) / prevClose) * 100;
+  }
+
+  // --- Momentum: RSI is the strongest live predictor (higher = better) ---
+  if (tech.rsi != null) {
+    if (tech.rsi >= 70 && tech.rsi <= 82) { score += 20; signals.push(`RSI ${tech.rsi.toFixed(0)} (strong momentum)`); }
+    else if (tech.rsi >= 60 && tech.rsi < 70) { score += 12; signals.push(`RSI ${tech.rsi.toFixed(0)}`); }
+    else if (tech.rsi > 82 && tech.rsi <= 88) { score += 8; signals.push(`RSI ${tech.rsi.toFixed(0)} (extended)`); }
+    else if (tech.rsi >= 50 && tech.rsi < 60) { score += 5; }
+    else if (tech.rsi < 45) { score -= 5; signals.push(`RSI ${tech.rsi.toFixed(0)} weak`); }
+  }
+
+  // --- Volume: moderate participation wins; spikes are exhaustion traps ---
+  if (q.relativeVolume >= 1.0 && q.relativeVolume <= 1.8) { score += 12; signals.push(`RVOL ${q.relativeVolume.toFixed(1)}x`); }
+  else if (q.relativeVolume > 1.8 && q.relativeVolume <= 2.5) { score += 5; signals.push(`RVOL ${q.relativeVolume.toFixed(1)}x`); }
+  else if (q.relativeVolume > 2.5) { score -= 8; signals.push(`RVOL ${q.relativeVolume.toFixed(1)}x (spike)`); }
+  else if (q.relativeVolume < 0.8) { score -= 3; }
+
+  // --- Trend alignment (with-trend longs) ---
+  if (q.fiftyDayMA && q.twoHundredDayMA && q.fiftyDayMA > q.twoHundredDayMA && price > q.fiftyDayMA) {
+    score += 12; signals.push('Uptrend (above 50 & 200 DMA)');
+  }
+
+  // --- Leadership: proximity to the 52-week high ---
+  if (q.percentFromFiftyTwoWeekHigh >= 0) { score += 12; signals.push('New 52W high'); }
+  else if (near52w) { score += 8; signals.push('Near 52W high'); }
+
+  // --- Relative strength vs index ---
+  if (relStr > 1) { score += 8; signals.push(`RS +${relStr.toFixed(1)}%`); }
+  else if (relStr > 0) { score += 4; }
+  else if (relStr < -1) { score -= 5; signals.push(`RS ${relStr.toFixed(1)}%`); }
+
+  // --- MACD bullish confirmation (supporting) ---
+  if (tech.macdHistogram != null && tech.macd != null && tech.macdSignal != null
+      && tech.macdHistogram > 0 && tech.macd > tech.macdSignal) {
+    score += 6; signals.push('MACD bullish');
+  }
+
+  // --- Tight consolidation = clean base ---
+  if (tech.consolidationTightness != null && tech.consolidationTightness < 2.5) {
+    score += 5; signals.push(`Tight base (${tech.consolidationTightness.toFixed(1)}x ATR)`);
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // PENALTIES
+  // ═══════════════════════════════════════════════════════════════════════════
+  if (tech.macdHistogram != null && tech.macdHistogram < 0) { score -= 4; signals.push('MACD bearish'); }
+  if (q.fiftyDayMA && price <= q.fiftyDayMA) { score -= 10; signals.push('Below 50 DMA'); }
+  // Buying a large gap-up = buying into the open's high; mild discount.
+  if (gapPercent > 3) { score -= 5; signals.push(`Big gap +${gapPercent.toFixed(1)}%`); }
+
+  // Extension: far above 50 DMA = exhausted move.
+  let extensionPercent = 0;
+  if (q.fiftyDayMA && q.fiftyDayMA > 0) {
+    extensionPercent = round2(((price - q.fiftyDayMA) / q.fiftyDayMA) * 100);
+    if (tech.atr && tech.atr > 0) {
+      const atrFromDMA = (price - q.fiftyDayMA) / tech.atr;
+      if (atrFromDMA > 5) { score -= 8; signals.push(`Extended ${atrFromDMA.toFixed(1)} ATR`); }
+      else if (atrFromDMA > 4) { score -= 4; }
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // TRADE STRUCTURE — OPENING-MOMENTUM DAY TRADE
+  //
+  // Enter at/near the OPEN (do NOT chase a prior-day-high breakout). Back-
+  // testing the realised picks showed chasing the breakout turned a roughly
+  // +0.6%/day open→close edge into a −0.35%/trade loss: the breakout tags the
+  // intraday high, then the tight stop is hit on the normal pullback before the
+  // stock resumes. Instead, ride the position through the session and exit at
+  // the close, protected by a hard stop. A stretch limit target lets
+  // exceptional days lock in more, but the CLOSE is the primary exit.
+  //   Entry:  the opening print (premarket proxy if available, else prev close)
+  //   Stop:   1.5 ATR below entry (floored 2.5%, capped 4% of price) — ~3.5% typical
+  //   Target: 3.0 ATR far stretch limit (the close is the primary exit)
+  // ═══════════════════════════════════════════════════════════════════════════
+  const atr = tech.atr || price * 0.015;
+
+  // Reference entry = expected opening print.
+  const buyPrice = round2(price);
+  const entryTrigger = buyPrice;
+
+  let stopDist = Math.max(STOP_ATR_MULT * atr, MIN_STOP_PCT * buyPrice);
+  stopDist = Math.min(stopDist, MAX_STOP_PCT * buyPrice);
+  const stopLoss = round2(buyPrice - stopDist);
+  const sellPrice = round2(buyPrice + TARGET_ATR_MULT * atr);
+  const risk = buyPrice - stopLoss;
+  const reward = sellPrice - buyPrice;
+  const rewardRiskRatio = risk > 0 ? round2(reward / risk) : 0;
+
+  // Setup classification (informational).
+  let setupType: 'breakout' | 'pullback' | 'momentum' = 'momentum';
+  if (q.percentFromFiftyTwoWeekHigh > -3) setupType = 'breakout';
+
+  score = Math.max(0, Math.min(100, score));
+
+  // Entry / management instructions for the email + UI.
+  const currency = q.market === 'IN' ? '₹' : '$';
+  const stopPctText = buyPrice > 0 ? ((stopDist / buyPrice) * 100).toFixed(1) : '0';
+  const entryRule =
+    `Buy at the open near ${currency}${buyPrice.toFixed(2)}. Hold through the day and exit at the close. ` +
+    `Hard stop ${currency}${stopLoss.toFixed(2)} (−${stopPctText}%); ` +
+    `optionally take a partial into strength near ${currency}${sellPrice.toFixed(2)}.`;
+
+  return {
+    score, signals,
+    rsi: tech.rsi, macdHistogram: tech.macdHistogram,
+    atr: tech.atr, atrPercent: tech.atrPercent,
+    entryTrigger, buyPrice, sellPrice, stopLoss, rewardRiskRatio,
+    relativeStrength: round2(relStr),
+    entryRule, consolidationTightness: tech.consolidationTightness,
+    hasCatalyst, catalystLabel,
+    setupType, extensionPercent,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// LEGACY MODEL (kept for the live A/B comparison) — original breakout model.
+//
+// This is the pre-tuning model: gap-up / high-RVOL / RSI 55-75 selection with a
+// breakout-of-previous-day-high entry and a symmetric 1 ATR stop/target. It is
+// retained verbatim so the two models can run side by side and be compared on
+// real forward data. The current (default) quickScore/fullScore above are the
+// new opening-momentum model.
+// ---------------------------------------------------------------------------
+
+/** Pass 1 quick score — OLD model (gap-up / RVOL gated). */
+export function quickScoreOld(q: StockQuote): number {
+  if (q.preMarketPrice && q.price > 0) {
+    const gapPct = ((q.preMarketPrice - q.price) / q.price) * 100;
+    if (gapPct < -0.3) return -999;
+  }
+  if (q.fiftyDayMA && q.price <= q.fiftyDayMA) return -999;
+  if (q.relativeVolume < 1.0) return -999;
+
+  let score = 0;
+  const near52w = q.percentFromFiftyTwoWeekHigh > -5;
+  if (near52w && q.relativeVolume > 1.3) score += 15;
+  if (q.preMarketPrice && q.price > 0) {
+    const gapPct = ((q.preMarketPrice - q.price) / q.price) * 100;
+    if (q.changePercent > 0.5 && gapPct > 0.3) score += 12;
+  }
+  if (q.fiftyDayMA && q.twoHundredDayMA) {
+    if (q.fiftyDayMA > q.twoHundredDayMA && q.price > q.fiftyDayMA) score += 10;
+  }
+  if (q.relativeVolume >= 1.3 && q.relativeVolume <= 2.0) score += 8;
+  else if (q.relativeVolume > 2.0) score += 5;
+  if (near52w) score += 5;
+  if (q.avgVolume > 5_000_000) score += 3;
+  return score;
+}
+
+/** Pass 2 full score — OLD model (breakout entry, 1 ATR symmetric stop/target). */
+export function fullScoreOld(input: FullScoreInput): FullScoreResult {
+  const { quote: q, tech, indexChangePercent, marketCondition } = input;
+  let score = 0;
+  const signals: string[] = [];
+
+  const price = q.preMarketPrice || q.price;
+  const prevClose = q.price;
+
+  if (tech.rsi != null && tech.rsi > 80) {
+    return {
+      score: 0, signals: ['RSI > 80 REJECTED'], rsi: tech.rsi,
+      macdHistogram: tech.macdHistogram, atr: tech.atr, atrPercent: tech.atrPercent,
+      entryTrigger: 0, buyPrice: 0, sellPrice: 0, stopLoss: 0, rewardRiskRatio: 0,
+      relativeStrength: 0, entryRule: '', consolidationTightness: tech.consolidationTightness,
+      hasCatalyst: false, catalystLabel: null, setupType: 'momentum', extensionPercent: 0,
+    };
+  }
+
+  if (tech.atrPercent != null && tech.atrPercent < MIN_DAY_TRADE_ATR_PERCENT) {
+    return {
+      score: 0, signals: [`ATR ${tech.atrPercent.toFixed(2)}% REJECTED`], rsi: tech.rsi,
+      macdHistogram: tech.macdHistogram, atr: tech.atr, atrPercent: tech.atrPercent,
+      entryTrigger: 0, buyPrice: 0, sellPrice: 0, stopLoss: 0, rewardRiskRatio: 0,
+      relativeStrength: 0, entryRule: '', consolidationTightness: tech.consolidationTightness,
+      hasCatalyst: false, catalystLabel: null, setupType: 'momentum', extensionPercent: 0,
+    };
+  }
+
+  if (marketCondition === 'bearish') { score -= 15; signals.push('⚠ Market bearish'); }
+  else if (marketCondition === 'bullish') { score += 5; signals.push('Market tailwind'); }
+
   let hasCatalyst = false;
   let catalystLabel: string | null = null;
   const now = Date.now() / 1000;
@@ -522,69 +719,27 @@ export function fullScore(input: FullScoreInput): FullScoreResult {
   }
   if (!hasCatalyst && q.relativeVolume >= 5) { score += 10; hasCatalyst = true; catalystLabel = `Vol spike ${q.relativeVolume.toFixed(1)}x`; signals.push(`🔔 Vol ${q.relativeVolume.toFixed(1)}x`); }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // DATA-DRIVEN SCORING (from reverse analysis of 13,649 stock-days)
-  // ═══════════════════════════════════════════════════════════════════════════
-
   const near52w = q.percentFromFiftyTwoWeekHigh > -5;
   const relStr = q.changePercent - indexChangePercent;
   let gapPercent = 0;
-  if (q.preMarketPrice && prevClose > 0) {
-    gapPercent = ((q.preMarketPrice - prevClose) / prevClose) * 100;
-  }
+  if (q.preMarketPrice && prevClose > 0) gapPercent = ((q.preMarketPrice - prevClose) / prevClose) * 100;
 
-  // --- 52W high + RVOL + Gap UP combo (44.6% win rate → +20) ---
-  if (near52w && q.relativeVolume > 1.3 && gapPercent > 0.3) {
-    score += 20;
-    signals.push('52W+RVOL+Gap combo');
-  }
-
-  // --- Prev UP + Gap UP continuation (28.0% win rate → +15) ---
-  if (q.changePercent > 0.5 && gapPercent > 0.3) {
-    score += 15;
-    signals.push(`Continuation (+${q.changePercent.toFixed(1)}% → gap +${gapPercent.toFixed(1)}%)`);
-  }
-
-  // --- MACD bullish (10.7% vs 7.8% → +10) ---
+  if (near52w && q.relativeVolume > 1.3 && gapPercent > 0.3) { score += 20; signals.push('52W+RVOL+Gap combo'); }
+  if (q.changePercent > 0.5 && gapPercent > 0.3) { score += 15; signals.push(`Continuation (+${q.changePercent.toFixed(1)}% → gap +${gapPercent.toFixed(1)}%)`); }
   if (tech.macdHistogram != null && tech.macd != null && tech.macdSignal != null) {
     if (tech.macdHistogram > 0 && tech.macd > tech.macdSignal) { score += 10; signals.push('MACD Bullish'); }
   }
-
-  // --- RSI 55-75 sweet spot (14.8% win rate → +10) ---
-  if (tech.rsi != null && tech.rsi >= 55 && tech.rsi <= 75) {
-    score += 10;
-    signals.push(`RSI ${tech.rsi.toFixed(0)}`);
-  }
-
-  // --- Above both DMAs (10.9% → +8) ---
-  if (q.fiftyDayMA && q.twoHundredDayMA && q.fiftyDayMA > q.twoHundredDayMA && price > q.fiftyDayMA) {
-    score += 8;
-    signals.push('Above 50 & 200 DMA');
-  }
-
-  // --- RVOL 1.3-2.0 (21.6% → +8) ---
+  if (tech.rsi != null && tech.rsi >= 55 && tech.rsi <= 75) { score += 10; signals.push(`RSI ${tech.rsi.toFixed(0)}`); }
+  if (q.fiftyDayMA && q.twoHundredDayMA && q.fiftyDayMA > q.twoHundredDayMA && price > q.fiftyDayMA) { score += 8; signals.push('Above 50 & 200 DMA'); }
   if (q.relativeVolume >= 1.3 && q.relativeVolume <= 2.0) { score += 8; signals.push(`RVOL ${q.relativeVolume.toFixed(1)}x`); }
   else if (q.relativeVolume > 2.0) { score += 5; signals.push(`RVOL ${q.relativeVolume.toFixed(1)}x (high)`); }
-
-  // --- Near 52W high (11.9% vs 8.0% → +5) ---
   if (near52w) { score += 5; signals.push('Near 52W high'); }
-
-  // --- Tight consolidation (+5) ---
-  if (tech.consolidationTightness != null && tech.consolidationTightness < 2.5) {
-    score += 5;
-    signals.push(`Tight base (${tech.consolidationTightness.toFixed(1)}x ATR)`);
-  }
-
-  // --- Relative Strength vs index (+5) ---
+  if (tech.consolidationTightness != null && tech.consolidationTightness < 2.5) { score += 5; signals.push(`Tight base (${tech.consolidationTightness.toFixed(1)}x ATR)`); }
   if (relStr > 1.5) { score += 5; signals.push(`RS +${relStr.toFixed(1)}%`); }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // PENALTIES
-  // ═══════════════════════════════════════════════════════════════════════════
   if (tech.macdHistogram != null && tech.macdHistogram < 0) { score -= 5; signals.push('MACD Bearish'); }
   if (tech.rsi != null && tech.rsi > 75) { score -= 8; signals.push(`RSI ${tech.rsi.toFixed(0)} overbought`); }
 
-  // Extension: too far from 50 DMA
   let extensionPercent = 0;
   if (q.fiftyDayMA && q.fiftyDayMA > 0) {
     extensionPercent = round2(((price - q.fiftyDayMA) / q.fiftyDayMA) * 100);
@@ -595,26 +750,16 @@ export function fullScore(input: FullScoreInput): FullScoreResult {
     }
   }
 
-  // ═══════════════════════════════════════════════════════════════════════════
-  // ENTRY: Breakout of previous day high (backtested best entry method)
-  // Stop: 1.0 ATR | Target: 2.0 ATR (let winners run)
-  // ═══════════════════════════════════════════════════════════════════════════
   const atr = tech.atr || price * 0.015;
-
-  // Entry trigger = previous day high (for US with premarket, use max of premarket and prev high)
   const prevDayHigh = tech.recentHighs.length > 0 ? tech.recentHighs[tech.recentHighs.length - 1] : price;
-  const entryTrigger = q.preMarketPrice
-    ? round2(Math.max(prevDayHigh, q.preMarketPrice))
-    : round2(prevDayHigh);
-
+  const entryTrigger = q.preMarketPrice ? round2(Math.max(prevDayHigh, q.preMarketPrice)) : round2(prevDayHigh);
   const buyPrice = round2(entryTrigger);
-  const stopLoss = round2(buyPrice - 1.0 * atr);   // 1.0 ATR stop
-  const sellPrice = round2(buyPrice + 1.0 * atr);   // 1.0 ATR target (achievable in single day)
+  const stopLoss = round2(buyPrice - 1.0 * atr);
+  const sellPrice = round2(buyPrice + 1.0 * atr);
   const risk = buyPrice - stopLoss;
   const reward = sellPrice - buyPrice;
   const rewardRiskRatio = risk > 0 ? round2(reward / risk) : 0;
 
-  // Setup classification
   let setupType: 'breakout' | 'pullback' | 'momentum' = 'momentum';
   if (q.percentFromFiftyTwoWeekHigh > -3 || (tech.consolidationTightness != null && tech.consolidationTightness < 2)) {
     setupType = 'breakout';
@@ -622,7 +767,6 @@ export function fullScore(input: FullScoreInput): FullScoreResult {
 
   score = Math.max(0, Math.min(100, score));
 
-  // Entry rule with trade management instructions
   const currency = q.market === 'IN' ? '₹' : '$';
   const maxChase = round2(entryTrigger + 0.3 * atr);
   const partialLevel = round2(buyPrice * 1.013);
@@ -665,18 +809,22 @@ export interface TwoPassConfig {
   minScore: number;        // minimum full score to qualify
   highThreshold: number;   // score >= this = High priority
   logPrefix: string;
+  model?: 'old' | 'new';   // which scoring model to use (default 'new')
 }
 
 export async function runTwoPassScoring(config: TwoPassConfig): Promise<DayTradePick[]> {
   const { market, quotes, indexChangePercent, maxCandidates, maxPicks, minScore, highThreshold, logPrefix } = config;
+  const model = config.model ?? 'new';
+  const quickFn = model === 'old' ? quickScoreOld : quickScore;
+  const fullFn = model === 'old' ? fullScoreOld : fullScore;
 
   const marketCondition = assessMarketCondition(indexChangePercent);
-  console.log(`${logPrefix} Market condition: ${marketCondition} (index ${indexChangePercent >= 0 ? '+' : ''}${indexChangePercent.toFixed(2)}%)`);
+  console.log(`${logPrefix} Model: ${model} | Market condition: ${marketCondition} (index ${indexChangePercent >= 0 ? '+' : ''}${indexChangePercent.toFixed(2)}%)`);
 
   // --- Pass 1: Quick score all quotes ---
   const quickScored: QuickScoreResult[] = quotes.map(q => ({
     quote: q,
-    quickScore: quickScore(q),
+    quickScore: quickFn(q),
   }));
   quickScored.sort((a, b) => b.quickScore - a.quickScore);
 
@@ -692,7 +840,7 @@ export async function runTwoPassScoring(config: TwoPassConfig): Promise<DayTrade
     const promises = batch.map(async ({ quote }) => {
       try {
         const tech = await computeTechnicals(quote.symbol, quote.price);
-        const result = fullScore({ quote, tech, indexChangePercent, marketCondition });
+        const result = fullFn({ quote, tech, indexChangePercent, marketCondition });
 
         if (result.score >= minScore) {
           const prevClose = quote.price;

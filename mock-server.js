@@ -2893,6 +2893,23 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (path === '/api/stocks' && action === 'holidays' && req.method === 'GET') {
+      try {
+        // Single source of truth shared with the crons (api/_lib/market-calendar.ts).
+        const marketHolidays = require('./api/_lib/market-holidays.json');
+        res.writeHead(200);
+        res.end(JSON.stringify({
+          holidays: { US: marketHolidays.US || [], IN: marketHolidays.IN || [] },
+          notes: marketHolidays.notes || {},
+        }));
+      } catch (error) {
+        console.error('[Holidays] Error:', error.message);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: 'Failed to load holidays', message: error.message }));
+      }
+      return;
+    }
+
     if (path === '/api/stocks' && action === 'penny-hits' && req.method === 'GET') {
       try {
         const market = (url.searchParams.get('market') || 'US').toUpperCase();

@@ -1,0 +1,44 @@
+{
+  "US": [
+    { "date": "2026-01-01", "name": "New Year's Day" },
+    { "date": "2026-01-19", "name": "Martin Luther King Jr. Day" },
+    { "date": "2026-02-16", "name": "Washington's Birthday" },
+    { "date": "2026-04-03", "name": "Good Friday" },
+    { "date": "2026-05-25", "name": "Memorial Day" },
+    { "date": "2026-06-19", "name": "Juneteenth National Independence Day" },
+    { "date": "2026-07-03", "name": "Independence Day (observed)" },
+    { "date": "2026-09-07", "name": "Labor Day" },
+    { "date": "2026-11-26", "name": "Thanksgiving Day" },
+    { "date": "2026-12-25", "name": "Christmas Day" },
+    { "date": "2027-01-01", "name": "New Year's Day" },
+    { "date": "2027-01-18", "name": "Martin Luther King Jr. Day" },
+    { "date": "2027-02-15", "name": "Washington's Birthday" },
+    { "date": "2027-03-26", "name": "Good Friday" },
+    { "date": "2027-05-31", "name": "Memorial Day" },
+    { "date": "2027-06-18", "name": "Juneteenth (observed)" },
+    { "date": "2027-07-05", "name": "Independence Day (observed)" },
+    { "date": "2027-09-06", "name": "Labor Day" },
+    { "date": "2027-11-25", "name": "Thanksgiving Day" },
+    { "date": "2027-12-24", "name": "Christmas Day (observed)" }
+  ],
+  "IN": [
+    { "date": "2026-01-26", "name": "Republic Day" },
+    { "date": "2026-04-03", "name": "Good Friday" },
+    { "date": "2026-04-14", "name": "Dr. Ambedkar Jayanti" },
+    { "date": "2026-05-01", "name": "Maharashtra Day" },
+    { "date": "2026-08-15", "name": "Independence Day" },
+    { "date": "2026-10-02", "name": "Gandhi Jayanti" },
+    { "date": "2026-12-25", "name": "Christmas" },
+    { "date": "2027-01-26", "name": "Republic Day" },
+    { "date": "2027-03-26", "name": "Good Friday" },
+    { "date": "2027-04-14", "name": "Dr. Ambedkar Jayanti" },
+    { "date": "2027-05-01", "name": "Maharashtra Day" },
+    { "date": "2027-08-15", "name": "Independence Day" },
+    { "date": "2027-10-02", "name": "Gandhi Jayanti" },
+    { "date": "2027-12-25", "name": "Christmas" }
+  ],
+  "notes": {
+    "US": "NYSE/NASDAQ holidays, rule-derived and complete for 2026-2027 (includes weekday-observed dates).",
+    "IN": "NSE fixed-date holidays only. Variable/lunar holidays (Holi, Maha Shivaratri, Eid, Ram Navami, Buddha Purnima, Bakri Id, Muharram, Dussehra, Diwali, Guru Nanak Jayanti) shift each year — add them here from the NSE annual holiday circular."
+  }
+}

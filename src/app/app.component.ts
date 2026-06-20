@@ -63,6 +63,10 @@ import { AuthService } from './core/services/auth.service';
             <i class="pi pi-bolt"></i>
             <span class="nav-label">News</span>
           </a>
+          <a class="nav-item" routerLink="/holidays" routerLinkActive="active" title="Market Holidays">
+            <i class="pi pi-calendar"></i>
+            <span class="nav-label">Holidays</span>
+          </a>
         </nav>
 
         <!-- Page Content -->

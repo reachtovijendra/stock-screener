@@ -94,4 +94,48 @@ const tradableScore = fullScore({
 assert.ok(tradableScore.score >= 40);
 assert.ok(tradableScore.buyPrice > 0);
 
-console.log('day-trade scorer volatility filter tests passed');
+// --- Opening-momentum model: entry is the opening print, not a breakout ---
+// With a premarket print, entry = premarket (the expected open), NOT the
+// previous day's high.
+const openEntryScore = fullScore({
+  quote: createQuote({ price: 100, preMarketPrice: 101 }),
+  tech: createTechnicals(),
+  indexChangePercent: 0.4,
+  marketCondition: 'bullish',
+});
+assert.equal(openEntryScore.buyPrice, 101);
+assert.equal(openEntryScore.entryTrigger, 101);
+assert.ok(openEntryScore.sellPrice > openEntryScore.buyPrice, 'target above entry');
+assert.ok(openEntryScore.stopLoss < openEntryScore.buyPrice, 'stop below entry');
+// Stop distance must respect the 2.5%–4% guardrails (allow cent-rounding slack).
+const stopPct = (openEntryScore.buyPrice - openEntryScore.stopLoss) / openEntryScore.buyPrice;
+assert.ok(stopPct >= 0.024 && stopPct <= 0.041, 'stop within ~2.5%-4%');
+
+// --- Strong momentum (high RSI) is rewarded, NOT rejected ---
+// Old model hard-rejected RSI > 80; the new model only rejects blow-offs (>90)
+// and gives strong-momentum names the biggest bonus.
+const strongMomentum = fullScore({
+  quote: createQuote(),
+  tech: createTechnicals({ rsi: 78 }),
+  indexChangePercent: 0.4,
+  marketCondition: 'bullish',
+});
+assert.ok(strongMomentum.score > 0, 'RSI 78 must not be rejected');
+assert.ok(strongMomentum.score >= tradableScore.score, 'RSI 78 should score >= RSI 65');
+
+// --- Volume spikes are penalised, not rewarded ---
+const moderateVol = fullScore({
+  quote: createQuote({ relativeVolume: 1.4 }),
+  tech: createTechnicals(),
+  indexChangePercent: 0.4,
+  marketCondition: 'bullish',
+});
+const spikeVol = fullScore({
+  quote: createQuote({ relativeVolume: 3.5 }),
+  tech: createTechnicals(),
+  indexChangePercent: 0.4,
+  marketCondition: 'bullish',
+});
+assert.ok(moderateVol.score > spikeVol.score, 'moderate RVOL beats a volume spike');
+
+console.log('day-trade scorer opening-momentum tests passed');

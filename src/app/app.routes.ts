@@ -86,6 +86,12 @@ export const routes: Routes = [
     title: 'Market Holidays'
   },
   {
+    path: 'profit-maximizer',
+    loadComponent: () => import('./features/profit-maximizer/profit-maximizer.component').then(m => m.ProfitMaximizerComponent),
+    canActivate: [authGuard],
+    title: 'Profit Maximizer'
+  },
+  {
     path: 'stock/:symbol',
     loadComponent: () => import('./features/stock-detail/stock-detail.component').then(m => m.StockDetailComponent),
     title: 'Stock Details'

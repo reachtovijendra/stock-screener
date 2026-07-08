@@ -40,6 +40,10 @@ import { AuthService } from './core/services/auth.service';
             <i class="pi pi-briefcase"></i>
             <span class="nav-label">Paper</span>
           </a>
+          <a class="nav-item premium" routerLink="/profit-maximizer" routerLinkActive="active" title="Profit Maximizer">
+            <i class="pi pi-dollar"></i>
+            <span class="nav-label">Profit</span>
+          </a>
 
           <div class="nav-divider"></div>
 

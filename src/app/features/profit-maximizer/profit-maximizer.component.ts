@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, computed, inject, OnInit, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, OnDestroy, OnInit, signal } from '@angular/core';
 import { CommonModule, DecimalPipe, DatePipe } from '@angular/common';
 import { HttpClient } from '@angular/common/http';
 import { ButtonModule } from 'primeng/button';
@@ -32,6 +32,8 @@ interface HoldingView extends Holding {
 type SortKey =
   | 'symbol' | 'totalShares' | 'avgCost' | 'price' | 'totalReturn'
   | 'totalTaxIfSold' | 'longTermShares' | 'longTermTax' | 'allLongTerm';
+
+const PRICE_REFRESH_MS = 15000; // ~15s during market hours (Yahoo-backed; CDN/rate limits make faster impractical)
 
 @Component({
   selector: 'app-profit-maximizer',
@@ -117,9 +119,24 @@ type SortKey =
               <span class="rate-input"><input type="number" min="0" max="60" step="0.5" [value]="stRate()" (change)="onRateChange('st', $event)" /> %</span>
             </label>
           </div>
-          @if (loadingPrices()) {
-            <span class="prices-loading"><p-progressSpinner strokeWidth="4" [style]="{width:'16px',height:'16px'}"></p-progressSpinner> Live prices…</span>
-          }
+          <div class="live-status">
+            @if (loadingPrices()) {
+              <span class="prices-loading"><p-progressSpinner strokeWidth="4" [style]="{width:'16px',height:'16px'}"></p-progressSpinner> Updating…</span>
+            } @else if (lastUpdated()) {
+              <span class="updated">Updated {{ lastUpdated() | date:'h:mm:ss a' }}</span>
+            }
+            @if (isMarketHours()) {
+              @if (autoRefresh()) {
+                <span class="live-pill"><span class="pulse"></span> Live</span>
+              } @else {
+                <span class="paused-pill">Paused</span>
+              }
+            } @else {
+              <span class="closed-pill">Market closed</span>
+            }
+            <button pButton class="p-button-sm p-button-text" icon="pi pi-refresh" (click)="refreshNow()" pTooltip="Refresh now" tooltipPosition="top"></button>
+            <button pButton class="p-button-sm p-button-text" [icon]="autoRefresh() ? 'pi pi-pause' : 'pi pi-play'" (click)="toggleAutoRefresh()" [pTooltip]="autoRefresh() ? 'Pause auto-refresh' : 'Resume auto-refresh'" tooltipPosition="top"></button>
+          </div>
         </div>
 
         <section class="table-panel">
@@ -229,6 +246,15 @@ type SortKey =
     .rate-input input:focus { outline: none; border-color: #38bdf8; }
     .num.tax { color: #f87171; font-weight: 700; }
 
+    .live-status { display: inline-flex; align-items: center; gap: 0.5rem; color: #94a3b8; font-size: 0.76rem; font-weight: 700; }
+    .live-status .updated { color: #64748b; }
+    .live-pill, .paused-pill, .closed-pill { display: inline-flex; align-items: center; gap: 0.35rem; border-radius: 999px; padding: 0.15rem 0.5rem; font-size: 0.68rem; font-weight: 800; }
+    .live-pill { color: #34d399; background: rgba(16,185,129,0.12); }
+    .paused-pill { color: #fbbf24; background: rgba(251,191,36,0.12); }
+    .closed-pill { color: #94a3b8; background: rgba(148,163,184,0.12); }
+    .live-pill .pulse { width: 7px; height: 7px; border-radius: 50%; background: #34d399; box-shadow: 0 0 0 0 rgba(52,211,153,0.6); animation: pm-pulse 1.6s infinite; }
+    @keyframes pm-pulse { 0% { box-shadow: 0 0 0 0 rgba(52,211,153,0.5); } 70% { box-shadow: 0 0 0 6px rgba(52,211,153,0); } 100% { box-shadow: 0 0 0 0 rgba(52,211,153,0); } }
+
     .table-panel { border-radius: 18px; overflow: hidden; }
     /* Own scroll area (both axes) so the header can freeze while rows scroll. */
     .table-wrap { overflow: auto; -webkit-overflow-scrolling: touch; max-height: calc(100vh - 300px); min-height: 12rem; }
@@ -260,9 +286,10 @@ type SortKey =
     .disclaimer .pi { color: #a78bfa; margin-top: 0.1rem; }
   `]
 })
-export class ProfitMaximizerComponent implements OnInit {
+export class ProfitMaximizerComponent implements OnInit, OnDestroy {
   private http = inject(HttpClient);
   private store = inject(ProfitMaximizerService);
+  private refreshTimer: ReturnType<typeof setInterval> | null = null;
 
   state = signal<ProfitMaximizerUpload | null>(null);
   dragOver = signal(false);
@@ -270,6 +297,8 @@ export class ProfitMaximizerComponent implements OnInit {
   saving = signal(false);
   confirmingClear = signal(false);
   loadingPrices = signal(false);
+  autoRefresh = signal(true);
+  lastUpdated = signal<number | null>(null);
   ltRate = signal(DEFAULT_LT_TAX_RATE);
   stRate = signal(DEFAULT_ST_TAX_RATE);
   sortKey = signal<SortKey>('symbol');
@@ -395,6 +424,37 @@ export class ProfitMaximizerComponent implements OnInit {
     } catch (e: any) {
       this.error.set(e?.message ?? 'Failed to load saved holdings.');
     }
+
+    // Auto-refresh live prices during US market hours (when enabled and the tab is visible).
+    this.refreshTimer = setInterval(() => {
+      if (!this.autoRefresh() || !this.state() || this.loadingPrices()) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      if (!this.isMarketHours()) return;
+      this.fetchPrices();
+    }, PRICE_REFRESH_MS);
+  }
+
+  ngOnDestroy(): void {
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
+  }
+
+  toggleAutoRefresh(): void {
+    const on = !this.autoRefresh();
+    this.autoRefresh.set(on);
+    if (on && this.state()) this.fetchPrices(); // refresh immediately on resume
+  }
+
+  refreshNow(): void {
+    if (this.state()) this.fetchPrices();
+  }
+
+  /** True during regular US market hours (Mon–Fri, 9:30–16:00 ET). */
+  isMarketHours(): boolean {
+    const et = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/New_York' }));
+    const day = et.getDay();
+    if (day === 0 || day === 6) return false;
+    const mins = et.getHours() * 60 + et.getMinutes();
+    return mins >= 570 && mins <= 960; // 9:30 AM – 4:00 PM ET
   }
 
   onRateChange(which: 'lt' | 'st', event: Event): void {
@@ -482,10 +542,12 @@ export class ProfitMaximizerComponent implements OnInit {
     const chunks: string[][] = [];
     for (let i = 0; i < symbols.length; i += 10) chunks.push(symbols.slice(i, i + 10));
 
+    // Cache-buster so periodic refreshes bypass the shared CDN cache and return fresh quotes.
+    const bust = Date.now();
     let pending = chunks.length;
     for (const chunk of chunks) {
       this.http.get<{ stocks: Array<{ symbol: string; price?: number; name?: string }> }>(
-        `/api/stocks?action=search&q=${chunk.join(',')}&market=US`
+        `/api/stocks?action=search&q=${chunk.join(',')}&market=US&_t=${bust}`
       ).subscribe({
         next: (res) => {
           const next = { ...this.prices() };
@@ -495,7 +557,12 @@ export class ProfitMaximizerComponent implements OnInit {
           this.prices.set(next);
         },
         error: () => {},
-        complete: () => { if (--pending <= 0) this.loadingPrices.set(false); },
+        complete: () => {
+          if (--pending <= 0) {
+            this.loadingPrices.set(false);
+            this.lastUpdated.set(Date.now());
+          }
+        },
       });
     }
   }

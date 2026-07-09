@@ -11,7 +11,7 @@ import stocksHandler from './api/stocks';
 import marketHandler from './api/market';
 
 const app = express();
-const PORT = 3000;
+const PORT = 3100;
 
 app.use(cors());
 app.use(express.json());

@@ -36,7 +36,7 @@ function loadEnvFile(fileName) {
 loadEnvFile('.env.local');
 loadEnvFile('.env');
 
-const PORT = 3000;
+const PORT = 3100;
 const MAX_EXACT_SYMBOL_SEARCH = 10;
 const SUPABASE_URL = process.env.SUPABASE_URL || 'https://cbvfjicmcwuwmcchwwbw.supabase.co';
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNidmZqaWNtY3d1d21jY2h3d2J3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwMDA2NzcsImV4cCI6MjA5MDU3NjY3N30.xYvt9FmnhaXWQkQVPWqYkVTQa067oG04t0W373L4WyM';

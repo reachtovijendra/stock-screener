@@ -56,8 +56,8 @@ npm run start:dev
 ```
 
 This runs both:
-- Angular dev server at http://localhost:4200
-- Vercel API functions at http://localhost:3000
+- Angular dev server at http://localhost:4300
+- Vercel API functions at http://localhost:3100
 
 Alternatively, run them separately:
 
